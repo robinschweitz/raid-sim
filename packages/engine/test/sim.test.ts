@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { startCast } from '../src/casting';
 import { EventClass } from '../src/queue';
 import { Simulation } from '../src/sim';
 
@@ -223,6 +224,37 @@ describe('Simulation', () => {
     expect(sim.unit('p1').pos).toEqual({ x: 5, y: 0 });
     expect(sim.unit('p1').move).toBeNull();
     expect(kinds(sim)).not.toContain('move_end');
+  });
+
+  it('a second move_start ends the first move without a move_end (A-013)', () => {
+    const sim = newSim(5000);
+    sim.at(0, EventClass.Decision, () => {
+      sim.startMove('p1', { x: 10, y: 0 }, []);
+    });
+    sim.at(1000, EventClass.Decision, () => {
+      sim.startMove('p1', { x: 5, y: 10 }, []);
+    });
+    sim.run();
+    const ends = sim.trace.list().filter((e) => e.kind === 'move_end');
+    expect(ends).toHaveLength(1);
+    expect(ends[0].t).toBe(3000);
+    expect(ends[0].data).toMatchObject({ x: 5, y: 10, stopped: false });
+  });
+
+  it('death mid-cast writes no cast_interrupted and no cast_success (A-013)', () => {
+    const sim = newSim(5000);
+    sim.catalog.addSpell({ id: 'bolt', castTimeMs: 2000, gcdMs: 1500, cooldownMs: 0, rangeYd: 40, usableWhileMoving: false, target: 'unit', effects: [] });
+    sim.at(0, EventClass.Decision, () => {
+      startCast(sim, 'p1', 'bolt', 'boss', []);
+    });
+    sim.at(1000, EventClass.SpellHit, () => {
+      sim.damage('p1', 1e6, hit('boss'), []);
+    });
+    sim.run();
+    expect(sim.unit('p1').cast).toBeNull();
+    expect(kinds(sim)).toContain('cast_start');
+    expect(kinds(sim)).not.toContain('cast_interrupted');
+    expect(kinds(sim)).not.toContain('cast_success');
   });
 
   it('stopMove emits move_end stopped at the interpolated position and cancels arrival', () => {
