@@ -4,9 +4,11 @@ import { EventClass } from './queue';
 import type { Simulation } from './sim';
 import type { Unit } from './units';
 
-/** Stand-in parameters (A-011). They are approximations by definition and reported as such. */
-export const STANDIN_TICK_MS = 1000;
-export const STANDIN_RANGE_YD = { tank: 5, melee: 5, ranged: 40, healer: 40 } as const;
+/** Stand-in parameters (A-011), read from sourced data by the runner. They are approximations and reported as such. */
+export interface StandinParams {
+  readonly tickMs: number;
+  readonly rangeYd: Readonly<Record<StandinMember['role'], number>>;
+}
 
 /** Lowest health percentage in range (not lowest absolute health); ties go to the lowest id (A-011). */
 function healTarget(sim: Simulation, self: Unit, range: number): Unit | null {
@@ -24,9 +26,10 @@ function healTarget(sim: Simulation, self: Unit, range: number): Unit | null {
   return best;
 }
 
-export function installStandin(sim: Simulation, member: StandinMember): void {
-  const range = STANDIN_RANGE_YD[member.role];
-  const amount = Math.round((member.ratePerSecond * STANDIN_TICK_MS) / 1000);
+export function installStandin(sim: Simulation, member: StandinMember, params: StandinParams): void {
+  const range = params.rangeYd[member.role];
+  const tickMs = params.tickMs;
+  const amount = Math.round((member.ratePerSecond * tickMs) / 1000);
   const tick = (): void => {
     const self = sim.unit(member.id);
     if (!self.alive || sim.outcome) return;
@@ -39,7 +42,7 @@ export function installStandin(sim: Simulation, member: StandinMember): void {
         if (boss) sim.damage(boss.id, amount, { sourceId: self.id, ability: 'standin_damage', school: 'physical' }, []);
       }
     }
-    sim.at(sim.now + STANDIN_TICK_MS, EventClass.Decision, tick);
+    sim.at(sim.now + tickMs, EventClass.Decision, tick);
   };
-  sim.at(sim.now + STANDIN_TICK_MS, EventClass.Decision, tick);
+  sim.at(sim.now + tickMs, EventClass.Decision, tick);
 }

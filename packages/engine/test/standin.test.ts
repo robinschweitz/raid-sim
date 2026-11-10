@@ -2,7 +2,9 @@ import { describe, expect, it } from 'vitest';
 import { StandinMemberSchema } from '../src/plan/schema';
 import { EventClass } from '../src/queue';
 import { Simulation } from '../src/sim';
-import { installStandin } from '../src/standin';
+import { installStandin, type StandinParams } from '../src/standin';
+
+const PARAMS: StandinParams = { tickMs: 1000, rangeYd: { tank: 5, melee: 5, ranged: 40, healer: 40 } };
 
 const standin = (id: string, role: 'tank' | 'healer' | 'ranged', ratePerSecond: number) =>
   StandinMemberSchema.parse({ id, name: id, kind: 'standin', role, maxHealth: 40000, ratePerSecond, reaction: { minMs: 300, maxMs: 300 } });
@@ -14,7 +16,7 @@ function newSim() {
   const members = [standin('t1', 'tank', 500), standin('h1', 'healer', 800), standin('d1', 'ranged', 1000), standin('d2', 'ranged', 1000)];
   for (const m of members) {
     sim.addUnit({ id: m.id, name: m.id, kind: 'player', role: m.role, approximate: true, maxHealth: m.maxHealth, pos: place[m.id as keyof typeof place], speedYdPerSec: 7, combatReach: 1.5, boundingRadius: 0.389 });
-    installStandin(sim, m);
+    installStandin(sim, m, PARAMS);
   }
   return sim;
 }
@@ -84,7 +86,7 @@ describe('stand-ins (§6.3)', () => {
     for (const [id, role] of [['t0', 'tank'], ['h0', 'healer']] as const) {
       const m = standin(id, role, 0);
       sim.addUnit({ id, name: id, kind: 'player', role, maxHealth: 40000, pos: { x: 6, y: 0 }, speedYdPerSec: 7, combatReach: 1.5, boundingRadius: 0.389 });
-      installStandin(sim, m);
+      installStandin(sim, m, PARAMS);
     }
     sim.at(500, EventClass.SpellHit, () => void sim.damage('t0', 1000, { sourceId: 'boss', ability: 'smash', school: 'physical' }, []));
     sim.run();

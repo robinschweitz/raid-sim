@@ -10,9 +10,9 @@ import type { ModelledMember } from './plan/schema';
 import type { LoadProblem } from './plan/validate';
 import { BUILTIN_ACTIONS, RuleEngine, type ActionHandler } from './rules';
 import { Simulation, type OutcomeKind } from './sim';
-import { installStandin } from './standin';
+import { installStandin, type StandinParams } from './standin';
 import { buildSummary, type Summary } from './summary';
-import type { Trace } from './trace';
+import { canonicalStringify, type Trace } from './trace';
 import { byId, type Role, type UnitInit } from './units';
 
 export const ENGINE_VERSION = '0.1.0';
@@ -72,21 +72,34 @@ function checkContent(p: PreparedRun, reg: ContentRegistry): LoadProblem[] {
   return problems;
 }
 
+function dataProblems(file: string, build: () => unknown): LoadProblem[] {
+  try {
+    build();
+    return [];
+  } catch (e) {
+    if (e instanceof DataValidationError) return e.problems.map((message) => ({ file, path: '(data)', message }));
+    throw e;
+  }
+}
+
+function setupFailure(file: string, e: unknown): RunResult {
+  return { outcome: 'invalid', problems: [{ file, path: '(setup)', message: e instanceof Error ? e.message : String(e) }] };
+}
+
 export function runScenario(prepared: PreparedRun, registry: ContentRegistry): RunResult {
   const problems = checkContent(prepared, registry);
   if (problems.length > 0) return { outcome: 'invalid', problems };
   const { scenario, plan } = prepared;
   const boss = registry.bosses.get(plan.boss)!;
 
-  let data: DataRegistry;
-  try {
+  // Engine data is validated on its own so a problem in it is not blamed on the boss content.
+  const coreProblems = dataProblems('engine:core-data', () => new DataRegistry(CORE_DATA));
+  if (coreProblems.length > 0) return { outcome: 'invalid', problems: coreProblems };
+  let data!: DataRegistry;
+  const bossProblems = dataProblems(`boss:${boss.id}`, () => {
     data = new DataRegistry([...CORE_DATA, ...boss.data], boss.overrides, scenario.profile);
-  } catch (e) {
-    if (e instanceof DataValidationError) {
-      return { outcome: 'invalid', problems: e.problems.map((message) => ({ file: `boss:${boss.id}`, path: '(data)', message })) };
-    }
-    throw e;
-  }
+  });
+  if (bossProblems.length > 0) return { outcome: 'invalid', problems: bossProblems };
 
   const sim = new Simulation({
     seed: scenario.seed,
@@ -94,7 +107,13 @@ export function runScenario(prepared: PreparedRun, registry: ContentRegistry): R
     sampleIntervalMs: data.num('core.sample_interval_ms'),
   });
   installCoreRules(sim);
-  const setup = boss.setup({ sim, data, difficulty: scenario.difficulty });
+  // Content setup errors (an unknown data key, a throwing model factory) are reported as invalid input.
+  let setup!: BossSetup;
+  try {
+    setup = boss.setup({ sim, data, difficulty: scenario.difficulty });
+  } catch (e) {
+    return setupFailure(`boss:${boss.id}`, e);
+  }
   const rules = new RuleEngine(sim, plan, new Map([...BUILTIN_ACTIONS, ...registry.actions]), {
     currentTank: () => victimOf(sim, setup.bossUnitId),
   });
@@ -116,17 +135,38 @@ export function runScenario(prepared: PreparedRun, registry: ContentRegistry): R
     const pos = plan.spots[rules.assignment(m.id)!];
     if (m.kind === 'modelled') {
       const factory = registry.policies.get(m.spec)!;
-      const made = factory.create({ sim, member: m, data });
+      let made: ReturnType<PolicyFactory['create']>;
+      try {
+        made = factory.create({ sim, member: m, data });
+      } catch (e) {
+        return setupFailure(`spec:${m.spec}`, e);
+      }
       sim.addUnit({ ...made.unit, id: m.id, name: m.name, kind: 'player', role: factory.role, pos });
       controllers.push(new ActorController(sim, m.id, made.policy, hooks));
     } else {
       sim.addUnit({ ...playerBody, id: m.id, name: m.name, kind: 'player', role: m.role, approximate: true, maxHealth: m.maxHealth, pos });
     }
   }
-  setup.pull(sim);
+  try {
+    setup.pull(sim);
+  } catch (e) {
+    return setupFailure(`boss:${boss.id}`, e);
+  }
   rules.install();
   for (const c of controllers) c.install();
-  for (const m of roster) if (m.kind === 'standin') installStandin(sim, m);
+  const standins = roster.filter((m) => m.kind === 'standin');
+  if (standins.length > 0) {
+    const params: StandinParams = {
+      tickMs: data.num('core.standin_tick_ms'),
+      rangeYd: {
+        tank: data.num('core.standin_range_tank_yd'),
+        melee: data.num('core.standin_range_melee_yd'),
+        ranged: data.num('core.standin_range_ranged_yd'),
+        healer: data.num('core.standin_range_healer_yd'),
+      },
+    };
+    for (const m of standins) installStandin(sim, m, params);
+  }
   const aiUpdateIntervalMs = data.num('core.ai_update_interval_ms');
   attachBoss(sim, setup.script, setup.bossUnitId, aiUpdateIntervalMs);
   const outcome = sim.run();
@@ -136,6 +176,9 @@ export function runScenario(prepared: PreparedRun, registry: ContentRegistry): R
     azerothcoreCommit: PINS.azerothcoreCommit,
     spellDataVersions: [...PINS.spellDataVersions],
     scenario: scenario.id,
+    plan: plan.id,
+    maxDurationMs: scenario.maxDurationMs,
+    mistakes: scenario.mistakes.map((m) => canonicalStringify(m)),
     boss: plan.boss,
     difficulty: scenario.difficulty,
     seed: scenario.seed,

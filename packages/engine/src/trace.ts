@@ -61,6 +61,10 @@ export interface TraceMeta {
   readonly azerothcoreCommit: string;
   readonly spellDataVersions: readonly string[];
   readonly scenario: string;
+  readonly plan: string;
+  readonly maxDurationMs: number;
+  /** Each scenario mistake as canonical JSON, so the meta stays a plain serialisable structure. */
+  readonly mistakes: readonly string[];
   readonly boss: string;
   readonly difficulty: string;
   readonly seed: number;
