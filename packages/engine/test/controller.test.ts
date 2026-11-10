@@ -120,4 +120,80 @@ describe('ActorController (§8.4)', () => {
       expect(sim.trace.list().some((e) => e.kind === 'move_start')).toBe(!ruleMoving);
     }
   });
+
+  it('spots in the view are frozen copies', () => {
+    const sim = newSim(1000);
+    const spot = { x: 1, y: 2 };
+    const h: ControllerHooks = { ...hooks(), spots: () => ({ home: spot }) };
+    const views: ActorView[] = [];
+    const probe: ActorPolicy = { wakeOn: { anyHealthChange: false, anyAuraChange: false }, decide: (v) => (views.push(v), { type: 'none' }) };
+    new ActorController(sim, 'mage', probe, h).install();
+    sim.run();
+    expect(() => {
+      (views[0].spots.home as { x: number }).x = 99;
+    }).toThrow(TypeError);
+    expect(spot).toEqual({ x: 1, y: 2 });
+  });
+
+  it('a move does not end the decision: an instant may follow at the same time', () => {
+    const sim = newSim(1000);
+    const kite: ActorPolicy = {
+      wakeOn: { anyHealthChange: false, anyAuraChange: false },
+      decide: (v) =>
+        !v.self.moving
+          ? { type: 'move', to: { x: 30, y: 0 } }
+          : v.canCast('flash', 'boss').ok
+            ? { type: 'cast', spell: 'flash', target: 'boss' }
+            : { type: 'none' },
+    };
+    new ActorController(sim, 'mage', kite, hooks()).install();
+    sim.run();
+    const first = sim.trace.list().filter((e) => (e.kind === 'move_start' || e.kind === 'cast_start') && e.t === 0).map((e) => e.kind);
+    expect(first).toEqual(['move_start', 'cast_start']);
+  });
+
+  it('ignores a policy move for a unit that cannot move, and a move to the current destination', () => {
+    const sim = newSim(1000);
+    sim.addUnit({ maxHealth: 10000, speedYdPerSec: 0, combatReach: 0, boundingRadius: 0, id: 'totem', name: 'Totem', kind: 'player', role: 'ranged', pos: { x: 5, y: 5 } });
+    const mover: ActorPolicy = { wakeOn: { anyHealthChange: false, anyAuraChange: false }, decide: () => ({ type: 'move', to: { x: 30, y: 0 } }) };
+    new ActorController(sim, 'totem', mover, hooks()).install();
+    new ActorController(sim, 'mage', mover, hooks()).install();
+    sim.run();
+    const starts = sim.trace.list().filter((e) => e.kind === 'move_start');
+    expect(starts.filter((e) => e.data.unit === 'totem')).toEqual([]);
+    expect(starts.filter((e) => e.data.unit === 'mage')).toHaveLength(1);
+  });
+
+  it('a policy can ask to be woken later', () => {
+    const sim = newSim(4000);
+    const times: number[] = [];
+    const timed: ActorPolicy = {
+      wakeOn: { anyHealthChange: false, anyAuraChange: false },
+      decide: (v) => (times.push(v.now), { type: 'none', retryAtMs: v.now === 0 ? 2500 : undefined }),
+    };
+    new ActorController(sim, 'mage', timed, hooks()).install();
+    sim.run();
+    expect(times).toEqual([0, 2500]);
+  });
+
+  it('hitting the action bound continues at the next millisecond', () => {
+    const sim = newSim(3);
+    sim.catalog.addSpell({ id: 'tick', castTimeMs: 0, gcdMs: 0, cooldownMs: 0, rangeYd: 30, usableWhileMoving: true, target: 'unit', effects: dmg(1) });
+    const spam: ActorPolicy = { wakeOn: { anyHealthChange: false, anyAuraChange: false }, decide: () => ({ type: 'cast', spell: 'tick', target: 'boss' }) };
+    new ActorController(sim, 'mage', spam, hooks()).install();
+    sim.run();
+    const at = sim.trace.list().filter((e) => e.kind === 'cast_start').map((e) => e.t);
+    expect(at.slice(0, 8)).toEqual([0, 0, 0, 0, 1, 1, 1, 1]);
+  });
+
+  it('a wake loop within one millisecond fails loudly', () => {
+    const sim = newSim(600000);
+    sim.catalog.addSpell({ id: 'pulse', castTimeMs: 0, gcdMs: 0, cooldownMs: 0, rangeYd: 40, usableWhileMoving: true, target: 'unit', effects: [{ type: 'heal', min: 1, max: 1 }] });
+    sim.at(0, EventClass.SpellHit, () => void sim.damage('tank', 100, { sourceId: 'boss', ability: 'smash', school: 'physical' }, []));
+    const loop: ActorPolicy = { wakeOn: { anyHealthChange: true, anyAuraChange: false }, decide: () => ({ type: 'cast', spell: 'pulse', target: 'tank' }) };
+    new ActorController(sim, 'healer', loop, hooks()).install();
+    sim.addUnit({ maxHealth: 10000, speedYdPerSec: 7, combatReach: 0, boundingRadius: 0, id: 'healer2', name: 'Healer2', kind: 'player', role: 'healer', pos: { x: 26, y: 0 } });
+    new ActorController(sim, 'healer2', loop, hooks()).install();
+    expect(() => sim.run()).toThrow(/decided more than 64 times at \d+ ms: likely a wake loop/);
+  });
 });

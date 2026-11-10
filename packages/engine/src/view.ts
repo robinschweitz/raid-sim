@@ -89,7 +89,7 @@ export function buildView(
     now,
     self,
     units: Object.freeze(units),
-    spots: Object.freeze({ ...spots }),
+    spots: Object.freeze(Object.fromEntries(Object.entries(spots).map(([k, v]) => [k, Object.freeze({ x: v.x, y: v.y })]))),
     assignment,
     timers: Object.freeze(timers),
     gcdReadyAtMs: me.gcdUntilMs,

@@ -9,7 +9,7 @@ import { buildView, type ActorView } from './view';
 export type PolicyAction =
   | { readonly type: 'cast'; readonly spell: string; readonly target: string }
   | { readonly type: 'move'; readonly to: Vec2 }
-  | { readonly type: 'none' };
+  | { readonly type: 'none'; readonly retryAtMs?: number };
 
 /** A spec's decision policy (priority list, healer targeting). Plan 3 adds the real specs. */
 export interface ActorPolicy {
@@ -25,11 +25,15 @@ export interface ControllerHooks {
 
 /** Bound on actions in one wake-up; only off-GCD instants can chain. */
 const MAX_ACTIONS_PER_WAKE = 4;
+/** More decisions than this by one actor in one millisecond means a wake loop. */
+const MAX_DECISIONS_PER_MS = 64;
 
 export class ActorController {
   private pending: Scheduled | null = null;
   private pendingAt = Number.POSITIVE_INFINITY;
   private deciding = false;
+  private decisionMs = -1;
+  private decisionCount = 0;
 
   constructor(
     private readonly sim: Simulation,
@@ -85,29 +89,58 @@ export class ActorController {
   private decide(): void {
     const self = this.sim.unit(this.actorId);
     if (!self.alive || this.sim.outcome) return;
+    if (this.sim.now !== this.decisionMs) {
+      this.decisionMs = this.sim.now;
+      this.decisionCount = 0;
+    }
+    if (++this.decisionCount > MAX_DECISIONS_PER_MS) {
+      throw new Error(`actor ${this.actorId} decided more than ${MAX_DECISIONS_PER_MS} times at ${this.sim.now} ms: likely a wake loop`);
+    }
     this.deciding = true;
+    let retryAtMs: number | undefined;
+    let hitBound = true;
     try {
       for (let i = 0; i < MAX_ACTIONS_PER_WAKE; i++) {
-        if (self.cast) break;
+        if (self.cast) {
+          hitBound = false;
+          break;
+        }
         const view = buildView(this.sim, this.actorId, this.hooks.spots(), this.hooks.assignment(this.actorId));
         const action = this.policy.decide(view);
-        if (action.type === 'none') break;
+        if (action.type === 'none') {
+          retryAtMs = action.retryAtMs;
+          hitBound = false;
+          break;
+        }
         if (action.type === 'move') {
           const here = positionAt(self, this.sim.now);
-          const already = here.x === action.to.x && here.y === action.to.y;
+          const arrivesAtOnce = here.x === action.to.x && here.y === action.to.y;
+          const sameDestination = self.move !== null && self.move.to.x === action.to.x && self.move.to.y === action.to.y;
           // Moving to the current position would arrive at once and wake the actor again in the same millisecond.
-          if (!already && !this.hooks.isRuleMoving(this.actorId)) this.sim.startMove(this.actorId, action.to, []);
-          break;
+          if (arrivesAtOnce || sameDestination || self.speedYdPerSec <= 0 || this.hooks.isRuleMoving(this.actorId)) {
+            hitBound = false;
+            break;
+          }
+          this.sim.startMove(this.actorId, action.to, []);
+          continue;
         }
         const gcdBefore = self.gcdUntilMs;
         const result = startCast(this.sim, this.actorId, action.spell, action.target, []);
-        if (!result.ok) break;
+        if (!result.ok) {
+          hitBound = false;
+          break;
+        }
         const offGcdInstant = self.gcdUntilMs === gcdBefore && !self.cast;
-        if (!offGcdInstant) break;
+        if (!offGcdInstant) {
+          hitBound = false;
+          break;
+        }
       }
     } finally {
       this.deciding = false;
     }
+    if (hitBound) this.wake(this.sim.now + 1);
+    else if (retryAtMs !== undefined && retryAtMs > this.sim.now) this.wake(retryAtMs);
     this.scheduleFollowUp(self);
   }
 
