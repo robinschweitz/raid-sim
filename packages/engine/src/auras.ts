@@ -1,11 +1,9 @@
 import { applyEffects } from './effects';
 import { EventClass } from './queue';
 import type { Simulation } from './sim';
-import { auraKey, type AuraInstance } from './units';
+import { auraKey, compareStrings, type AuraInstance } from './units';
 
-const byString = (a: string, b: string): number => (a < b ? -1 : a > b ? 1 : 0);
-
-/** Applies or stacks an aura; returns the event id, or null if the target is dead. */
+/** Applies or stacks an aura; returns the event id, or null if the target is dead or the fight is over. */
 export function applyAura(
   sim: Simulation,
   auraId: string,
@@ -15,7 +13,7 @@ export function applyAura(
 ): string | null {
   const def = sim.catalog.aura(auraId);
   const target = sim.unit(targetId);
-  if (!target.alive) return null;
+  if (!target.alive || sim.over) return null;
   const key = auraKey(auraId, casterId);
   const expiresMs = sim.now + def.durationMs;
   const existing = target.auras.get(key);
@@ -100,7 +98,7 @@ export function removeAuras(
 ): string[] {
   const target = sim.unit(targetId);
   const ids: string[] = [];
-  for (const key of [...target.auras.keys()].sort(byString)) {
+  for (const key of [...target.auras.keys()].sort(compareStrings)) {
     const inst = target.auras.get(key)!;
     if (inst.auraId !== auraId) continue;
     sim.cancel(inst.expiry);

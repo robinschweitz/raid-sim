@@ -10,7 +10,7 @@ export interface StandinParams {
   readonly rangeYd: Readonly<Record<StandinMember['role'], number>>;
 }
 
-/** Lowest health percentage in range (not lowest absolute health); ties go to the lowest id (A-011). */
+/** Lowest health percentage in range (not lowest absolute health); ties go to the lowest id, as players() is sorted (A-011). */
 function healTarget(sim: Simulation, self: Unit, range: number): Unit | null {
   let best: Unit | null = null;
   let bestRatio = 1;
@@ -18,7 +18,7 @@ function healTarget(sim: Simulation, self: Unit, range: number): Unit | null {
     if (!p.alive || p.health >= p.maxHealth) continue;
     if (edgeDistance(self, p, sim.now) > range) continue;
     const ratio = p.health / p.maxHealth;
-    if (ratio < bestRatio || (ratio === bestRatio && best !== null && p.id < best.id)) {
+    if (ratio < bestRatio) {
       best = p;
       bestRatio = ratio;
     }

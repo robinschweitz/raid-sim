@@ -1,7 +1,7 @@
 import { checkCast, type CastCheck } from './casting';
 import { positionAt } from './movement';
 import type { Simulation, TimerWindow } from './sim';
-import type { Role, Unit, Vec2 } from './units';
+import { compareStrings, type Role, type Unit, type Vec2 } from './units';
 
 export interface AuraView {
   readonly aura: string;
@@ -45,13 +45,12 @@ export interface ActorView {
   canCast(spellId: string, targetId: string): CastCheck;
 }
 
-const byString = (a: string, b: string): number => (a < b ? -1 : a > b ? 1 : 0);
 
 function unitView(u: Unit, now: number): UnitView {
   const p = positionAt(u, now);
   const auras = [...u.auras.values()]
     .map((a) => Object.freeze({ aura: a.auraId, caster: a.casterId, stacks: a.stacks, remainingMs: a.expiresMs - now }))
-    .sort((a, b) => byString(a.aura, b.aura) || byString(a.caster, b.caster));
+    .sort((a, b) => compareStrings(a.aura, b.aura) || compareStrings(a.caster, b.caster));
   return Object.freeze({
     id: u.id,
     name: u.name,
@@ -81,9 +80,9 @@ export function buildView(
   if (!self) throw new Error(`unknown actor ${selfId}`);
   const me = sim.unit(selfId);
   const cooldowns: Record<string, number> = {};
-  for (const id of [...me.cooldowns.keys()].sort(byString)) cooldowns[id] = me.cooldowns.get(id)!;
+  for (const id of [...me.cooldowns.keys()].sort(compareStrings)) cooldowns[id] = me.cooldowns.get(id)!;
   const timers = [...sim.timerWindows.values()]
-    .sort((a, b) => byString(a.boss, b.boss) || byString(a.ability, b.ability))
+    .sort((a, b) => compareStrings(a.boss, b.boss) || compareStrings(a.ability, b.ability))
     .map((t) => Object.freeze({ ...t }));
   return Object.freeze({
     now,

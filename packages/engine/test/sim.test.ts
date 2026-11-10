@@ -272,6 +272,21 @@ describe('Simulation', () => {
     expect(ends[0].data).toMatchObject({ x: 5, y: 0, stopped: true });
     expect(sim.unit('p1').pos).toEqual({ x: 5, y: 0 });
   });
+
+  it('rounds damage and healing half-up to whole numbers (A-017)', () => {
+    const sim = newSim();
+    sim.at(0, EventClass.SpellHit, () => {
+      sim.damage('p1', 100.5, hit('boss'), []);
+      sim.damage('p2', 100.4, hit('boss'), []);
+      sim.heal('p1', 2.5, hit('p2'), []);
+    });
+    sim.run();
+    expect(sim.trace.list().filter((e) => e.kind !== 'outcome').map((e) => [e.kind, e.data.amount])).toEqual([
+      ['damage', 101],
+      ['damage', 100],
+      ['heal', 3],
+    ]);
+  });
 });
 
 function meta() {

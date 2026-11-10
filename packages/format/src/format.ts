@@ -3,6 +3,8 @@ import type { Dictionary } from './en';
 
 const UNIT_KEYS = new Set(['boss', 'caster', 'target', 'unit', 'source', 'actor']);
 const ABILITY_KEYS = new Set(['spell', 'ability', 'aura']);
+/** `...Ms` keys that are absolute times; every other `...Ms` key is a duration. */
+const CLOCK_KEYS = new Set(['endMs', 'expiresMs', 'arrivalMs', 'earliestMs', 'latestMs']);
 
 const pad = (n: number, width: number): string => String(n).padStart(width, '0');
 
@@ -19,7 +21,8 @@ export function createFormatter(trace: Trace, dict: Dictionary): (ev: TraceEvent
     if (Array.isArray(v)) return v.map((x) => render(key, x as string)).join(', ');
     if (typeof v === 'string' && UNIT_KEYS.has(key)) return names.get(v) ?? v;
     if (typeof v === 'string' && ABILITY_KEYS.has(key)) return dict[`ability.${v}`] ?? v;
-    if (typeof v === 'number' && key.endsWith('Ms')) return clock(v);
+    if (typeof v === 'number' && CLOCK_KEYS.has(key)) return clock(v);
+    if (typeof v === 'number' && key.endsWith('Ms')) return `${v} ms`;
     return String(v);
   };
   return (ev) => {

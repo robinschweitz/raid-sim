@@ -164,4 +164,31 @@ describe('auras', () => {
     const ticks = events(sim, 'periodic_tick').map((e) => e.t);
     expect(ticks).toEqual(Array.from({ length: 20 }, (_, i) => (i + 1) * 1000));
   });
+
+  it('emits nothing after the outcome when an area effect continues past a lethal hit on the last boss', () => {
+    const sim = newSim();
+    sim.catalog.addAura({
+      id: 'doom',
+      durationMs: 1000,
+      maxStacks: 1,
+      onExpire: [
+        {
+          type: 'area',
+          radius: 200,
+          includeCenter: true,
+          filter: 'all',
+          effects: [
+            { type: 'damage', school: 'shadow', min: 1e6, max: 1e6 },
+            { type: 'apply_aura', aura: 'stacker' },
+          ],
+        },
+      ],
+    });
+    sim.at(0, EventClass.SpellHit, () => void applyAura(sim, 'doom', 'p1', 'boss', []));
+    const outcome = sim.run();
+    expect(outcome.kind).toBe('kill');
+    const all = sim.trace.list();
+    expect(all[all.length - 1].kind).toBe('outcome');
+    expect(all.filter((e) => e.kind === 'aura_applied' && e.t >= 1000)).toHaveLength(0);
+  });
 });

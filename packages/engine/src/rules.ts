@@ -3,7 +3,7 @@ import type { Action, Member, Plan, Rule } from './plan/schema';
 import { EventClass } from './queue';
 import type { Simulation } from './sim';
 import type { TraceEvent, TraceValue } from './trace';
-import type { Unit, Vec2 } from './units';
+import { byId, compareStrings, type Unit, type Vec2 } from './units';
 
 export type ActionResult = { readonly ok: true } | { readonly ok: false; readonly reason: string };
 
@@ -73,10 +73,10 @@ export class RuleEngine {
     private readonly handlers: ReadonlyMap<string, ActionHandler>,
     private readonly hooks: RuleHooks,
   ) {
-    this.sortedRoster = [...plan.roster].sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+    this.sortedRoster = [...plan.roster].sort(byId);
     this.members = new Map(plan.roster.map((m) => [m.id, m]));
     this.ordered = [...plan.rules].sort(
-      (a, b) => b.priority - a.priority || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0),
+      (a, b) => b.priority - a.priority || compareStrings(a.id, b.id),
     );
   }
 
@@ -84,7 +84,7 @@ export class RuleEngine {
   private whoOf(rule: Rule): readonly string[] {
     let sorted = this.whoSorted.get(rule.id);
     if (!sorted) {
-      sorted = [...rule.who].sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
+      sorted = [...rule.who].sort(compareStrings);
       this.whoSorted.set(rule.id, sorted);
     }
     return sorted;
@@ -185,7 +185,7 @@ export class RuleEngine {
 
   private fire(rule: Rule, actorId: string, causes: readonly string[]): boolean {
     const actor = this.sim.units.get(actorId);
-    if (!actor || !actor.alive || this.sim.outcome) return false;
+    if (!actor || !actor.alive || this.sim.over) return false;
     const key = `${rule.id}|${actorId}`;
     const last = this.lastFired.get(key);
     if (last !== undefined && this.sim.now < last + rule.cooldownMs) return false;
@@ -199,7 +199,7 @@ export class RuleEngine {
 
   private execute(rule: Rule, actorId: string, cause: string, attempt: number): void {
     const actor = this.sim.unit(actorId);
-    if (!actor.alive || this.sim.outcome) return;
+    if (!actor.alive || this.sim.over) return;
     let result: ActionResult;
     const running = this.moving.get(actorId);
     if (MOVE_ACTIONS.has(rule.do.do) && running !== undefined && running >= rule.priority) {

@@ -1,3 +1,5 @@
+import { byId } from './units';
+
 const STREAM_NAME = /^[a-z0-9_.:-]+$/;
 
 function fnv1a(text: string): number {
@@ -40,7 +42,7 @@ export class Rng {
   /** Up to n items. The result depends only on the set of ids and the stream state, not on input order. */
   pick<T extends { readonly id: string }>(items: readonly T[], n: number): T[] {
     if (!Number.isSafeInteger(n) || n < 0) throw new Error(`invalid pick count ${n}`);
-    const pool = [...items].sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+    const pool = [...items].sort(byId);
     const k = Math.min(n, pool.length);
     for (let i = 0; i < k; i++) {
       const j = this.int(i, pool.length - 1);

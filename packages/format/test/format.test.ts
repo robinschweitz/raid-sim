@@ -49,4 +49,12 @@ describe('formatter', () => {
     expect(canonicalStringify(t)).toBe(before);
     expect(canonicalStringify(trace())).toBe(before);
   });
+
+  it('renders only absolute-time keys as clocks; durations print in ms', () => {
+    const t = trace();
+    const ev = { id: 'e9', t: 61234, kind: 'cast_start', causes: [], data: { caster: 'p1', spell: 'bolt', castTimeMs: 1500, endMs: 62734 } } as Trace['events'][number];
+    const dict = { ...EN, 'event.cast_start': '{caster} casts {spell} ({castTimeMs}) until {endMs}' };
+    const withEvent: Trace = { ...t, events: [ev] };
+    expect(formatLog(withEvent, dict, {})).toEqual(['[01:01.234] Alice casts bolt (1500 ms) until 01:02.734']);
+  });
 });

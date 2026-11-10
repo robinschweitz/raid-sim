@@ -3,7 +3,7 @@ import { EventMap } from './eventmap';
 import { EventClass } from './queue';
 import type { Simulation } from './sim';
 import type { TraceValue } from './trace';
-import type { Unit } from './units';
+import { compareStrings, type Unit } from './units';
 
 export type MechanicStatusKind = 'implemented' | 'partial' | 'not_implemented';
 export type ValidationStatus = 'unvalidated' | 'azerothcore_source' | 'rising_gods_logs';
@@ -38,14 +38,13 @@ export interface BossScript {
   updateAI(ctx: BossContext, diffMs: number): void;
 }
 
-const byString = (a: string, b: string): number => (a < b ? -1 : a > b ? 1 : 0);
 
 /** Highest threat among living units on the boss's threat table; ties go to the lowest id. */
 export function victimOf(sim: Simulation, bossId: string): Unit | null {
   const boss = sim.unit(bossId);
   let best: Unit | null = null;
   let bestThreat = Number.NEGATIVE_INFINITY;
-  for (const id of [...boss.threat.keys()].sort(byString)) {
+  for (const id of [...boss.threat.keys()].sort(compareStrings)) {
     const u = sim.units.get(id);
     const threat = boss.threat.get(id)!;
     if (!u || !u.alive) continue;

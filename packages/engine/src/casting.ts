@@ -13,7 +13,8 @@ export type CastFailure =
   | 'cooldown'
   | 'target_dead'
   | 'moving'
-  | 'out_of_range';
+  | 'out_of_range'
+  | 'fight_over';
 
 export type CastCheck = { readonly ok: true } | { readonly ok: false; readonly reason: CastFailure };
 
@@ -49,6 +50,8 @@ export function startCast(
   targetId: string,
   causes: readonly string[],
 ): CastResult {
+  // No events once the outcome is decided; `event` is empty because nothing was written.
+  if (sim.over) return { ok: false, reason: 'fight_over', event: '' };
   const check = checkCast(sim, casterId, spellId, targetId);
   if (!check.ok) {
     const event = sim.emit('cast_failed', { caster: casterId, spell: spellId, target: targetId, reason: check.reason }, causes);

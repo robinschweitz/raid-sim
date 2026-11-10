@@ -3,7 +3,7 @@ import { positionAt, travelTimeMs } from './movement';
 import { EventClass, EventQueue, type Scheduled } from './queue';
 import { RngRegistry } from './rng';
 import { TraceWriter, type EventKind, type TraceEvent, type TraceValue, type UnitSnapshot } from './trace';
-import { byId, createUnit, type Unit, type UnitInit, type Vec2 } from './units';
+import { byId, compareStrings, createUnit, type Unit, type UnitInit, type Vec2 } from './units';
 
 export type OutcomeKind = 'kill' | 'wipe' | 'timeout';
 
@@ -33,7 +33,6 @@ export interface HitInfo {
 }
 
 const r3 = (n: number): number => Math.round(n * 1000) / 1000;
-const byString = (a: string, b: string): number => (a < b ? -1 : a > b ? 1 : 0);
 
 export class Simulation {
   now = 0;
@@ -87,6 +86,11 @@ export class Simulation {
     return this.sortedUnits((u) => u.kind === 'player');
   }
 
+  /** True once the outcome is decided (or being decided): nothing may emit events or act after this. */
+  get over(): boolean {
+    return this.outcome !== null || this.ending;
+  }
+
   subscribe(listener: (ev: TraceEvent) => void): void {
     this.listeners.push(listener);
   }
@@ -110,7 +114,7 @@ export class Simulation {
   damage(targetId: string, amount: number, info: HitInfo, causes: readonly string[]): string | null {
     const u = this.unit(targetId);
     if (!Number.isFinite(amount)) throw new Error(`invalid amount ${amount} for damage to ${targetId}`);
-    if (!u.alive || this.outcome || this.ending) return null;
+    if (!u.alive || this.over) return null;
     const rounded = Math.max(0, Math.round(amount));
     const dealt = Math.min(u.health, rounded);
     u.health -= dealt;
@@ -130,7 +134,7 @@ export class Simulation {
   heal(targetId: string, amount: number, info: HitInfo, causes: readonly string[]): string | null {
     const u = this.unit(targetId);
     if (!Number.isFinite(amount)) throw new Error(`invalid amount ${amount} for heal to ${targetId}`);
-    if (!u.alive || this.outcome || this.ending) return null;
+    if (!u.alive || this.over) return null;
     const rounded = Math.max(0, Math.round(amount));
     const effective = Math.min(u.maxHealth - u.health, rounded);
     u.health += effective;
@@ -221,7 +225,7 @@ export class Simulation {
     }
     const deathId = this.emit('death', { unit: u.id }, [cause]);
     u.diedAtEvent = deathId;
-    for (const key of [...u.auras.keys()].sort(byString)) {
+    for (const key of [...u.auras.keys()].sort(compareStrings)) {
       const a = u.auras.get(key)!;
       this.cancel(a.expiry);
       this.cancel(a.tick);
@@ -252,7 +256,7 @@ export class Simulation {
       const p = positionAt(u, t);
       const auras = [...u.auras.values()]
         .map((a) => [a.auraId, a.stacks] as const)
-        .sort((a, b) => byString(a[0], b[0]) || a[1] - b[1]);
+        .sort((a, b) => compareStrings(a[0], b[0]) || a[1] - b[1]);
       return { id: u.id, x: r3(p.x), y: r3(p.y), health: u.health, alive: u.alive, auras, cast: u.cast ? u.cast.spellId : null };
     });
     this.trace.snapshot({ t, units });

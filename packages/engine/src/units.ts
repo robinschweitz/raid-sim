@@ -113,5 +113,7 @@ export function createUnit(init: UnitInit): Unit {
 
 export const auraKey = (auraId: string, casterId: string): string => `${auraId}|${casterId}`;
 
-export const byId = (a: { readonly id: string }, b: { readonly id: string }): number =>
-  a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
+/** Locale-independent string order (UTF-16 code units); the one comparator used wherever order must be deterministic. */
+export const compareStrings = (a: string, b: string): number => (a < b ? -1 : a > b ? 1 : 0);
+
+export const byId = (a: { readonly id: string }, b: { readonly id: string }): number => compareStrings(a.id, b.id);
