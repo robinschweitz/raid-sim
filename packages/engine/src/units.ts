@@ -81,9 +81,11 @@ export function createUnit(init: UnitInit): Unit {
   if (!Number.isInteger(init.maxHealth) || init.maxHealth <= 0) {
     throw new Error(`maxHealth of ${init.id} must be a positive integer`);
   }
-  if (init.speedYdPerSec < 0 || init.combatReach < 0 || init.boundingRadius < 0) {
-    throw new Error(`negative speed or size for ${init.id}`);
+  const sizeOk = (x: number): boolean => Number.isFinite(x) && x >= 0;
+  if (!sizeOk(init.speedYdPerSec) || !sizeOk(init.combatReach) || !sizeOk(init.boundingRadius)) {
+    throw new Error(`negative or invalid speed or size for ${init.id}`);
   }
+  if (!Number.isFinite(init.pos.x) || !Number.isFinite(init.pos.y)) throw new Error(`invalid position for ${init.id}`);
   return {
     id: init.id,
     name: init.name,

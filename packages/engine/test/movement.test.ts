@@ -37,4 +37,37 @@ describe('movement', () => {
     expect(() => createUnit({ ...base, id: 'Bad Id', name: 'X', pos: { x: 0, y: 0 } })).toThrow(/invalid unit id/);
     expect(() => createUnit({ ...base, id: 'x', name: 'X', maxHealth: 0, pos: { x: 0, y: 0 } })).toThrow(/maxHealth/);
   });
+
+  it('rejects NaN speed and NaN position', () => {
+    expect(() => createUnit({ ...base, id: 'x', name: 'X', speedYdPerSec: NaN, pos: { x: 0, y: 0 } })).toThrow(/negative or invalid speed or size for x/);
+    expect(() => createUnit({ ...base, id: 'x', name: 'X', pos: { x: NaN, y: 0 } })).toThrow(/invalid position for x/);
+    expect(() => createUnit({ ...base, id: 'x', name: 'X', pos: { x: 0, y: Infinity } })).toThrow(/invalid position for x/);
+  });
+
+  it('handles zero-length moves', () => {
+    const u = createUnit({ ...base, id: 'p1', name: 'P1', pos: { x: 2, y: 2 } });
+    expect(travelTimeMs({ x: 2, y: 2 }, { x: 2, y: 2 }, 0)).toBe(0);
+    expect(() => travelTimeMs({ x: 0, y: 0 }, { x: 1, y: 0 }, 0)).toThrow();
+    expect(() => travelTimeMs({ x: 0, y: 0 }, { x: 1, y: 0 }, NaN)).toThrow();
+    const handle = new EventQueue().push(0, EventClass.Decision, () => {});
+    u.move = { from: { x: 2, y: 2 }, to: { x: 2, y: 2 }, startMs: 0, speed: 5, arrivalMs: 0, handle };
+    expect(positionAt(u, -5)).toEqual({ x: 2, y: 2 });
+  });
+
+  it('interpolates diagonally and clamps before the start', () => {
+    const u = createUnit({ ...base, id: 'p1', name: 'P1', pos: { x: 0, y: 0 } });
+    const handle = new EventQueue().push(2000, EventClass.Decision, () => {});
+    u.move = { from: { x: 0, y: 0 }, to: { x: 6, y: 8 }, startMs: 500, speed: 5, arrivalMs: 2500, handle };
+    expect(positionAt(u, 1500)).toEqual({ x: 3, y: 4 });
+    expect(positionAt(u, 0)).toEqual({ x: 0, y: 0 });
+  });
+
+  it('measures edge distance for a unit mid-move', () => {
+    const a = createUnit({ ...base, id: 'a', name: 'A', pos: { x: 0, y: 0 } });
+    const b = createUnit({ ...base, id: 'b', name: 'B', pos: { x: 20, y: 0 } });
+    const handle = new EventQueue().push(2000, EventClass.Decision, () => {});
+    b.move = { from: { x: 20, y: 0 }, to: { x: 10, y: 0 }, startMs: 0, speed: 5, arrivalMs: 2000, handle };
+    expect(edgeDistance(a, b, 1000)).toBe(12);
+    expect(edgeDistance(a, b, 2000)).toBe(7);
+  });
 });
