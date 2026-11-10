@@ -37,6 +37,12 @@ describe('DataEntrySchema', () => {
     expect(DataEntrySchema.safeParse({ key: 'a.b', value: 1 }).success).toBe(false);
   });
 
+  it('rejects NaN and Infinity values', () => {
+    const source = { kind: 'configured', file: 'x' };
+    expect(DataEntrySchema.safeParse({ key: 'a.b', value: NaN, source }).success).toBe(false);
+    expect(DataEntrySchema.safeParse({ key: 'a.b', value: Infinity, source }).success).toBe(false);
+  });
+
   it('accepts a sourced value', () => {
     const r = DataEntrySchema.safeParse({ key: 'a.b', value: 1, source: { kind: 'configured', file: 'x' } });
     expect(r.success).toBe(true);
@@ -52,5 +58,20 @@ describe('OverrideEntrySchema', () => {
       source: { kind: 'assumption', rationale: 'x', confirmBy: 'y' },
     });
     expect(r.success).toBe(false);
+  });
+
+  it('accepts a log source', () => {
+    const r = OverrideEntrySchema.safeParse({
+      key: 'rg.a.b',
+      overrides: 'a.b',
+      value: 2,
+      source: {
+        kind: 'log',
+        logFile: 'logs/2026-11-01.txt',
+        encounter: { server: 'rising-gods', difficulty: '25n', date: '2026-11-01' },
+        uncertainty: '±0.5 s',
+      },
+    });
+    expect(r.success).toBe(true);
   });
 });

@@ -28,7 +28,7 @@ export const SourceSchema = z.discriminatedUnion('kind', [
 export type Source = z.infer<typeof SourceSchema>;
 export type SourceKind = Source['kind'];
 
-export const ValueSchema = z.union([z.number(), z.string(), z.boolean()]);
+export const ValueSchema = z.union([z.number().finite(),z.string(), z.boolean()]);
 export type Value = z.infer<typeof ValueSchema>;
 
 export const DataEntrySchema = z.object({ key: DataKeySchema, value: ValueSchema, source: SourceSchema }).strict();
