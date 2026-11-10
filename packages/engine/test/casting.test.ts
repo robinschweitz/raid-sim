@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { checkCast, installCoreRules, startCast } from '../src/casting';
+import { checkCast, installCoreRules, interruptCast, startCast } from '../src/casting';
 import { EventClass } from '../src/queue';
 import { Simulation } from '../src/sim';
 
@@ -103,5 +103,58 @@ describe('casting', () => {
     });
     sim.run();
     expect(of(sim, 'cast_failed')).toHaveLength(1);
+  });
+
+  it('interrupt then recast at the same millisecond yields exactly one hit, at the new cast end', () => {
+    const sim = newSim();
+    sim.catalog.addSpell({ id: 'slow', castTimeMs: 2000, gcdMs: 0, cooldownMs: 0, rangeYd: 30, usableWhileMoving: false, target: 'unit', effects: dmg(100) });
+    sim.at(0, EventClass.Decision, () => void startCast(sim, 'mage', 'slow', 'boss', []));
+    sim.at(1000, EventClass.Decision, () => {
+      expect(interruptCast(sim, 'mage', 'stopped', [])).not.toBeNull();
+      expect(startCast(sim, 'mage', 'slow', 'boss', []).ok).toBe(true);
+    });
+    sim.run();
+    expect(of(sim, 'spell_hit').map((e) => e.t)).toEqual([3000]);
+    expect(sim.unit('boss').health).toBe(99900);
+  });
+
+  it('a caster who dies mid-cast produces no cast_success and no hit', () => {
+    const sim = newSim();
+    sim.at(0, EventClass.Decision, () => void startCast(sim, 'mage', 'bolt', 'boss', []));
+    sim.at(1000, EventClass.SpellHit, () => void sim.damage('mage', 1e6, { sourceId: 'boss', ability: 'x', school: 'physical' }, []));
+    sim.run();
+    expect(of(sim, 'cast_success')).toHaveLength(0);
+    expect(of(sim, 'spell_hit')).toHaveLength(0);
+  });
+
+  it('a target that dies while the projectile is in flight takes no hit', () => {
+    const sim = newSim();
+    sim.at(0, EventClass.Decision, () => void startCast(sim, 'mage', 'arrow', 'boss', []));
+    sim.at(200, EventClass.SpellHit, () => void sim.damage('boss', 1e9, { sourceId: 'add', ability: 'x', school: 'physical' }, []));
+    sim.run();
+    expect(of(sim, 'cast_success')).toHaveLength(1);
+    expect(of(sim, 'spell_hit')).toHaveLength(0);
+    expect(of(sim, 'damage').map((e) => e.data.ability)).toEqual(['x']);
+  });
+
+  it('a cast-time spell usable while moving is not interrupted by movement', () => {
+    const sim = newSim();
+    sim.catalog.addSpell({ id: 'walkcast', castTimeMs: 2000, gcdMs: 0, cooldownMs: 0, rangeYd: 60, usableWhileMoving: true, target: 'unit', effects: dmg(100) });
+    sim.at(0, EventClass.Decision, () => void startCast(sim, 'mage', 'walkcast', 'boss', []));
+    sim.at(500, EventClass.Decision, () => void sim.startMove('mage', { x: 25, y: 0 }, []));
+    sim.run();
+    expect(of(sim, 'cast_interrupted')).toHaveLength(0);
+    expect(of(sim, 'spell_hit').map((e) => e.t)).toEqual([2000]);
+  });
+
+  it('does not start the cooldown when completion fails', () => {
+    const sim = newSim();
+    sim.catalog.addSpell({ id: 'cdbolt', castTimeMs: 2000, gcdMs: 0, cooldownMs: 6000, rangeYd: 30, usableWhileMoving: false, target: 'unit', effects: dmg(100) });
+    sim.at(0, EventClass.Decision, () => void startCast(sim, 'mage', 'cdbolt', 'boss', []));
+    sim.at(500, EventClass.Decision, () => void sim.startMove('boss', { x: -20, y: 0 }, []));
+    sim.at(2000, EventClass.Decision, () => expect(sim.unit('mage').cooldowns.get('cdbolt')).toBeUndefined());
+    sim.run();
+    expect(of(sim, 'cast_failed').map((e) => e.data.reason)).toEqual(['out_of_range']);
+    expect(sim.unit('mage').cooldowns.has('cdbolt')).toBe(false);
   });
 });

@@ -93,4 +93,46 @@ describe('auras', () => {
     });
     sim.run();
   });
+
+  it('keeps its tick phase when a refresh revives a stopped tick chain (A-009)', () => {
+    const sim = newSim();
+    sim.catalog.addAura({
+      id: 'phase_dot',
+      durationMs: 2500,
+      maxStacks: 1,
+      periodic: { intervalMs: 1000, effects: [{ type: 'damage', school: 'shadow', min: 1, max: 1 }] },
+    });
+    sim.at(0, EventClass.SpellHit, () => void applyAura(sim, 'phase_dot', 'boss', 'p1', []));
+    sim.at(2200, EventClass.SpellHit, () => void applyAura(sim, 'phase_dot', 'boss', 'p1', []));
+    sim.run();
+    expect(events(sim, 'periodic_tick').map((e) => e.t)).toEqual([1000, 2000, 3000, 4000]);
+    expect(events(sim, 'aura_removed')[0].t).toBe(4700);
+  });
+
+  it('a removed and re-applied aura is not touched by the old instance expiry or ticks', () => {
+    const sim = newSim();
+    sim.at(0, EventClass.SpellHit, () => void applyAura(sim, 'dot', 'boss', 'p1', []));
+    sim.at(500, EventClass.SpellHit, () => void removeAuras(sim, 'p1', 'dot', 'removed', []));
+    sim.at(600, EventClass.SpellHit, () => void applyAura(sim, 'dot', 'boss', 'p1', []));
+    sim.run();
+    expect(events(sim, 'periodic_tick').map((e) => e.t)).toEqual([1600, 2600, 3600]);
+    const removed = events(sim, 'aura_removed');
+    expect(removed.map((e) => [e.t, e.data.reason])).toEqual([[500, 'removed'], [3600, 'expired']]);
+  });
+
+  it('a periodic tick that kills its target ends the aura with reason death and no on-expire', () => {
+    const sim = newSim();
+    sim.catalog.addAura({
+      id: 'lethal',
+      durationMs: 5000,
+      maxStacks: 1,
+      periodic: { intervalMs: 1000, effects: [{ type: 'damage', school: 'shadow', min: 1e6, max: 1e6 }] },
+      onExpire: [{ type: 'damage', school: 'nature', min: 1, max: 1 }],
+    });
+    sim.at(0, EventClass.SpellHit, () => void applyAura(sim, 'lethal', 'boss', 'p1', []));
+    sim.run();
+    expect(events(sim, 'periodic_tick').map((e) => e.t)).toEqual([1000]);
+    expect(events(sim, 'aura_removed').map((e) => [e.t, e.data.reason])).toEqual([[1000, 'death']]);
+    expect(events(sim, 'damage')).toHaveLength(1);
+  });
 });

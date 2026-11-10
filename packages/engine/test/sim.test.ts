@@ -118,6 +118,7 @@ describe('Simulation', () => {
         expiresMs: 5000,
         expiry: sim.at(5000, EventClass.AuraExpiry, () => {}),
         tick: null,
+        nextTickMs: 0,
         appliedEvent: '',
       });
       sim.damage('p1', 1e6, hit('boss'), []);

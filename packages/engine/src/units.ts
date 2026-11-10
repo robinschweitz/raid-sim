@@ -26,6 +26,8 @@ export interface AuraInstance {
   expiresMs: number;
   expiry: Scheduled;
   tick: Scheduled | null;
+  /** Time of the next periodic tick anchor (applied + k * interval); keeps tick phase across refreshes. */
+  nextTickMs: number;
   appliedEvent: string;
 }
 

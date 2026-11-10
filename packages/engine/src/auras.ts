@@ -23,13 +23,17 @@ export function applyAura(
     existing.stacks = Math.min(def.maxStacks, existing.stacks + 1);
     sim.cancel(existing.expiry);
     existing.expiresMs = expiresMs;
-    existing.expiry = sim.at(expiresMs, EventClass.AuraExpiry, () => expire(sim, targetId, key));
+    existing.expiry = sim.at(expiresMs, EventClass.AuraExpiry, () => expire(sim, targetId, key, existing));
     const id = sim.emit(
       'aura_stack',
       { unit: targetId, aura: auraId, caster: casterId, stacks: existing.stacks, expiresMs },
       causes,
     );
-    if (def.periodic && existing.tick === null && target.auras.get(key) === existing) scheduleTick(sim, targetId, key, existing);
+    if (def.periodic && existing.tick === null && target.auras.get(key) === existing) {
+      // Resume at the first tick anchor at or after now (A-009: the tick schedule is kept).
+      while (existing.nextTickMs < sim.now) existing.nextTickMs += def.periodic.intervalMs;
+      scheduleTick(sim, targetId, key, existing);
+    }
     return id;
   }
   const inst: AuraInstance = {
@@ -38,8 +42,9 @@ export function applyAura(
     stacks: 1,
     appliedMs: sim.now,
     expiresMs,
-    expiry: sim.at(expiresMs, EventClass.AuraExpiry, () => expire(sim, targetId, key)),
+    expiry: sim.at(expiresMs, EventClass.AuraExpiry, () => expire(sim, targetId, key, inst)),
     tick: null,
+    nextTickMs: sim.now + (def.periodic?.intervalMs ?? 0),
     appliedEvent: '',
   };
   target.auras.set(key, inst);
@@ -51,7 +56,7 @@ export function applyAura(
 function scheduleTick(sim: Simulation, targetId: string, key: string, inst: AuraInstance): void {
   const periodic = sim.catalog.aura(inst.auraId).periodic;
   if (!periodic) return;
-  const at = sim.now + periodic.intervalMs;
+  const at = inst.nextTickMs;
   if (at > inst.expiresMs) {
     inst.tick = null;
     return;
@@ -60,6 +65,7 @@ function scheduleTick(sim: Simulation, targetId: string, key: string, inst: Aura
     inst.tick = null;
     const target = sim.unit(targetId);
     if (target.auras.get(key) !== inst) return;
+    inst.nextTickMs += periodic.intervalMs;
     const tickId = sim.emit(
       'periodic_tick',
       { unit: targetId, aura: inst.auraId, caster: inst.casterId, stacks: inst.stacks },
@@ -70,10 +76,9 @@ function scheduleTick(sim: Simulation, targetId: string, key: string, inst: Aura
   });
 }
 
-function expire(sim: Simulation, targetId: string, key: string): void {
+function expire(sim: Simulation, targetId: string, key: string, inst: AuraInstance): void {
   const target = sim.unit(targetId);
-  const inst = target.auras.get(key);
-  if (!inst) return;
+  if (target.auras.get(key) !== inst) return;
   sim.cancel(inst.tick);
   target.auras.delete(key);
   const removed = sim.emit(
