@@ -40,7 +40,10 @@ export function crossValidate(plan: Plan, planFile: string, scenario: Scenario |
   plan.rules.forEach((r, i) => {
     if (rules.has(r.id)) inPlan(`rules.${i}.id`, `duplicate rule id ${r.id}`);
     rules.set(r.id, r);
+    const seenWho = new Set<string>();
     r.who.forEach((w, j) => {
+      if (seenWho.has(w)) inPlan(`rules.${i}.who.${j}`, `duplicate member ${w} in rule ${r.id}`);
+      seenWho.add(w);
       if (!roster.has(w)) inPlan(`rules.${i}.who.${j}`, `unknown roster id ${w}`);
     });
     const w = r.when;

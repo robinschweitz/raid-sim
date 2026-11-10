@@ -6,7 +6,7 @@ export const IdSchema = z.string().regex(/^[a-z0-9_-]+$/, 'ids use lowercase let
 /** Unit references with a special meaning; roster ids must not use them. */
 export const RESERVED_REFS: readonly string[] = ['self', 'current_tank', 'boss'];
 const TextKeySchema = z.string().regex(/^[a-z0-9_.]+$/, 'text keys use lowercase letters, digits, _ and .');
-const Vec2Schema = z.object({ x: z.number(), y: z.number() }).strict();
+const Vec2Schema = z.object({ x: z.number().finite(), y: z.number().finite() }).strict();
 const ReactionSchema = z.object({ minMs: z.number().int().min(0), maxMs: z.number().int().min(0) }).strict();
 export const PlayerRoleSchema = z.enum(['tank', 'healer', 'melee', 'ranged']);
 
@@ -28,7 +28,7 @@ export const StandinMemberSchema = z
     kind: z.literal('standin'),
     role: PlayerRoleSchema,
     maxHealth: z.number().int().positive(),
-    ratePerSecond: z.number().min(0),
+    ratePerSecond: z.number().finite().min(0),
     buffs: z.array(IdSchema).default([]),
     reaction: ReactionSchema,
   })
@@ -41,7 +41,7 @@ export const TriggerSchema = z.discriminatedUnion('on', [
   z.object({ on: z.literal('aura_stacks'), aura: IdSchema, target: IdSchema, atLeast: z.number().int().min(1) }).strict(),
   z.object({ on: z.literal('cast_start'), spell: IdSchema, caster: IdSchema }).strict(),
   z.object({ on: z.literal('time'), atMs: z.number().int().min(0) }).strict(),
-  z.object({ on: z.literal('health_below'), target: IdSchema, pct: z.number().gt(0).max(100) }).strict(),
+  z.object({ on: z.literal('health_below'), target: IdSchema, pct: z.number().finite().gt(0).max(100) }).strict(),
 ]);
 
 export const ActionSchema = z.discriminatedUnion('do', [

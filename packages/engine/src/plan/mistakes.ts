@@ -19,5 +19,6 @@ export function applyMistakes(plan: Plan, mistakes: readonly Mistake[]): Plan {
         break;
     }
   }
+  out.rules = out.rules.filter((r) => r.who.length > 0);
   return out;
 }

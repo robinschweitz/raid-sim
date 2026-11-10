@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { applyMistakes } from '../src/plan/mistakes';
+import { RuleEngine, BUILTIN_ACTIONS } from '../src/rules';
+import { Simulation } from '../src/sim';
 import { parsePlan, parseScenario, prepareRun } from '../src/plan/prepare';
 
 const PLAN = `
@@ -77,7 +79,27 @@ describe('plan and scenario parsing', () => {
   });
 });
 
+describe('finite numbers', () => {
+  it('rejects infinite positions and rates', () => {
+    expect(parsePlan('plan.yaml', PLAN.replace('far: { x: 50, y: 0 }', 'far: { x: .inf, y: 0 }')).ok).toBe(false);
+    expect(parsePlan('plan.yaml', PLAN.replace('ratePerSecond: 500', 'ratePerSecond: .inf')).ok).toBe(false);
+  });
+
+  it('rejects an infinite health percentage', () => {
+    const rule = ['  - id: low', '    who: [p1]', '    when: { on: health_below, target: self, pct: .inf }', '    do: { do: stop_casting }', ''].join(String.fromCharCode(10));
+    expect(parsePlan('plan.yaml', PLAN + rule).ok).toBe(false);
+  });
+});
+
 describe('cross validation', () => {
+  it('rejects duplicate members within a rule', () => {
+    const { plan, scenario } = parsed();
+    const bad = structuredClone(plan);
+    bad.rules[0].who = ['p1', 'p1'];
+    const r = prepareRun({ plan: bad, planFile: 'plan.yaml', scenario, scenarioFile: 'scenario.yaml' });
+    expect(r.ok ? [] : r.problems.map((p) => p.message)).toContain('duplicate member p1 in rule run');
+  });
+
   it('accepts a consistent plan and scenario', () => {
     const { plan, scenario } = parsed();
     expect(prepareRun({ plan, planFile: 'plan.yaml', scenario, scenarioFile: 'scenario.yaml' }).ok).toBe(true);
@@ -138,11 +160,34 @@ describe('mistakes', () => {
     expect(applyMistakes(plan, [{ type: 'disable_rule', rule: 'swap' }]).rules.map((r) => r.id)).toEqual(['run']);
   });
 
+  it('drops rules whose who became empty', () => {
+    const { plan } = parsed();
+    const effective = applyMistakes(plan, [
+      { type: 'exclude_from_rule', rule: 'swap', player: 'p1' },
+      { type: 'exclude_from_rule', rule: 'run', player: 'p1' },
+    ]);
+    expect(effective.rules.map((r) => r.id)).toEqual(['run']);
+    expect(effective.rules[0].who).toEqual(['p2']);
+    expect(applyMistakes(plan, [{ type: 'exclude_from_rule', rule: 'swap', player: 'p1' }]).rules.map((r) => r.id)).toEqual(['run']);
+  });
+
   it('prepareRun returns base and effective plans', () => {
     const { plan, scenario } = parsed();
     const r = prepareRun({ plan, planFile: 'plan.yaml', scenario, scenarioFile: 'scenario.yaml' });
     if (!r.ok) throw new Error('expected ok');
     expect(r.value.basePlan.rules.find((x) => x.id === 'run')?.who).toEqual(['p1', 'p2']);
     expect(r.value.plan.rules.find((x) => x.id === 'run')?.who).toEqual(['p1']);
+  });
+});
+
+describe('phase assignments', () => {
+  it('an actor missing from a non-default phase falls back to its default assignment', () => {
+    const { plan } = parsed();
+    plan.phases.push({ phase: 'two', assignments: { t1: 'far' } });
+    const sim = new Simulation({ seed: 1, maxDurationMs: 1000, sampleIntervalMs: 1000 });
+    const engine = new RuleEngine(sim, plan, BUILTIN_ACTIONS, { currentTank: () => null });
+    sim.phase = 'two';
+    expect(engine.assignment('t1')).toBe('far');
+    expect(engine.assignment('p1')).toBe('ranged');
   });
 });
