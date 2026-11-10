@@ -1,0 +1,16 @@
+{
+  "name": "raid-explainer",
+  "private": true,
+  "type": "module",
+  "license": "GPL-2.0-only",
+  "packageManager": "pnpm@9.15.0",
+  "scripts": {
+    "test": "vitest run --passWithNoTests",
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "devDependencies": {
+    "@types/node": "22.10.2",
+    "typescript": "5.6.3",
+    "vitest": "2.1.8"
+  }
+}
