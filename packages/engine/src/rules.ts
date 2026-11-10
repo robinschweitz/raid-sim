@@ -29,16 +29,18 @@ const MOVE_ACTIONS = new Set(['move_to', 'return_to_assignment']);
 
 const moveTo: ActionHandler = (ctx) => {
   if (ctx.action.do !== 'move_to') return { ok: false, reason: 'wrong_action' };
-  ctx.markMoving();
+  if (ctx.actor.speedYdPerSec <= 0) return { ok: false, reason: 'cannot_move' };
   ctx.sim.startMove(ctx.actor.id, ctx.spot(ctx.action.spot), ctx.causes);
+  ctx.markMoving();
   return { ok: true };
 };
 
 const returnToAssignment: ActionHandler = (ctx) => {
   const spot = ctx.assignment();
   if (spot === null) return { ok: false, reason: 'no_assignment' };
-  ctx.markMoving();
+  if (ctx.actor.speedYdPerSec <= 0) return { ok: false, reason: 'cannot_move' };
   ctx.sim.startMove(ctx.actor.id, ctx.spot(spot), ctx.causes);
+  ctx.markMoving();
   return { ok: true };
 };
 
@@ -107,8 +109,12 @@ export class RuleEngine {
     for (const m of this.plan.roster) {
       const u = this.sim.units.get(m.id);
       const spot = this.assignment(m.id);
-      if (!u || !u.alive || spot === null || this.moving.has(m.id)) continue;
-      this.sim.startMove(m.id, this.spotOf(spot), [ev.id]);
+      if (!u || !u.alive || u.speedYdPerSec <= 0 || spot === null || this.moving.has(m.id)) continue;
+      const target = this.spotOf(spot);
+      const dest = u.move ? u.move.to : u.pos;
+      if (dest.x === target.x && dest.y === target.y) continue;
+      this.sim.startMove(m.id, target, [ev.id]);
+      this.moving.set(m.id, 1);
     }
   }
 
@@ -126,14 +132,14 @@ export class RuleEngine {
         if (ev.kind !== 'aura_applied' && ev.kind !== 'aura_stack' && ev.kind !== 'aura_removed') return;
         if (d.aura !== w.aura || !this.refMatches(w.target, actorId, d.unit)) return;
         const stacks = ev.kind === 'aura_removed' ? 0 : Number(d.stacks);
-        this.condition(rule, actorId, stacks >= w.atLeast, ev.id);
+        this.condition(rule, actorId, String(d.unit), stacks >= w.atLeast, ev.id);
         return;
       }
       case 'health_below': {
         if (ev.kind !== 'damage' && ev.kind !== 'heal') return;
         if (!this.refMatches(w.target, actorId, d.target)) return;
         const u = this.sim.unit(String(d.target));
-        this.condition(rule, actorId, u.alive && (u.health / u.maxHealth) * 100 < w.pct, ev.id);
+        this.condition(rule, actorId, String(d.target), u.alive && (u.health / u.maxHealth) * 100 < w.pct, ev.id);
         return;
       }
       case 'time':
@@ -141,11 +147,15 @@ export class RuleEngine {
     }
   }
 
-  private condition(rule: Rule, actorId: string, isTrue: boolean, cause: string): void {
-    const key = `${rule.id}|${actorId}`;
+  private condition(rule: Rule, actorId: string, unitId: string, isTrue: boolean, cause: string): void {
+    const key = `${rule.id}|${actorId}|${unitId}`;
     const was = this.active.get(key) ?? false;
-    this.active.set(key, isTrue);
-    if (isTrue && !was) this.fire(rule, actorId, [cause]);
+    if (!isTrue) {
+      this.active.set(key, false);
+      return;
+    }
+    if (was) return;
+    if (this.fire(rule, actorId, [cause])) this.active.set(key, true);
   }
 
   private refMatches(ref: string, actorId: string, unitId: TraceValue | undefined): boolean {
@@ -156,17 +166,18 @@ export class RuleEngine {
     return ref === unitId;
   }
 
-  private fire(rule: Rule, actorId: string, causes: readonly string[]): void {
+  private fire(rule: Rule, actorId: string, causes: readonly string[]): boolean {
     const actor = this.sim.units.get(actorId);
-    if (!actor || !actor.alive || this.sim.outcome) return;
+    if (!actor || !actor.alive || this.sim.outcome) return false;
     const key = `${rule.id}|${actorId}`;
     const last = this.lastFired.get(key);
-    if (last !== undefined && this.sim.now < last + rule.cooldownMs) return;
+    if (last !== undefined && this.sim.now < last + rule.cooldownMs) return false;
     this.lastFired.set(key, this.sim.now);
     const fired = this.sim.emit('rule_fired', { rule: rule.id, actor: actorId }, causes);
     const reaction = this.members.get(actorId)!.reaction;
     const delay = this.sim.rng.stream(`unit:${actorId}.reaction`).int(reaction.minMs, reaction.maxMs);
     this.sim.at(this.sim.now + delay, EventClass.Decision, () => this.execute(rule, actorId, fired, 0));
+    return true;
   }
 
   private execute(rule: Rule, actorId: string, cause: string, attempt: number): void {
