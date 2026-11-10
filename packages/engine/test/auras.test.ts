@@ -135,4 +135,19 @@ describe('auras', () => {
     expect(events(sim, 'aura_removed').map((e) => [e.t, e.data.reason])).toEqual([[1000, 'death']]);
     expect(events(sim, 'damage')).toHaveLength(1);
   });
+
+  it('a re-application after expiry starts a fresh tick chain', () => {
+    const sim = newSim();
+    sim.catalog.addAura({
+      id: 'short_dot',
+      durationMs: 2500,
+      maxStacks: 1,
+      periodic: { intervalMs: 1000, effects: [{ type: 'damage', school: 'shadow', min: 1, max: 1 }] },
+    });
+    sim.at(0, EventClass.SpellHit, () => void applyAura(sim, 'short_dot', 'boss', 'p1', []));
+    sim.at(5000, EventClass.SpellHit, () => void applyAura(sim, 'short_dot', 'boss', 'p1', []));
+    sim.run();
+    expect(events(sim, 'periodic_tick').map((e) => e.t)).toEqual([1000, 2000, 6000, 7000]);
+    expect(events(sim, 'aura_removed').map((e) => e.t)).toEqual([2500, 7500]);
+  });
 });

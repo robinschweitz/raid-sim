@@ -102,10 +102,16 @@ export function makeBossContext(sim: Simulation, bossId: string): BossContext {
   };
 }
 
+const attached = new WeakMap<Simulation, Set<string>>();
+
 /** Emits engage, calls onEngage, and runs updateAI every intervalMs (A-002). Returns the engage event id. */
 export function attachBoss(sim: Simulation, script: BossScript, bossUnitId: string, intervalMs: number): string {
   if (!Number.isInteger(intervalMs) || intervalMs <= 0) throw new Error('AI update interval must be a positive integer');
+  let ids = attached.get(sim);
+  if (!ids) attached.set(sim, (ids = new Set()));
+  if (ids.has(bossUnitId)) throw new Error(`boss ${bossUnitId} is already attached`);
   const ctx = makeBossContext(sim, bossUnitId);
+  ids.add(bossUnitId);
   const engage = sim.emit('engage', { boss: bossUnitId });
   script.onEngage(ctx);
   const tick = (): void => {

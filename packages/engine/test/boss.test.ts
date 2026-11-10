@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { EventScriptedAI, attachBoss, victimOf, type BossContext, type MechanicStatus } from '../src/boss';
+import { EventScriptedAI, attachBoss, makeBossContext, victimOf, type BossContext, type MechanicStatus } from '../src/boss';
 import { installCoreRules } from '../src/casting';
+import { EventClass } from '../src/queue';
 import { Simulation } from '../src/sim';
 
 class TestAI extends EventScriptedAI {
@@ -84,5 +85,48 @@ describe('boss AI (§5.1)', () => {
       .pick(sim.players(), 2)
       .map((u) => u.id);
     expect(picked).toEqual(expected);
+  });
+
+  it('throws when the same boss is attached twice', () => {
+    const sim = newSim();
+    attachBoss(sim, new TestAI(), 'boss', 10);
+    expect(() => attachBoss(sim, new TestAI(), 'boss', 10)).toThrow('boss boss is already attached');
+  });
+
+  it('emits no ai_event after the boss dies', () => {
+    const sim = newSim();
+    class Repeater extends TestAI {
+      protected engage(_ctx: BossContext): void {
+        this.events.schedule(1, 100);
+      }
+      protected executeEvent(_id: number, ctx: BossContext): void {
+        ctx.ai('tick');
+        this.events.schedule(1, 100);
+      }
+    }
+    attachBoss(sim, new Repeater(), 'boss', 10);
+    sim.at(1050, EventClass.SpellHit, () => {
+      sim.unit('boss').alive = false;
+    });
+    sim.run();
+    const ts = aiEvents(sim).map((e) => e[0] as number);
+    expect(ts.length).toBeGreaterThan(0);
+    expect(Math.max(...ts)).toBeLessThanOrEqual(1050);
+  });
+
+  it('rejects non-positive and non-integer update intervals', () => {
+    for (const bad of [0, -1, 1.5]) {
+      expect(() => attachBoss(newSim(), new TestAI(), 'boss', bad)).toThrow('AI update interval must be a positive integer');
+    }
+  });
+
+  it('setPhase sets the phase and emits phase_change', () => {
+    const sim = newSim();
+    const ctx = makeBossContext(sim, 'boss');
+    ctx.setPhase('p2', []);
+    expect(sim.phase).toBe('p2');
+    const ev = sim.trace.list().filter((e) => e.kind === 'phase_change');
+    expect(ev).toHaveLength(1);
+    expect(ev[0].data).toMatchObject({ boss: 'boss', phase: 'p2' });
   });
 });
