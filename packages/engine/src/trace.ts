@@ -84,8 +84,12 @@ export class TraceWriter {
   private n = 0;
 
   emit(t: number, kind: EventKind, data: Readonly<Record<string, TraceValue>>, causes: readonly string[] = []): TraceEvent {
+    if (typeof t !== 'number' || !Number.isFinite(t) || t < 0) throw new Error(`invalid trace time ${t}`);
+    if (!(EVENT_KINDS as readonly string[]).includes(kind)) throw new Error(`unknown event kind ${kind}`);
     for (const c of causes) if (!this.byId.has(c)) throw new Error(`unknown cause ${c}`);
-    const ev: TraceEvent = { id: `e${++this.n}`, t, kind, causes: [...causes], data: { ...data } };
+    const copy: Record<string, TraceValue> = {};
+    for (const [k, v] of Object.entries(data)) copy[k] = Array.isArray(v) ? [...v] : v;
+    const ev: TraceEvent = { id: `e${++this.n}`, t, kind, causes: [...causes], data: copy };
     this.events.push(ev);
     this.byId.set(ev.id, ev);
     return ev;
@@ -116,8 +120,10 @@ export function canonicalStringify(value: unknown): string {
     return JSON.stringify(value);
   }
   if (typeof value === 'string' || typeof value === 'boolean') return JSON.stringify(value);
-  if (Array.isArray(value)) return `[${value.map((v) => canonicalStringify(v)).join(',')}]`;
+  if (Array.isArray(value)) return `[${Array.from(value, (v) => canonicalStringify(v)).join(',')}]`;
   if (typeof value === 'object') {
+    const proto = Object.getPrototypeOf(value);
+    if (proto !== Object.prototype && proto !== null) throw new Error('cannot serialise non-plain object');
     const o = value as Record<string, unknown>;
     const parts = Object.keys(o)
       .filter((k) => o[k] !== undefined)

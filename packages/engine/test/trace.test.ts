@@ -22,6 +22,27 @@ describe('TraceWriter', () => {
     data.amount = 2;
     expect(ev.data.amount).toBe(1);
   });
+
+  it('copies array values in data', () => {
+    const w = new TraceWriter();
+    const arr = ['a', 'b'];
+    const ev = w.emit(0, 'damage', { picked: arr });
+    arr.push('x');
+    expect(ev.data.picked).toEqual(['a', 'b']);
+  });
+
+  it('rejects invalid times and unknown kinds', () => {
+    const w = new TraceWriter();
+    expect(() => w.emit(-1, 'engage', {})).toThrow(/invalid trace time/);
+    expect(() => w.emit(Number.NaN, 'engage', {})).toThrow(/invalid trace time/);
+    expect(() => w.emit(0, 'bogus' as never, {})).toThrow(/unknown event kind/);
+  });
+
+  it('a failed emit does not consume an id', () => {
+    const w = new TraceWriter();
+    expect(() => w.emit(-1, 'engage', {})).toThrow();
+    expect(w.emit(0, 'engage', {}).id).toBe('e1');
+  });
 });
 
 describe('canonicalStringify', () => {
@@ -32,6 +53,13 @@ describe('canonicalStringify', () => {
   it('rejects non-finite numbers and functions', () => {
     expect(() => canonicalStringify({ a: Number.NaN })).toThrow(/non-finite/);
     expect(() => canonicalStringify({ a: () => 1 })).toThrow(/cannot serialise/);
+  });
+
+  it('rejects sparse arrays and non-plain objects', () => {
+    // eslint-disable-next-line no-sparse-arrays
+    expect(() => canonicalStringify([1, , 3])).toThrow();
+    expect(() => canonicalStringify({ a: new Map() })).toThrow(/cannot serialise/);
+    expect(() => canonicalStringify({ a: new Date(0) })).toThrow(/cannot serialise/);
   });
 
   it('drops undefined object members', () => {
