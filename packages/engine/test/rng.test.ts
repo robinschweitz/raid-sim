@@ -33,11 +33,38 @@ describe('RngRegistry', () => {
   });
 
   it('pick depends on the set of ids, not their order', () => {
-    const items = [{ id: 'c' }, { id: 'a' }, { id: 'd' }, { id: 'b' }];
-    const p1 = new RngRegistry(9).stream('pick').pick(items, 2);
-    const p2 = new RngRegistry(9).stream('pick').pick([...items].reverse(), 2);
-    expect(ids(p1)).toEqual(ids(p2));
-    expect(p1).toHaveLength(2);
+    const base = ['a', 'b', 'c', 'd', 'e', 'f'].map((id) => ({ id }));
+    const orderings = [
+      [...base],
+      [...base].reverse(),
+      [base[3], base[0], base[5], base[1], base[4], base[2]],
+      [base[2], base[4], base[1], base[5], base[0], base[3]],
+    ];
+    for (let seed = 0; seed <= 50; seed++) {
+      const results = orderings.map((o) => ids(new RngRegistry(seed).stream('pick').pick(o, 3)));
+      for (const r of results) {
+        expect(r).toHaveLength(3);
+        expect(r).toEqual(results[0]);
+      }
+    }
+  });
+
+  it('pick rejects an invalid count', () => {
+    const r = new RngRegistry(9).stream('pick');
+    const items = [{ id: 'a' }, { id: 'b' }];
+    for (const n of [-1, 1.5, Number.NaN, Number.POSITIVE_INFINITY]) {
+      expect(() => r.pick(items, n)).toThrow(/invalid pick count/);
+    }
+    expect(r.pick(items, 0)).toEqual([]);
+  });
+
+  // Pinned regression values: they record the current algorithm's output.
+  // If this test fails, the RNG algorithm or seeding changed and every recorded trace changes with it.
+  it('matches pinned regression values', () => {
+    const a = new RngRegistry(42).stream('x');
+    expect([a.nextU32(), a.nextU32(), a.nextU32()]).toEqual([232436370, 2278145324, 2612924331]);
+    const b = new RngRegistry(7).stream('boss:dummy.mark');
+    expect([b.int(1, 100), b.int(1, 100), b.int(1, 100)]).toEqual([4, 2, 22]);
   });
 
   it('pick returns every item when n exceeds the pool', () => {

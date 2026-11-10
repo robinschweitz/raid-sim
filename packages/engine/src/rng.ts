@@ -33,12 +33,13 @@ export class Rng {
 
   /** Inclusive on both ends, like AzerothCore's urand. */
   int(min: number, max: number): number {
-    if (!Number.isInteger(min) || !Number.isInteger(max) || min > max) throw new Error(`invalid range ${min}..${max}`);
+    if (!Number.isSafeInteger(min) || !Number.isSafeInteger(max) || min > max) throw new Error(`invalid range ${min}..${max}`);
     return min + Math.floor(this.float() * (max - min + 1));
   }
 
   /** Up to n items. The result depends only on the set of ids and the stream state, not on input order. */
   pick<T extends { readonly id: string }>(items: readonly T[], n: number): T[] {
+    if (!Number.isSafeInteger(n) || n < 0) throw new Error(`invalid pick count ${n}`);
     const pool = [...items].sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
     const k = Math.min(n, pool.length);
     for (let i = 0; i < k; i++) {
