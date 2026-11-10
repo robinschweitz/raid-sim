@@ -50,18 +50,31 @@ export class DataRegistry {
       }
       this.baseline.set(r.data.key, r.data);
     });
+    const overrideKeys = new Set<string>();
     overrides.forEach((raw, i) => {
       const r = OverrideEntrySchema.safeParse(raw);
       if (!r.success) {
         problems.push(`override ${i}: ${formatZod(r.error)}`);
         return;
       }
-      if (!this.baseline.has(r.data.overrides)) {
+      if (this.baseline.has(r.data.key) || overrideKeys.has(r.data.key)) {
+        problems.push(`override ${i}: duplicate key ${r.data.key}`);
+        return;
+      }
+      overrideKeys.add(r.data.key);
+      const base = this.baseline.get(r.data.overrides);
+      if (!base) {
         problems.push(`override ${i}: unknown baseline key ${r.data.overrides}`);
         return;
       }
       if (this.overrides.has(r.data.overrides)) {
         problems.push(`override ${i}: second override for ${r.data.overrides}`);
+        return;
+      }
+      if (typeof r.data.value !== typeof base.value) {
+        problems.push(
+          `override ${i}: value type ${typeof r.data.value} does not match baseline ${base.key} type ${typeof base.value}`,
+        );
         return;
       }
       this.overrides.set(r.data.overrides, { key: r.data.key, value: r.data.value, source: r.data.source });
@@ -71,6 +84,9 @@ export class DataRegistry {
       if (s.kind === 'derived') {
         for (const input of s.inputs) {
           if (!this.baseline.has(input)) problems.push(`${e.key}: derived input ${input} does not exist`);
+          else if (this.overrides.has(input) && !this.overrides.has(e.key)) {
+            problems.push(`${e.key}: input ${input} has a Rising-Gods override, so ${e.key} needs one too`);
+          }
         }
       }
       if ((s.kind === 'code' || s.kind === 'db') && s.commit !== PINS.azerothcoreCommit) {

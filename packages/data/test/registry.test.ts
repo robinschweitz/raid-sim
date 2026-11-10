@@ -69,6 +69,32 @@ describe('DataRegistry', () => {
     expect(() => new DataRegistry([], [override])).toThrow(/unknown baseline key boss.timer_ms/);
   });
 
+  it('rejects override key collisions', () => {
+    const o2 = { ...override, key: 'boss.guess', overrides: 'boss.guess', value: 6 };
+    expect(() => new DataRegistry([timer, guess], [{ ...override, key: 'boss.guess' }])).toThrow(/override 0: duplicate key boss.guess/);
+    const dup = { ...o2, key: 'rg.boss.timer_ms' };
+    expect(() => new DataRegistry([timer, guess], [override, dup])).toThrow(/override 1: duplicate key rg.boss.timer_ms/);
+  });
+
+  it('rejects an override whose value type differs from the baseline', () => {
+    expect(() => new DataRegistry([timer], [{ ...override, value: 'fast' }])).toThrow(
+      /override 0: value type string does not match baseline boss.timer_ms type number/,
+    );
+  });
+
+  it('rejects stale derived values', () => {
+    const derived = {
+      key: 'boss.double',
+      value: 40000,
+      source: { kind: 'derived', formula: 'timer*2', inputs: ['boss.timer_ms'] },
+    };
+    expect(() => new DataRegistry([timer, derived], [override])).toThrow(
+      /boss.double: input boss.timer_ms has a Rising-Gods override, so boss.double needs one too/,
+    );
+    const derivedOverride = { ...override, key: 'rg.boss.double', overrides: 'boss.double', value: 42000 };
+    expect(() => new DataRegistry([timer, derived], [override, derivedOverride])).not.toThrow();
+  });
+
   it('throws on unknown keys and non-numbers', () => {
     const r = new DataRegistry([{ key: 'a.s', value: 'x', source: { kind: 'configured', file: 'f' } }]);
     expect(() => r.get('nope')).toThrow(/unknown data key/);
