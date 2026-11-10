@@ -186,6 +186,57 @@ describe('ActorController (§8.4)', () => {
     expect(at.slice(0, 8)).toEqual([0, 0, 0, 0, 1, 1, 1, 1]);
   });
 
+  it('starts at most one move per wake-up', () => {
+    const sim = newSim(2000);
+    let n = 0;
+    const flip: ActorPolicy = {
+      wakeOn: { anyHealthChange: false, anyAuraChange: false },
+      decide: () => ({ type: 'move', to: n++ % 2 === 0 ? { x: 30, y: 0 } : { x: 10, y: 10 } }),
+    };
+    new ActorController(sim, 'mage', flip, hooks()).install();
+    sim.run();
+    const perMs = new Map<number, number>();
+    for (const e of sim.trace.list().filter((e) => e.kind === 'move_start')) perMs.set(e.t, (perMs.get(e.t) ?? 0) + 1);
+    expect(perMs.size).toBeGreaterThan(0);
+    expect(Math.max(...perMs.values())).toBe(1);
+  });
+
+  it('a move shorter than one millisecond of travel counts as already there', () => {
+    const sim = newSim(1000);
+    const tiny: ActorPolicy = { wakeOn: { anyHealthChange: false, anyAuraChange: false }, decide: () => ({ type: 'move', to: { x: 20.005, y: 0 } }) };
+    new ActorController(sim, 'mage', tiny, hooks()).install();
+    sim.run();
+    expect(sim.trace.list().some((e) => e.kind === 'move_start')).toBe(false);
+  });
+
+  it('retryAtMs: non-finite is ignored, fractions round up, the past is ignored', () => {
+    for (const [retry, expected] of [[Infinity, [0]], [NaN, [0]], [2500.4, [0, 2501]], [-5, [0]]] as const) {
+      const sim = newSim(4000);
+      const times: number[] = [];
+      const timed: ActorPolicy = {
+        wakeOn: { anyHealthChange: false, anyAuraChange: false },
+        decide: (v) => (times.push(v.now), { type: 'none', retryAtMs: v.now === 0 ? retry : undefined }),
+      };
+      new ActorController(sim, 'mage', timed, hooks()).install();
+      sim.run();
+      expect(times).toEqual(expected);
+    }
+  });
+
+  it('the per-millisecond decision counter resets when time advances', () => {
+    const sim = newSim(200);
+    sim.catalog.addSpell({ id: 'tick', castTimeMs: 0, gcdMs: 0, cooldownMs: 0, rangeYd: 30, usableWhileMoving: true, target: 'unit', effects: dmg(1) });
+    // 100 wake-ups over 100 ms: more than 64 overall, one per millisecond.
+    let calls = 0;
+    const busy: ActorPolicy = {
+      wakeOn: { anyHealthChange: false, anyAuraChange: false },
+      decide: () => (++calls <= 400 ? { type: 'cast', spell: 'tick', target: 'boss' } : { type: 'none' }),
+    };
+    new ActorController(sim, 'mage', busy, hooks()).install();
+    expect(() => sim.run()).not.toThrow();
+    expect(calls).toBeGreaterThan(64);
+  });
+
   it('a wake loop within one millisecond fails loudly', () => {
     const sim = newSim(600000);
     sim.catalog.addSpell({ id: 'pulse', castTimeMs: 0, gcdMs: 0, cooldownMs: 0, rangeYd: 40, usableWhileMoving: true, target: 'unit', effects: [{ type: 'heal', min: 1, max: 1 }] });

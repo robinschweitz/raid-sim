@@ -9,6 +9,10 @@ import { buildView, type ActorView } from './view';
 export type PolicyAction =
   | { readonly type: 'cast'; readonly spell: string; readonly target: string }
   | { readonly type: 'move'; readonly to: Vec2 }
+  /**
+   * `retryAtMs` asks to be woken at that absolute time. It is ignored unless finite; fractions round up to the next
+   * whole millisecond; a time at or before now is ignored (use events or cooldowns to wake sooner).
+   */
   | { readonly type: 'none'; readonly retryAtMs?: number };
 
 /** A spec's decision policy (priority list, healer targeting). Plan 3 adds the real specs. */
@@ -99,6 +103,7 @@ export class ActorController {
     this.deciding = true;
     let retryAtMs: number | undefined;
     let hitBound = true;
+    let moved = false;
     try {
       for (let i = 0; i < MAX_ACTIONS_PER_WAKE; i++) {
         if (self.cast) {
@@ -114,7 +119,13 @@ export class ActorController {
         }
         if (action.type === 'move') {
           const here = positionAt(self, this.sim.now);
-          const arrivesAtOnce = here.x === action.to.x && here.y === action.to.y;
+          // At most one started move per wake-up; a cast may still follow it.
+          if (moved) {
+            hitBound = false;
+            break;
+          }
+          // Less than one millisecond of travel counts as already there.
+          const arrivesAtOnce = Math.hypot(here.x - action.to.x, here.y - action.to.y) < self.speedYdPerSec / 1000;
           const sameDestination = self.move !== null && self.move.to.x === action.to.x && self.move.to.y === action.to.y;
           // Moving to the current position would arrive at once and wake the actor again in the same millisecond.
           if (arrivesAtOnce || sameDestination || self.speedYdPerSec <= 0 || this.hooks.isRuleMoving(this.actorId)) {
@@ -122,6 +133,7 @@ export class ActorController {
             break;
           }
           this.sim.startMove(this.actorId, action.to, []);
+          moved = true;
           continue;
         }
         const gcdBefore = self.gcdUntilMs;
@@ -140,7 +152,10 @@ export class ActorController {
       this.deciding = false;
     }
     if (hitBound) this.wake(this.sim.now + 1);
-    else if (retryAtMs !== undefined && retryAtMs > this.sim.now) this.wake(retryAtMs);
+    else if (retryAtMs !== undefined && Number.isFinite(retryAtMs)) {
+      const at = Math.ceil(retryAtMs);
+      if (at > this.sim.now) this.wake(at);
+    }
     this.scheduleFollowUp(self);
   }
 

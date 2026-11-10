@@ -8,14 +8,15 @@ import type { Unit } from './units';
 export const STANDIN_TICK_MS = 1000;
 export const STANDIN_RANGE_YD = { tank: 5, melee: 5, ranged: 40, healer: 40 } as const;
 
-function healTarget(sim: Simulation, self: Unit): Unit | null {
+/** Lowest health percentage in range (not lowest absolute health); ties go to the lowest id (A-011). */
+function healTarget(sim: Simulation, self: Unit, range: number): Unit | null {
   let best: Unit | null = null;
   let bestRatio = 1;
   for (const p of sim.players()) {
     if (!p.alive || p.health >= p.maxHealth) continue;
-    if (edgeDistance(self, p, sim.now) > STANDIN_RANGE_YD.healer) continue;
+    if (edgeDistance(self, p, sim.now) > range) continue;
     const ratio = p.health / p.maxHealth;
-    if (ratio < bestRatio) {
+    if (ratio < bestRatio || (ratio === bestRatio && best !== null && p.id < best.id)) {
       best = p;
       bestRatio = ratio;
     }
@@ -31,7 +32,7 @@ export function installStandin(sim: Simulation, member: StandinMember): void {
     if (!self.alive || sim.outcome) return;
     if (!self.move && amount > 0) {
       if (member.role === 'healer') {
-        const target = healTarget(sim, self);
+        const target = healTarget(sim, self, range);
         if (target) sim.heal(target.id, amount, { sourceId: self.id, ability: 'standin_heal', school: 'holy' }, []);
       } else {
         const boss = sim.bosses().find((b) => b.alive && edgeDistance(self, b, sim.now) <= range);
