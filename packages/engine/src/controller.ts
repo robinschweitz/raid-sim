@@ -1,5 +1,5 @@
 import { startCast } from './casting';
-import { positionAt } from './movement';
+import { centerDistance, positionAt } from './movement';
 import { EventClass, type Scheduled } from './queue';
 import type { Simulation } from './sim';
 import type { TraceEvent } from './trace';
@@ -125,7 +125,7 @@ export class ActorController {
             break;
           }
           // Less than one millisecond of travel counts as already there.
-          const arrivesAtOnce = Math.hypot(here.x - action.to.x, here.y - action.to.y) < self.speedYdPerSec / 1000;
+          const arrivesAtOnce = centerDistance(here, action.to) < self.speedYdPerSec / 1000;
           const sameDestination = self.move !== null && self.move.to.x === action.to.x && self.move.to.y === action.to.y;
           // Moving to the current position would arrive at once and wake the actor again in the same millisecond.
           if (arrivesAtOnce || sameDestination || self.speedYdPerSec <= 0 || this.hooks.isRuleMoving(this.actorId)) {

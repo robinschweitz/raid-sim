@@ -40,8 +40,12 @@ export function evaluateObservations(
       case 'custom': {
         const fn = custom.get(c.name);
         if (!fn) return { check: `custom:${c.name}`, pass: false, detail: 'unknown custom check' };
-        const r = fn({ trace, params: c.params });
-        return { check: `custom:${c.name}`, pass: r.pass, detail: r.detail };
+        try {
+          const r = fn({ trace, params: c.params });
+          return { check: `custom:${c.name}`, pass: r.pass, detail: r.detail };
+        } catch (err) {
+          return { check: `custom:${c.name}`, pass: false, detail: `check threw: ${err instanceof Error ? err.message : String(err)}` };
+        }
       }
     }
   });

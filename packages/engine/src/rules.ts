@@ -130,16 +130,16 @@ export class RuleEngine {
         return;
       case 'aura_stacks': {
         if (ev.kind !== 'aura_applied' && ev.kind !== 'aura_stack' && ev.kind !== 'aura_removed') return;
-        if (d.aura !== w.aura || !this.refMatches(w.target, actorId, d.unit)) return;
+        if (d.aura !== w.aura || typeof d.unit !== 'string') return;
         const stacks = ev.kind === 'aura_removed' ? 0 : Number(d.stacks);
-        this.condition(rule, actorId, String(d.unit), stacks >= w.atLeast, ev.id);
+        this.condition(rule, actorId, d.unit, stacks >= w.atLeast, ev.id, this.refMatches(w.target, actorId, d.unit));
         return;
       }
       case 'health_below': {
         if (ev.kind !== 'damage' && ev.kind !== 'heal') return;
-        if (!this.refMatches(w.target, actorId, d.target)) return;
-        const u = this.sim.unit(String(d.target));
-        this.condition(rule, actorId, String(d.target), u.alive && (u.health / u.maxHealth) * 100 < w.pct, ev.id);
+        if (typeof d.target !== 'string') return;
+        const u = this.sim.unit(d.target);
+        this.condition(rule, actorId, d.target, u.alive && (u.health / u.maxHealth) * 100 < w.pct, ev.id, this.refMatches(w.target, actorId, d.target));
         return;
       }
       case 'time':
@@ -147,14 +147,18 @@ export class RuleEngine {
     }
   }
 
-  private condition(rule: Rule, actorId: string, unitId: string, isTrue: boolean, cause: string): void {
+  /**
+   * Per-unit edge detection. State is updated for every matching unit; `eligible` (the unit currently matches the
+   * trigger's reference, e.g. is the tank) only gates firing, so a false edge is never missed while a unit is off-reference.
+   */
+  private condition(rule: Rule, actorId: string, unitId: string, isTrue: boolean, cause: string, eligible: boolean): void {
     const key = `${rule.id}|${actorId}|${unitId}`;
     const was = this.active.get(key) ?? false;
     if (!isTrue) {
       this.active.set(key, false);
       return;
     }
-    if (was) return;
+    if (was || !eligible) return;
     if (this.fire(rule, actorId, [cause])) this.active.set(key, true);
   }
 

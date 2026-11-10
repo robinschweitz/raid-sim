@@ -115,4 +115,30 @@ describe('limitations (§6.4)', () => {
     expect(l.knownServerDifferences).toEqual(['example difference']);
     expect(l.unappliedOverrides).toEqual([]);
   });
+
+  it('reports failing built-in checks', () => {
+    const { trace } = fight();
+    const results = evaluateObservations(
+      [
+        { check: 'outcome_is', outcome: 'kill' },
+        { check: 'event_occurs', kind: 'death', where: { unit: 'p2' } },
+        { check: 'event_absent', kind: 'death', where: { unit: 'p1' } },
+      ],
+      trace,
+      new Map(),
+    );
+    expect(results.map((r) => r.pass)).toEqual([false, false, false]);
+    expect(results[0].detail).toBe('expected kill, got timeout');
+    expect(results[1].detail).toBe('0 matching events');
+    expect(results[2].detail).toBe('1 matching events');
+  });
+
+  it('a throwing custom check fails instead of aborting', () => {
+    const { trace } = fight();
+    const boom: CustomCheck = () => {
+      throw new Error('kaboom');
+    };
+    const results = evaluateObservations([{ check: 'custom', name: 'boom', params: {} }], trace, new Map([['boom', boom]]));
+    expect(results).toEqual([{ check: 'custom:boom', pass: false, detail: 'check threw: kaboom' }]);
+  });
 });

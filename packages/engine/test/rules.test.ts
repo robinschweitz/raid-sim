@@ -149,6 +149,22 @@ describe('RuleEngine (§8.5)', () => {
     expect(calls).toEqual([3300, 5300]);
   });
 
+  it('tracks unit conditions even while the unit is not the reference (removal during a tank swap re-arms)', () => {
+    const calls: number[] = [];
+    const taunt: ActionHandler = (ctx) => (calls.push(ctx.sim.now), { ok: true });
+    const { sim } = newSim(
+      plan([{ id: 'swap', who: ['p1'], when: { on: 'aura_stacks', aura: 'bloat', target: 'current_tank', atLeast: 1 }, do: { do: 'taunt', target: 'boss' } }]),
+      [['taunt', taunt]],
+    );
+    at(sim, 1000, () => void applyAura(sim, 'bloat', 'boss', 't1', []));
+    at(sim, 2000, () => void sim.unit('boss').threat.set('t2', 200));
+    at(sim, 3000, () => void removeAuras(sim, 't1', 'bloat', 'removed', []));
+    at(sim, 4000, () => void sim.unit('boss').threat.set('t1', 300));
+    at(sim, 5000, () => void applyAura(sim, 'bloat', 'boss', 't1', []));
+    sim.run();
+    expect(calls).toEqual([1300, 5300]);
+  });
+
   it('a cooldown does not swallow the edge', () => {
     const { sim } = newSim(
       plan([{ id: 'run', who: ['p1'], when: { on: 'aura_stacks', aura: 'bloat', target: 'self', atLeast: 1 }, do: { do: 'move_to', spot: 'a' }, cooldownMs: 5000 }]),
