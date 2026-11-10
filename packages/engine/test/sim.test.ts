@@ -127,6 +127,118 @@ describe('Simulation', () => {
     expect(removed?.data).toMatchObject({ unit: 'p1', aura: 'mark', reason: 'death' });
     expect(sim.unit('p1').auras.size).toBe(0);
   });
+
+  it('a listener cannot heal a unit that took a lethal hit', () => {
+    const sim = newSim();
+    const heals: (string | null)[] = [];
+    sim.subscribe((ev) => {
+      if (ev.kind === 'damage') heals.push(sim.heal('p1', 500, hit('p2'), [ev.id]));
+    });
+    sim.at(100, EventClass.SpellHit, () => {
+      sim.damage('p1', 5000, hit('boss'), []);
+    });
+    sim.run();
+    expect(heals).toEqual([null]);
+    expect(sim.unit('p1').alive).toBe(false);
+    expect(sim.unit('p1').health).toBe(0);
+    expect(kinds(sim)).not.toContain('heal');
+  });
+
+  it('a listener damaging the unit again on the lethal hit yields exactly one death', () => {
+    const sim = newSim();
+    sim.subscribe((ev) => {
+      if (ev.kind === 'damage') sim.damage('p1', 10, hit('boss'), [ev.id]);
+    });
+    sim.at(100, EventClass.SpellHit, () => {
+      sim.damage('p1', 5000, hit('boss'), []);
+    });
+    sim.run();
+    expect(kinds(sim).filter((k) => k === 'death')).toHaveLength(1);
+    expect(kinds(sim).filter((k) => k === 'damage')).toHaveLength(1);
+  });
+
+  it('startMove with an invalid target throws and keeps the previous move', () => {
+    const sim = newSim(5000);
+    sim.at(0, EventClass.Decision, () => {
+      sim.startMove('p1', { x: 5, y: 0 }, []);
+    });
+    sim.at(500, EventClass.Decision, () => {
+      expect(() => sim.startMove('p1', { x: Number.NaN, y: 0 }, [])).toThrow('invalid move target for p1');
+      expect(() => sim.startMove('p1', { x: 0, y: Number.POSITIVE_INFINITY }, [])).toThrow('invalid move target for p1');
+    });
+    sim.run();
+    const ends = sim.trace.list().filter((e) => e.kind === 'move_end');
+    expect(ends).toHaveLength(1);
+    expect(ends[0].data).toMatchObject({ x: 5, y: 0, stopped: false });
+    expect(sim.trace.list().filter((e) => e.kind === 'move_start')).toHaveLength(1);
+  });
+
+  it('startMove stores a copy of the target', () => {
+    const sim = newSim(5000);
+    const to = { x: 5, y: 0 };
+    sim.at(0, EventClass.Decision, () => {
+      sim.startMove('p1', to, []);
+      to.x = 100;
+    });
+    sim.run();
+    expect(sim.unit('p1').pos).toEqual({ x: 5, y: 0 });
+  });
+
+  it('damage and heal reject non-finite amounts', () => {
+    const sim = newSim();
+    for (const bad of [Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY]) {
+      expect(() => sim.damage('p1', bad, hit('boss'), [])).toThrow(/invalid amount/);
+      expect(() => sim.heal('p1', bad, hit('boss'), [])).toThrow(/invalid amount/);
+    }
+    expect(sim.trace.list()).toHaveLength(0);
+  });
+
+  it('writes no damage or heal after the outcome event', () => {
+    const sim = newSim();
+    sim.subscribe((ev) => {
+      if (ev.kind === 'outcome') {
+        expect(sim.damage('p2', 10, hit('boss'), [ev.id])).toBeNull();
+        expect(sim.heal('p2', 10, hit('boss'), [ev.id])).toBeNull();
+      }
+    });
+    sim.at(100, EventClass.SpellHit, () => {
+      sim.damage('boss', 1e6, hit('p1'), []);
+    });
+    sim.run();
+    const list = sim.trace.list();
+    const idx = list.findIndex((e) => e.kind === 'outcome');
+    expect(list.slice(idx + 1)).toEqual([]);
+  });
+
+  it('death mid-move freezes the position and writes no move_end (A-013)', () => {
+    const sim = newSim(5000);
+    sim.at(0, EventClass.Decision, () => {
+      sim.startMove('p1', { x: 10, y: 0 }, []);
+    });
+    sim.at(1000, EventClass.SpellHit, () => {
+      sim.damage('p1', 1e6, hit('boss'), []);
+    });
+    sim.run();
+    expect(sim.unit('p1').pos).toEqual({ x: 5, y: 0 });
+    expect(sim.unit('p1').move).toBeNull();
+    expect(kinds(sim)).not.toContain('move_end');
+  });
+
+  it('stopMove emits move_end stopped at the interpolated position and cancels arrival', () => {
+    const sim = newSim(5000);
+    sim.at(0, EventClass.Decision, () => {
+      sim.startMove('p1', { x: 10, y: 0 }, []);
+    });
+    sim.at(1000, EventClass.Decision, () => {
+      sim.stopMove('p1', []);
+    });
+    sim.run();
+    const ends = sim.trace.list().filter((e) => e.kind === 'move_end');
+    expect(ends).toHaveLength(1);
+    expect(ends[0].t).toBe(1000);
+    expect(ends[0].data).toMatchObject({ x: 5, y: 0, stopped: true });
+    expect(sim.unit('p1').pos).toEqual({ x: 5, y: 0 });
+  });
 });
 
 function meta() {

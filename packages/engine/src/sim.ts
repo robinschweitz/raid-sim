@@ -49,6 +49,8 @@ export class Simulation {
   private readonly listeners: Array<(ev: TraceEvent) => void> = [];
   private nextSampleMs = 0;
   private lastSampleMs = -1;
+  private ending = false;
+  private readonly killed = new Set<string>();
 
   constructor(readonly options: SimOptions) {
     if (!Number.isInteger(options.sampleIntervalMs) || options.sampleIntervalMs <= 0) {
@@ -107,23 +109,28 @@ export class Simulation {
   /** Applies damage; returns the damage event id, or null if the target is dead or the fight is over. */
   damage(targetId: string, amount: number, info: HitInfo, causes: readonly string[]): string | null {
     const u = this.unit(targetId);
-    if (!u.alive || this.outcome) return null;
+    if (!Number.isFinite(amount)) throw new Error(`invalid amount ${amount} for damage to ${targetId}`);
+    if (!u.alive || this.outcome || this.ending) return null;
     const rounded = Math.max(0, Math.round(amount));
     const dealt = Math.min(u.health, rounded);
     u.health -= dealt;
+    // Decide lethality before listeners run so they cannot heal or re-kill the unit.
+    const lethal = u.health <= 0;
+    if (lethal) u.alive = false;
     const id = this.emit(
       'damage',
       { target: u.id, source: info.sourceId, ability: info.ability, school: info.school, amount: dealt, overkill: rounded - dealt },
       causes,
     );
-    if (u.health <= 0) this.kill(u, id);
+    if (lethal) this.kill(u, id);
     return id;
   }
 
   /** Applies healing; a dead target is not healed and no event is written (A-008). */
   heal(targetId: string, amount: number, info: HitInfo, causes: readonly string[]): string | null {
     const u = this.unit(targetId);
-    if (!u.alive || this.outcome) return null;
+    if (!Number.isFinite(amount)) throw new Error(`invalid amount ${amount} for heal to ${targetId}`);
+    if (!u.alive || this.outcome || this.ending) return null;
     const rounded = Math.max(0, Math.round(amount));
     const effective = Math.min(u.maxHealth - u.health, rounded);
     u.health += effective;
@@ -138,20 +145,22 @@ export class Simulation {
     const u = this.unit(unitId);
     if (!u.alive) throw new Error(`dead unit ${unitId} cannot move`);
     if (u.speedYdPerSec <= 0) throw new Error(`unit ${unitId} cannot move (speed 0)`);
+    if (!Number.isFinite(to.x) || !Number.isFinite(to.y)) throw new Error(`invalid move target for ${unitId}`);
+    const target: Vec2 = { x: to.x, y: to.y };
     const from = positionAt(u, this.now);
+    const arrivalMs = this.now + travelTimeMs(from, target, u.speedYdPerSec);
     if (u.move) this.cancel(u.move.handle);
-    const arrivalMs = this.now + travelTimeMs(from, to, u.speedYdPerSec);
     let startEvent = '';
     const handle = this.at(arrivalMs, EventClass.Decision, () => {
-      u.pos = to;
+      u.pos = target;
       u.move = null;
-      this.emit('move_end', { unit: u.id, x: r3(to.x), y: r3(to.y), stopped: false }, [startEvent]);
+      this.emit('move_end', { unit: u.id, x: r3(target.x), y: r3(target.y), stopped: false }, [startEvent]);
     });
     u.pos = from;
-    u.move = { from, to, startMs: this.now, speed: u.speedYdPerSec, arrivalMs, handle };
+    u.move = { from, to: target, startMs: this.now, speed: u.speedYdPerSec, arrivalMs, handle };
     startEvent = this.emit(
       'move_start',
-      { unit: u.id, fromX: r3(from.x), fromY: r3(from.y), toX: r3(to.x), toY: r3(to.y), arrivalMs },
+      { unit: u.id, fromX: r3(from.x), fromY: r3(from.y), toX: r3(target.x), toY: r3(target.y), arrivalMs },
       causes,
     );
     return startEvent;
@@ -170,6 +179,7 @@ export class Simulation {
   run(): Outcome {
     if (this.outcome) return this.outcome;
     const max = this.options.maxDurationMs;
+    let result: Outcome | null = null;
     for (;;) {
       const next = this.queue.peek();
       const horizon = Math.min(next ? next.time : Number.POSITIVE_INFINITY, max + 1);
@@ -179,19 +189,25 @@ export class Simulation {
       }
       if (!next || next.time > max) {
         this.now = Math.max(this.now, max);
-        this.finish('timeout', []);
+        result = this.finish('timeout', []);
         break;
       }
       this.queue.pop();
       this.now = next.time;
       next.run();
-      if (this.outcome) break;
+      if (this.outcome) {
+        result = this.outcome;
+        break;
+      }
     }
     if (this.lastSampleMs !== this.now) this.sample(this.now);
-    return this.outcome as unknown as Outcome;
+    if (!result) throw new Error('simulation ended without an outcome');
+    return result;
   }
 
   private kill(u: Unit, cause: string): void {
+    if (this.killed.has(u.id)) return;
+    this.killed.add(u.id);
     u.alive = false;
     u.health = 0;
     if (u.cast) {
@@ -216,16 +232,19 @@ export class Simulation {
   }
 
   private checkOutcome(cause: string): void {
-    if (this.outcome) return;
+    if (this.outcome || this.ending) return;
     const bosses = this.bosses();
     const players = this.players();
     if (bosses.length > 0 && bosses.every((b) => !b.alive)) this.finish('kill', [cause]);
     else if (players.length > 0 && players.every((p) => !p.alive)) this.finish('wipe', [cause]);
   }
 
-  private finish(kind: OutcomeKind, causes: readonly string[]): void {
+  private finish(kind: OutcomeKind, causes: readonly string[]): Outcome {
+    this.ending = true;
     const event = this.emit('outcome', { kind }, causes);
-    this.outcome = { kind, atMs: this.now, event };
+    const outcome: Outcome = { kind, atMs: this.now, event };
+    this.outcome = outcome;
+    return outcome;
   }
 
   private sample(t: number): void {
