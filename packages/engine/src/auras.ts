@@ -30,8 +30,7 @@ export function applyAura(
       causes,
     );
     if (def.periodic && existing.tick === null && target.auras.get(key) === existing) {
-      // Resume at the first tick anchor at or after now (A-009: the tick schedule is kept).
-      while (existing.nextTickMs < sim.now) existing.nextTickMs += def.periodic.intervalMs;
+      // Resume at the kept tick anchor (A-009). It is always after now: a chain only stops when the anchor passes the expiry.
       scheduleTick(sim, targetId, key, existing);
     }
     return id;
@@ -72,7 +71,8 @@ function scheduleTick(sim: Simulation, targetId: string, key: string, inst: Aura
       [inst.appliedEvent],
     );
     applyEffects(sim, periodic.effects, { casterId: inst.casterId, targetId, ability: inst.auraId, causes: [tickId] });
-    if (target.auras.get(key) === inst) scheduleTick(sim, targetId, key, inst);
+    // A tick effect may have re-applied this aura, which already restarted the chain.
+    if (target.auras.get(key) === inst && inst.tick === null) scheduleTick(sim, targetId, key, inst);
   });
 }
 

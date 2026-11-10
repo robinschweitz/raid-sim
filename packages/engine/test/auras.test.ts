@@ -150,4 +150,18 @@ describe('auras', () => {
     expect(events(sim, 'periodic_tick').map((e) => e.t)).toEqual([1000, 2000, 6000, 7000]);
     expect(events(sim, 'aura_removed').map((e) => e.t)).toEqual([2500, 7500]);
   });
+
+  it('a periodic aura whose tick re-applies itself still ticks once per interval', () => {
+    const sim = newSim();
+    sim.catalog.addAura({
+      id: 'self_reapply',
+      durationMs: 5000,
+      maxStacks: 1,
+      periodic: { intervalMs: 1000, effects: [{ type: 'apply_aura', aura: 'self_reapply' }] },
+    });
+    sim.at(0, EventClass.SpellHit, () => void applyAura(sim, 'self_reapply', 'boss', 'p1', []));
+    sim.run();
+    const ticks = events(sim, 'periodic_tick').map((e) => e.t);
+    expect(ticks).toEqual(Array.from({ length: 20 }, (_, i) => (i + 1) * 1000));
+  });
 });

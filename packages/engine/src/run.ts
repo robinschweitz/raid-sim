@@ -13,7 +13,7 @@ import { Simulation, type OutcomeKind } from './sim';
 import { installStandin } from './standin';
 import { buildSummary, type Summary } from './summary';
 import type { Trace } from './trace';
-import type { Role, UnitInit } from './units';
+import { byId, type Role, type UnitInit } from './units';
 
 export const ENGINE_VERSION = '0.1.0';
 
@@ -109,8 +109,10 @@ export function runScenario(prepared: PreparedRun, registry: ContentRegistry): R
     boundingRadius: data.num('core.player_bounding_radius_yd'),
   };
 
+  // Roster order must not matter (§8.7): everything below walks the roster sorted by id.
+  const roster = [...plan.roster].sort(byId);
   const controllers: ActorController[] = [];
-  for (const m of plan.roster) {
+  for (const m of roster) {
     const pos = plan.spots[rules.assignment(m.id)!];
     if (m.kind === 'modelled') {
       const factory = registry.policies.get(m.spec)!;
@@ -124,7 +126,7 @@ export function runScenario(prepared: PreparedRun, registry: ContentRegistry): R
   setup.pull(sim);
   rules.install();
   for (const c of controllers) c.install();
-  for (const m of plan.roster) if (m.kind === 'standin') installStandin(sim, m);
+  for (const m of roster) if (m.kind === 'standin') installStandin(sim, m);
   const aiUpdateIntervalMs = data.num('core.ai_update_interval_ms');
   attachBoss(sim, setup.script, setup.bossUnitId, aiUpdateIntervalMs);
   const outcome = sim.run();

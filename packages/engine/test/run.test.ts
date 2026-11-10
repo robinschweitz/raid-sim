@@ -94,4 +94,18 @@ describe('runScenario', () => {
     expect(noSpec.outcome).toBe('invalid');
     if (noSpec.outcome === 'invalid') expect(noSpec.problems.map((p) => p.message)).toContain('no model for spec test_caster');
   });
+
+  it('results do not depend on roster or rule `who` list order (§8.7)', () => {
+    const base = prepared();
+    const reversed: PreparedRun = {
+      ...base,
+      plan: {
+        ...base.plan,
+        roster: [...base.plan.roster].reverse(),
+        rules: base.plan.rules.map((r) => ({ ...r, who: [...r.who].reverse() })),
+      },
+    };
+    expect(reversed.plan.roster.map((m) => m.id)).not.toEqual(base.plan.roster.map((m) => m.id));
+    expect(canonicalStringify(run(reversed).trace)).toBe(canonicalStringify(run(base).trace));
+  });
 });

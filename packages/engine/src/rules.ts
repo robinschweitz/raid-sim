@@ -64,6 +64,8 @@ export class RuleEngine {
   private readonly lastFired = new Map<string, number>();
   private readonly members: Map<string, Member>;
   private readonly ordered: Rule[];
+  private readonly sortedRoster: Member[];
+  private readonly whoSorted = new Map<string, readonly string[]>();
 
   constructor(
     private readonly sim: Simulation,
@@ -71,10 +73,21 @@ export class RuleEngine {
     private readonly handlers: ReadonlyMap<string, ActionHandler>,
     private readonly hooks: RuleHooks,
   ) {
+    this.sortedRoster = [...plan.roster].sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
     this.members = new Map(plan.roster.map((m) => [m.id, m]));
     this.ordered = [...plan.rules].sort(
       (a, b) => b.priority - a.priority || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0),
     );
+  }
+
+  /** Each rule's actors sorted by id, so list order in the plan never changes the result (§8.7). */
+  private whoOf(rule: Rule): readonly string[] {
+    let sorted = this.whoSorted.get(rule.id);
+    if (!sorted) {
+      sorted = [...rule.who].sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
+      this.whoSorted.set(rule.id, sorted);
+    }
+    return sorted;
   }
 
   isMoving(actorId: string): boolean {
@@ -94,7 +107,7 @@ export class RuleEngine {
       const w = rule.when;
       if (w.on !== 'time') continue;
       this.sim.at(Math.max(w.atMs, this.sim.now), EventClass.Decision, () => {
-        for (const actorId of rule.who) this.fire(rule, actorId, []);
+        for (const actorId of this.whoOf(rule)) this.fire(rule, actorId, []);
       });
     }
   }
@@ -102,11 +115,11 @@ export class RuleEngine {
   private onEvent(ev: TraceEvent): void {
     if ((ev.kind === 'move_end' || ev.kind === 'death') && typeof ev.data.unit === 'string') this.moving.delete(ev.data.unit);
     if (ev.kind === 'phase_change') this.onPhaseChange(ev);
-    for (const rule of this.ordered) for (const actorId of rule.who) this.evaluate(rule, actorId, ev);
+    for (const rule of this.ordered) for (const actorId of this.whoOf(rule)) this.evaluate(rule, actorId, ev);
   }
 
   private onPhaseChange(ev: TraceEvent): void {
-    for (const m of this.plan.roster) {
+    for (const m of this.sortedRoster) {
       const u = this.sim.units.get(m.id);
       const spot = this.assignment(m.id);
       if (!u || !u.alive || u.speedYdPerSec <= 0 || spot === null || this.moving.has(m.id)) continue;
