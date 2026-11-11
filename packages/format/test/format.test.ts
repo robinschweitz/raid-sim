@@ -57,4 +57,10 @@ describe('formatter', () => {
     const withEvent: Trace = { ...t, events: [ev] };
     expect(formatLog(withEvent, dict, {})).toEqual(['[01:01.234] Alice casts bolt (1500 ms) until 01:02.734']);
   });
+  it('renders a null ...Ms value (a permanent aura expiry) as never', () => {
+    const t = trace();
+    const ev = { id: 'e9', t: 0, kind: 'aura_applied', causes: [], data: { unit: 'p1', aura: 'blight', expiresMs: null } } as Trace['events'][number];
+    const dict = { ...EN, 'event.aura_applied': '{unit} gets {aura} until {expiresMs}' };
+    expect(formatLog({ ...t, events: [ev] }, dict, {})).toEqual(['[00:00.000] Alice gets blight until never']);
+  });
 });

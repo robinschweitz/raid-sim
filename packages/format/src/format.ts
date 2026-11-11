@@ -17,7 +17,8 @@ export function clock(ms: number): string {
 export function createFormatter(trace: Trace, dict: Dictionary): (ev: TraceEvent) => string {
   const names = new Map(trace.meta.units.map((u) => [u.id, u.name]));
   const render = (key: string, v: TraceValue | undefined): string => {
-    if (v === undefined || v === null) return '';
+    if (v === undefined) return '';
+    if (v === null) return key.endsWith('Ms') ? 'never' : '';
     if (Array.isArray(v)) return v.map((x) => render(key, x as string)).join(', ');
     if (typeof v === 'string' && UNIT_KEYS.has(key)) return names.get(v) ?? v;
     if (typeof v === 'string' && ABILITY_KEYS.has(key)) return dict[`ability.${v}`] ?? v;

@@ -12,7 +12,7 @@ function factor(sim: Simulation, unit: Unit, kind: DamageModifier['kind'], schoo
     const inst = unit.auras.get(key)!;
     for (const m of sim.catalog.aura(inst.auraId).modifiers ?? []) {
       if (m.kind !== kind || !applies(m, school)) continue;
-      f *= 1 + (m.pct * (m.perStack ? inst.stacks : 1)) / 100;
+      f *= Math.max(0, 1 + (m.pct * (m.perStack ? inst.stacks : 1)) / 100);
     }
   }
   return f;

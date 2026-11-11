@@ -35,15 +35,21 @@ export interface AuraHookContext {
   readonly casterId: string;
   readonly auraId: string;
   readonly stacks: number;
+  /** Stacks before this event: 0 on apply; equal to `stacks` when re-applied at max stacks. */
+  readonly previousStacks: number;
   readonly appliedMs: number;
   readonly refreshedMs: number;
   readonly causes: readonly string[];
 }
 
+/**
+ * Hooks are not called when the unit holding the aura (or, for a spell script, the spell's target) is dead at that
+ * moment. afterStack also fires when the aura is re-applied at max stacks (stacks unchanged, duration refreshed).
+ */
 export interface AuraScript {
   afterApply?(ctx: AuraHookContext): void;
   afterStack?(ctx: AuraHookContext): void;
-  /** Not called when the aura is removed by death (A-012). */
+  /** Not called when the aura is removed by death (A-012), nor when the holder is dead (e.g. killed by onExpire). */
   afterRemove?(ctx: AuraHookContext & { readonly reason: AuraRemoveReason }): void;
 }
 
@@ -56,7 +62,7 @@ export interface SpellHitContext {
 }
 
 export interface SpellScript {
-  /** Runs after all effects of the spell were applied to the target (A-024). */
+  /** Runs after all effects of the spell were applied to the target (A-024); skipped if the target died. */
   afterHitTarget?(ctx: SpellHitContext): void;
 }
 
@@ -103,7 +109,7 @@ export class Catalog {
     if (!ID_PATTERN.test(def.id)) throw new Error(`invalid aura id ${def.id}`);
     if (this.auras.has(def.id)) throw new Error(`duplicate aura ${def.id}`);
     if ((def.durationMs !== null && !(def.durationMs > 0)) || !Number.isInteger(def.maxStacks) || def.maxStacks < 1) {
-      throw new Error(`aura ${def.id} needs a positive duration and maxStacks >= 1`);
+      throw new Error(`aura ${def.id} needs a positive duration or null (permanent), and maxStacks >= 1`);
     }
     if (def.periodic && def.periodic.intervalMs <= 0) throw new Error(`aura ${def.id} needs a positive tick interval`);
     for (const m of def.modifiers ?? []) {

@@ -22,6 +22,7 @@ export function applyAura(
     Number.isFinite(expiresMs) ? sim.at(expiresMs, EventClass.AuraExpiry, () => expire(sim, targetId, key, inst)) : null;
   const existing = target.auras.get(key);
   if (existing) {
+    const previousStacks = existing.stacks;
     existing.stacks = Math.min(def.maxStacks, existing.stacks + 1);
     sim.cancel(existing.expiry);
     existing.expiresMs = expiresMs;
@@ -36,7 +37,7 @@ export function applyAura(
       // Resume at the kept tick anchor (A-009). It is always after now: a chain only stops when the anchor passes the expiry.
       scheduleTick(sim, targetId, key, existing);
     }
-    sim.catalog.auraScript(auraId)?.afterStack?.(hookContext(sim, existing, targetId, [id]));
+    if (target.alive) sim.catalog.auraScript(auraId)?.afterStack?.(hookContext(sim, existing, targetId, [id], previousStacks));
     return id;
   }
   const inst: AuraInstance = {
@@ -55,17 +56,24 @@ export function applyAura(
   target.auras.set(key, inst);
   inst.appliedEvent = sim.emit('aura_applied', { unit: targetId, aura: auraId, caster: casterId, stacks: 1, expiresMs: traceExpiry }, causes);
   if (def.periodic && target.auras.get(key) === inst) scheduleTick(sim, targetId, key, inst);
-  sim.catalog.auraScript(auraId)?.afterApply?.(hookContext(sim, inst, targetId, [inst.appliedEvent]));
+  if (target.alive) sim.catalog.auraScript(auraId)?.afterApply?.(hookContext(sim, inst, targetId, [inst.appliedEvent], 0));
   return inst.appliedEvent;
 }
 
-function hookContext(sim: Simulation, inst: AuraInstance, unitId: string, causes: readonly string[]): AuraHookContext {
+function hookContext(
+  sim: Simulation,
+  inst: AuraInstance,
+  unitId: string,
+  causes: readonly string[],
+  previousStacks: number,
+): AuraHookContext {
   return {
     sim,
     unitId,
     casterId: inst.casterId,
     auraId: inst.auraId,
     stacks: inst.stacks,
+    previousStacks,
     appliedMs: inst.appliedMs,
     refreshedMs: inst.refreshedMs,
     causes,
@@ -73,7 +81,8 @@ function hookContext(sim: Simulation, inst: AuraInstance, unitId: string, causes
 }
 
 function afterRemove(sim: Simulation, inst: AuraInstance, unitId: string, removedId: string, reason: AuraRemoveReason): void {
-  sim.catalog.auraScript(inst.auraId)?.afterRemove?.({ ...hookContext(sim, inst, unitId, [removedId]), reason });
+  if (!sim.unit(unitId).alive) return;
+  sim.catalog.auraScript(inst.auraId)?.afterRemove?.({ ...hookContext(sim, inst, unitId, [removedId], inst.stacks), reason });
 }
 
 function scheduleTick(sim: Simulation, targetId: string, key: string, inst: AuraInstance): void {
@@ -126,8 +135,9 @@ export function removeAuras(
   const target = sim.unit(targetId);
   const ids: string[] = [];
   for (const key of [...target.auras.keys()].sort(compareStrings)) {
-    const inst = target.auras.get(key)!;
-    if (inst.auraId !== auraId) continue;
+    // A hook of an earlier removal may already have removed this instance.
+    const inst = target.auras.get(key);
+    if (!inst || inst.auraId !== auraId) continue;
     sim.cancel(inst.expiry);
     sim.cancel(inst.tick);
     target.auras.delete(key);
