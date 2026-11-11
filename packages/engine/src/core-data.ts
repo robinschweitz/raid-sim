@@ -53,6 +53,21 @@ export const CORE_DATA: readonly unknown[] = [
     value: 1000,
     source: { kind: 'code', file: 'src/server/game/Combat/ThreatManager.h', commit, line: 94 },
   },
+  {
+    key: 'core.taunt_range_yd',
+    value: 30,
+    source: { kind: 'assumption', rationale: 'generic 3.3.5a tank taunt (Taunt, Hand of Reckoning, Dark Command, Growl): 30 yd', confirmBy: 'Plan 3: each spec uses its own taunt spell from client data' },
+  },
+  {
+    key: 'core.taunt_cooldown_ms',
+    value: 8000,
+    source: { kind: 'assumption', rationale: 'generic 3.3.5a tank taunt cooldown: 8 s', confirmBy: 'Plan 3: each spec uses its own taunt spell from client data' },
+  },
+  {
+    key: 'core.taunt_duration_ms',
+    value: 3000,
+    source: { kind: 'assumption', rationale: 'generic 3.3.5a taunt effect duration: 3 s', confirmBy: 'Plan 3: each spec uses its own taunt spell from client data' },
+  },
   standin('core.standin_tick_ms', 1000, 'Stand-ins deal damage or healing once per second'),
   standin('core.standin_range_tank_yd', 5, 'A tank stand-in hits the boss from melee range'),
   standin('core.standin_range_melee_yd', 5, 'A melee stand-in hits the boss from melee range'),

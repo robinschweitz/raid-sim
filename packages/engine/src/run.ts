@@ -8,7 +8,7 @@ import { evaluateObservations, type CustomCheck } from './observations';
 import type { PreparedRun } from './plan/prepare';
 import type { ModelledMember } from './plan/schema';
 import type { LoadProblem } from './plan/validate';
-import { BUILTIN_ACTIONS, RuleEngine, type ActionHandler } from './rules';
+import { BUILTIN_ACTIONS, ENGINE_ACTION_NAMES, RuleEngine, createTauntAction, type ActionHandler } from './rules';
 import { Simulation, type OutcomeKind } from './sim';
 import { installStandin, type StandinParams } from './standin';
 import { buildSummary, type Summary } from './summary';
@@ -61,7 +61,7 @@ function checkContent(p: PreparedRun, reg: ContentRegistry): LoadProblem[] {
     }
   });
   p.plan.rules.forEach((r, i) => {
-    if (!BUILTIN_ACTIONS.has(r.do.do) && !reg.actions.has(r.do.do)) {
+    if (!ENGINE_ACTION_NAMES.has(r.do.do) && !reg.actions.has(r.do.do)) {
       problems.push({ file: p.planFile, path: `rules.${i}.do.do`, message: `no handler for action ${r.do.do}` });
     }
   });
@@ -117,7 +117,19 @@ export function runScenario(prepared: PreparedRun, registry: ContentRegistry): R
   } catch (e) {
     return setupFailure(`boss:${boss.id}`, e);
   }
-  const rules = new RuleEngine(sim, plan, new Map([...BUILTIN_ACTIONS, ...registry.actions]), {
+  const handlers = new Map<string, ActionHandler>(BUILTIN_ACTIONS);
+  if (plan.rules.some((r) => r.do.do === 'taunt')) {
+    handlers.set(
+      'taunt',
+      createTauntAction({
+        rangeYd: data.num('core.taunt_range_yd'),
+        cooldownMs: data.num('core.taunt_cooldown_ms'),
+        durationMs: data.num('core.taunt_duration_ms'),
+      }),
+    );
+  }
+  for (const [name, handler] of registry.actions) handlers.set(name, handler);
+  const rules = new RuleEngine(sim, plan, handlers, {
     currentTank: () => threat.victim(setup.bossUnitId),
   });
   const hooks = {

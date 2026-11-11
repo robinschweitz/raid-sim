@@ -2,6 +2,7 @@ import { applyAura, removeAuras } from './auras';
 import type { Effect } from './catalog';
 import { pointToEdge, positionAt } from './movement';
 import type { Simulation } from './sim';
+import { threatFor } from './threat';
 import type { Unit } from './units';
 
 export interface EffectContext {
@@ -40,6 +41,9 @@ function applyEffect(sim: Simulation, e: Effect, ctx: EffectContext): void {
       return;
     case 'remove_aura':
       removeAuras(sim, target.id, e.aura, 'removed', ctx.causes);
+      return;
+    case 'taunt':
+      threatFor(sim)?.taunt(target.id, ctx.casterId, e.durationMs, ctx.causes);
       return;
     case 'area': {
       const center = positionAt(target, sim.now);

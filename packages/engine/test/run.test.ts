@@ -104,11 +104,11 @@ describe('runScenario', () => {
     const withTaunt = `${PLAN_YAML}  - id: swap
     who: [p1]
     when: { on: time, atMs: 1000 }
-    do: { do: taunt, target: boss }
+    do: { do: use_cooldown, spell: test_bolt }
 `;
     const r = runScenario(prepared([], withTaunt), registry);
     expect(r.outcome).toBe('invalid');
-    if (r.outcome === 'invalid') expect(r.problems.map((p) => p.message)).toContain('no handler for action taunt');
+    if (r.outcome === 'invalid') expect(r.problems.map((p) => p.message)).toContain('no handler for action use_cooldown');
     const noSpec = runScenario(prepared(), { ...registry, policies: new Map() });
     expect(noSpec.outcome).toBe('invalid');
     if (noSpec.outcome === 'invalid') expect(noSpec.problems.map((p) => p.message)).toContain('no model for spec test_caster');

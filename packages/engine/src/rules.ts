@@ -1,7 +1,9 @@
 import { interruptCast } from './casting';
+import { edgeDistance } from './movement';
 import type { Action, Member, Plan, Rule } from './plan/schema';
 import { EventClass } from './queue';
 import type { Simulation } from './sim';
+import { threatFor } from './threat';
 import type { TraceEvent, TraceValue } from './trace';
 import { byId, compareStrings, type Unit, type Vec2 } from './units';
 
@@ -56,6 +58,33 @@ export const BUILTIN_ACTIONS: ReadonlyMap<string, ActionHandler> = new Map([
   ['return_to_assignment', returnToAssignment],
   ['stop_casting', stopCasting],
 ]);
+
+export interface TauntParams {
+  readonly rangeYd: number;
+  readonly cooldownMs: number;
+  readonly durationMs: number;
+}
+
+/** Plan action `taunt` for any actor; cooldown state lives in the returned handler (one per run). */
+export function createTauntAction(p: TauntParams): ActionHandler {
+  const readyAt = new Map<string, number>();
+  return (ctx) => {
+    if (ctx.action.do !== 'taunt') return { ok: false, reason: 'wrong_action' };
+    const target = ctx.resolve(ctx.action.target);
+    if (!target || !target.alive) return { ok: false, reason: 'target_dead' };
+    const threat = threatFor(ctx.sim);
+    if (!threat) return { ok: false, reason: 'no_threat' };
+    if ((readyAt.get(ctx.actor.id) ?? 0) > ctx.sim.now) return { ok: false, reason: 'cooldown' };
+    if (edgeDistance(ctx.actor, target, ctx.sim.now) > p.rangeYd) return { ok: false, reason: 'out_of_range' };
+    const r = threat.taunt(target.id, ctx.actor.id, p.durationMs, ctx.causes);
+    if (r !== 'ok') return { ok: false, reason: r };
+    readyAt.set(ctx.actor.id, ctx.sim.now + p.cooldownMs);
+    return { ok: true };
+  };
+}
+
+/** Actions the engine provides in every run (BUILTIN_ACTIONS plus taunt, which needs run data). */
+export const ENGINE_ACTION_NAMES: ReadonlySet<string> = new Set([...BUILTIN_ACTIONS.keys(), 'taunt']);
 
 export class RuleEngine {
   /** actorId → priority of the running rule move. */

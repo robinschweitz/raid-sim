@@ -7,6 +7,7 @@ export type Effect =
   | { readonly type: 'heal'; readonly min: number; readonly max: number }
   | { readonly type: 'apply_aura'; readonly aura: string }
   | { readonly type: 'remove_aura'; readonly aura: string }
+  | { readonly type: 'taunt'; readonly durationMs: number }
   | {
       readonly type: 'area';
       readonly radius: number;
