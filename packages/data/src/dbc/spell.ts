@@ -27,8 +27,18 @@ export const DBC_FORMAT_LINES: Readonly<Record<DbcName, number>> = {
 /** Zero-based Spell.dbc columns; arrays of three (effects) start at the given column. See docs/research. */
 export const SPELL_COLUMNS = {
   id: 0,
+  dispel: 2,
+  mechanic: 3,
   attributes: 4,
   attributesEx: 5,
+  attributesEx2: 6,
+  attributesEx3: 7,
+  attributesEx4: 8,
+  attributesEx5: 9,
+  attributesEx6: 10,
+  attributesEx7: 11,
+  /** SpellEntry.Targets: column 16 (the format skips the stance columns 12..15, so it is not 14). */
+  targets: 16,
   castingTimeIndex: 28,
   recoveryTime: 29,
   categoryRecoveryTime: 30,
@@ -42,21 +52,32 @@ export const SPELL_COLUMNS = {
   stackAmount: 49,
   effect: 71,
   effectDieSides: 74,
+  effectRealPointsPerLevel: 77,
   effectBasePoints: 80,
+  effectMechanic: 83,
   effectImplicitTargetA: 86,
   effectImplicitTargetB: 89,
   effectRadiusIndex: 92,
   effectApplyAuraName: 95,
   effectAmplitude: 98,
+  effectValueMultiplier: 101,
   effectChainTarget: 104,
   effectMiscValue: 110,
   effectTriggerSpell: 116,
+  /** Three flag96 masks per spell, three values each: effect i starts at 122 + 3 i. */
+  effectSpellClassMask: 122,
   name: 136,
   startRecoveryCategory: 205,
   startRecoveryTime: 206,
+  spellFamilyName: 208,
+  /** flag96, three values. */
+  spellFamilyFlags: 209,
   maxAffectedTargets: 212,
   dmgClass: 213,
+  preventionType: 214,
+  effectDamageMultiplier: 216,
   schoolMask: 225,
+  effectBonusMultiplier: 229,
 } as const;
 
 export interface SpellEffectRecord {
@@ -71,6 +92,15 @@ export interface SpellEffectRecord {
   readonly chainTarget: number;
   readonly miscValue: number;
   readonly triggerSpell: number;
+  readonly mechanic: number;
+  readonly realPointsPerLevel: number;
+  /** EffectValueMultiplier (column 101+). */
+  readonly valueMultiplier: number;
+  /** EffectDamageMultiplier (m_effectChainAmplitude). */
+  readonly damageMultiplier: number;
+  readonly bonusMultiplier: number;
+  /** EffectSpellClassMask: the flag96 of spell family bits the effect applies to. */
+  readonly classMask: readonly [number, number, number];
 }
 
 export interface SpellRecord {
@@ -80,6 +110,18 @@ export interface SpellRecord {
   readonly nameLocale: number;
   readonly attributes: number;
   readonly attributesEx: number;
+  readonly attributesEx2: number;
+  readonly attributesEx3: number;
+  readonly attributesEx4: number;
+  readonly attributesEx5: number;
+  readonly attributesEx6: number;
+  readonly attributesEx7: number;
+  readonly dispel: number;
+  readonly mechanic: number;
+  readonly targets: number;
+  readonly spellFamilyName: number;
+  readonly spellFamilyFlags: readonly [number, number, number];
+  readonly preventionType: number;
   readonly castingTimeIndex: number;
   readonly recoveryTime: number;
   readonly categoryRecoveryTime: number;
@@ -118,6 +160,10 @@ function num(row: DbcRow, i: number): number {
   return v;
 }
 
+function triple(row: DbcRow, i: number): readonly [number, number, number] {
+  return [num(row, i), num(row, i + 1), num(row, i + 2)];
+}
+
 function effect(row: DbcRow, i: number): SpellEffectRecord {
   const c = SPELL_COLUMNS;
   return {
@@ -132,6 +178,12 @@ function effect(row: DbcRow, i: number): SpellEffectRecord {
     chainTarget: num(row, c.effectChainTarget + i),
     miscValue: num(row, c.effectMiscValue + i),
     triggerSpell: num(row, c.effectTriggerSpell + i),
+    mechanic: num(row, c.effectMechanic + i),
+    realPointsPerLevel: num(row, c.effectRealPointsPerLevel + i),
+    valueMultiplier: num(row, c.effectValueMultiplier + i),
+    damageMultiplier: num(row, c.effectDamageMultiplier + i),
+    bonusMultiplier: num(row, c.effectBonusMultiplier + i),
+    classMask: triple(row, c.effectSpellClassMask + 3 * i),
   };
 }
 
@@ -153,6 +205,18 @@ export function decodeSpell(row: DbcRow): SpellRecord {
     nameLocale,
     attributes: num(row, c.attributes),
     attributesEx: num(row, c.attributesEx),
+    attributesEx2: num(row, c.attributesEx2),
+    attributesEx3: num(row, c.attributesEx3),
+    attributesEx4: num(row, c.attributesEx4),
+    attributesEx5: num(row, c.attributesEx5),
+    attributesEx6: num(row, c.attributesEx6),
+    attributesEx7: num(row, c.attributesEx7),
+    dispel: num(row, c.dispel),
+    mechanic: num(row, c.mechanic),
+    targets: num(row, c.targets),
+    spellFamilyName: num(row, c.spellFamilyName),
+    spellFamilyFlags: triple(row, c.spellFamilyFlags),
+    preventionType: num(row, c.preventionType),
     castingTimeIndex: num(row, c.castingTimeIndex),
     recoveryTime: num(row, c.recoveryTime),
     categoryRecoveryTime: num(row, c.categoryRecoveryTime),
@@ -174,7 +238,9 @@ export function decodeSpell(row: DbcRow): SpellRecord {
 }
 
 export function loadClientSpellData(files: Readonly<Record<DbcName, Uint8Array>>): ClientSpellData {
-  const table = (name: DbcName) => parseWdbc(files[name], DBC_FORMATS[name]).rows;
+  // Only the 16 SpellName columns must be valid UTF-8; other string columns (Rank, ...) are never read, so a bad string there is tolerated.
+  const spellOptions = { strictStringColumns: (column: number) => column >= SPELL_COLUMNS.name && column < SPELL_COLUMNS.name + 16 };
+  const table = (name: DbcName) => parseWdbc(files[name], DBC_FORMATS[name], name === 'Spell' ? spellOptions : undefined).rows;
   const map = <T>(name: DbcName, f: (row: DbcRow) => T): Map<number, T> => {
     const out = new Map<number, T>();
     for (const [id, row] of table(name)) out.set(id, f(row));

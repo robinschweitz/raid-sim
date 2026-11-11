@@ -24,8 +24,16 @@ function fieldWidth(c: string): number {
   throw new DbcFormatError(`unknown format character ${c}`);
 }
 
+export interface ParseOptions {
+  /**
+   * Whether invalid UTF-8 in the given (zero-based) string column is an error. Default: every column is strict.
+   * In a non-strict column an undecodable string becomes `null`; structural errors (offsets, termination) still throw.
+   */
+  readonly strictStringColumns?: (column: number) => boolean;
+}
+
 /** Parses a WDBC file using an AzerothCore format string (DBCfmt.h). */
-export function parseWdbc(bytes: Uint8Array, fmt: string): DbcTable {
+export function parseWdbc(bytes: Uint8Array, fmt: string, options: ParseOptions = {}): DbcTable {
   if (bytes.byteLength < 20) throw new DbcFormatError('file too short for a WDBC header');
   const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
   if (view.getUint32(0, true) !== WDBC_MAGIC) throw new DbcFormatError('not a WDBC file');
@@ -46,7 +54,7 @@ export function parseWdbc(bytes: Uint8Array, fmt: string): DbcTable {
     throw new DbcFormatError(`file has ${bytes.byteLength - stringStart - stringSize} unexpected trailing bytes`);
   }
   const decoder = new TextDecoder('utf-8', { fatal: true });
-  const readString = (offset: number): string => {
+  const readString = (offset: number, strict: boolean): string | null => {
     if (offset >= stringSize) throw new DbcFormatError(`string offset ${offset} outside the string block`);
     let end = stringStart + offset;
     while (end < stringStart + stringSize && bytes[end] !== 0) end++;
@@ -54,6 +62,7 @@ export function parseWdbc(bytes: Uint8Array, fmt: string): DbcTable {
     try {
       return decoder.decode(bytes.subarray(stringStart + offset, end));
     } catch {
+      if (!strict) return null;
       throw new DbcFormatError(`invalid UTF-8 in string at offset ${offset}`);
     }
   };
@@ -62,6 +71,7 @@ export function parseWdbc(bytes: Uint8Array, fmt: string): DbcTable {
     let o = 20 + r * recordSize;
     const row: (DbcValue | null)[] = [];
     for (const c of chars) {
+      const column = row.length;
       switch (c) {
         case 'n':
           row.push(view.getUint32(o, true));
@@ -73,7 +83,7 @@ export function parseWdbc(bytes: Uint8Array, fmt: string): DbcTable {
           row.push(view.getFloat32(o, true));
           break;
         case 's':
-          row.push(readString(view.getUint32(o, true)));
+          row.push(readString(view.getUint32(o, true), options.strictStringColumns?.(column) ?? true));
           break;
         case 'b':
           row.push(view.getUint8(o));

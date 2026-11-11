@@ -51,6 +51,12 @@ describe('extractSpells', () => {
     expect(root.difficultyVariants).toEqual([100, 101, 0, 0]);
   });
 
+  it('carries the extra spell and effect fields', () => {
+    const root = extractSpells(data(), files, [100]).spells[0];
+    expect(root).toMatchObject({ attributesEx2: 0, attributesEx7: 0, dispel: 0, mechanic: 0, targets: 0, spellFamilyName: 0, spellFamilyFlags: [0, 0, 0], preventionType: 0 });
+    expect(root.effects[0]).toMatchObject({ mechanic: 0, realPointsPerLevel: 0, valueMultiplier: 0, damageMultiplier: 0, bonusMultiplier: 0, classMask: [0, 0, 0] });
+  });
+
   it('reports ids that are not in the client data', () => {
     expect(extractSpells(data(), files, [100, 999]).missing).toEqual([999]);
   });

@@ -23,6 +23,13 @@ describe('spell DBC layout', () => {
     for (const k of ['effect', 'effectBasePoints', 'effectRadiusIndex', 'effectTriggerSpell', 'effectAmplitude'] as const) {
       for (let i = 0; i < 3; i++) expect(fmt[SPELL_COLUMNS[k] + i], `${k}[${i}]`).toBe('i');
     }
+    for (const k of ['effectMechanic', 'effectSpellClassMask'] as const) expect(fmt[SPELL_COLUMNS[k]]).toBe('i');
+    for (const k of ['effectRealPointsPerLevel', 'effectValueMultiplier', 'effectDamageMultiplier', 'effectBonusMultiplier'] as const) {
+      for (let i = 0; i < 3; i++) expect(fmt[SPELL_COLUMNS[k] + i], `${k}[${i}]`).toBe('f');
+    }
+    for (const k of ['dispel', 'mechanic', 'targets', 'attributesEx7', 'spellFamilyName', 'spellFamilyFlags', 'preventionType'] as const) {
+      expect(fmt[SPELL_COLUMNS[k]], k).toBe('i');
+    }
     for (const k of ['durationIndex', 'rangeIndex', 'castingTimeIndex', 'maxAffectedTargets', 'schoolMask', 'stackAmount'] as const) {
       expect(fmt[SPELL_COLUMNS[k]], k).toBe('i');
     }
@@ -71,6 +78,9 @@ describe('decoding', () => {
       implicitTargetA: eff(E.implicitTargetA, k), implicitTargetB: eff(E.implicitTargetB, k),
       radiusIndex: eff(E.radiusIndex, k), applyAuraName: eff(E.applyAuraName, k), amplitude: eff(E.amplitude, k),
       chainTarget: eff(E.chainTarget, k), miscValue: eff(E.miscValue, k), triggerSpell: eff(E.triggerSpell, k),
+      mechanic: eff([83, 84, 85], k), realPointsPerLevel: [77, 78, 79][k]! + 0.5, valueMultiplier: [101, 102, 103][k]! + 0.5,
+      damageMultiplier: [216, 217, 218][k]! + 0.5, bonusMultiplier: [229, 230, 231][k]! + 0.5,
+      classMask: [122 + 3 * k + 1000, 123 + 3 * k + 1000, 124 + 3 * k + 1000] as const,
     });
     expect(decodeSpell(row)).toEqual({
       id: 1000, attributes: 1004, attributesEx: 1005, castingTimeIndex: 1028, recoveryTime: 1029,
@@ -78,9 +88,37 @@ describe('decoding', () => {
       procChance: 1035, durationIndex: 1040, rangeIndex: 1046, speed: 47.5, stackAmount: 1049,
       name: 's136', nameLocale: 0, startRecoveryCategory: 1205, startRecoveryTime: 1206, maxAffectedTargets: 1212,
       dmgClass: 1213, schoolMask: 1225,
+      attributesEx2: 1006, attributesEx3: 1007, attributesEx4: 1008, attributesEx5: 1009, attributesEx6: 1010, attributesEx7: 1011,
+      dispel: 1002, mechanic: 1003, targets: 1016, spellFamilyName: 1208, spellFamilyFlags: [1209, 1210, 1211], preventionType: 1214,
       effects: [effectAt(0), effectAt(1), effectAt(2)],
     });
     expect(effectAt(2).triggerSpell).toBe(1118);
+  });
+
+  it('tolerates invalid UTF-8 in unused string columns but not in spell names', () => {
+    const fmt = DBC_FORMATS.Spell;
+    const row = spellRow({ id: 7 });
+    const rankColumn = fmt.indexOf('s', SPELL_COLUMNS.name + 16);
+    row[SPELL_COLUMNS.name] = 'Name';
+    row[rankColumn] = 'BAD';
+    const file = buildWdbc(fmt, [row]);
+    const at = new TextEncoder().encode('BAD');
+    const idx = file.findIndex((_, i) => file[i] === at[0] && file[i + 1] === at[1] && file[i + 2] === at[2]);
+    file.set([0xff, 0xfe, 0xfd], idx);
+    const load = (f: Uint8Array) =>
+      loadClientSpellData({
+        Spell: f,
+        SpellCastTimes: buildWdbc(DBC_FORMATS.SpellCastTimes, []),
+        SpellDifficulty: buildWdbc(DBC_FORMATS.SpellDifficulty, []),
+        SpellDuration: buildWdbc(DBC_FORMATS.SpellDuration, []),
+        SpellRadius: buildWdbc(DBC_FORMATS.SpellRadius, []),
+        SpellRange: buildWdbc(DBC_FORMATS.SpellRange, []),
+      });
+    expect(load(file).spells.get(7)?.name).toBe('Name');
+    const nameAt = new TextEncoder().encode('Name');
+    const nIdx = file.findIndex((_, i) => nameAt.every((b, k) => file[i + k] === b));
+    file.set([0xff, 0xfe, 0xfd, 0xfc], nIdx);
+    expect(() => load(file)).toThrow('invalid UTF-8');
   });
 
   it('decodes a spell row and its effects', () => {

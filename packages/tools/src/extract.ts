@@ -20,6 +20,12 @@ export interface ExtractedEffect {
   readonly triggerSpell: number;
   readonly radiusIndex: number;
   readonly radiusYd: { readonly radius: number; readonly max: number } | null;
+  readonly mechanic: number;
+  readonly realPointsPerLevel: number;
+  readonly valueMultiplier: number;
+  readonly damageMultiplier: number;
+  readonly bonusMultiplier: number;
+  readonly classMask: readonly [number, number, number];
 }
 
 export interface ExtractedSpell {
@@ -28,6 +34,18 @@ export interface ExtractedSpell {
   readonly nameLocale: number;
   readonly attributes: number;
   readonly attributesEx: number;
+  readonly attributesEx2: number;
+  readonly attributesEx3: number;
+  readonly attributesEx4: number;
+  readonly attributesEx5: number;
+  readonly attributesEx6: number;
+  readonly attributesEx7: number;
+  readonly dispel: number;
+  readonly mechanic: number;
+  readonly targets: number;
+  readonly spellFamilyName: number;
+  readonly spellFamilyFlags: readonly [number, number, number];
+  readonly preventionType: number;
   readonly schoolMask: number;
   readonly dmgClass: number;
   readonly castTimeMs: number | null;
@@ -94,6 +112,12 @@ export function extractSpells(data: ClientSpellData, files: readonly ExtractedFi
         triggerSpell: e.triggerSpell,
         radiusIndex: e.radiusIndex,
         radiusYd: r ? { radius: r.radius, max: r.max } : null,
+        mechanic: e.mechanic,
+        realPointsPerLevel: e.realPointsPerLevel,
+        valueMultiplier: e.valueMultiplier,
+        damageMultiplier: e.damageMultiplier,
+        bonusMultiplier: e.bonusMultiplier,
+        classMask: e.classMask,
       });
     });
     const range = data.ranges.get(s.rangeIndex);
@@ -103,6 +127,18 @@ export function extractSpells(data: ClientSpellData, files: readonly ExtractedFi
       nameLocale: s.nameLocale,
       attributes: s.attributes,
       attributesEx: s.attributesEx,
+      attributesEx2: s.attributesEx2,
+      attributesEx3: s.attributesEx3,
+      attributesEx4: s.attributesEx4,
+      attributesEx5: s.attributesEx5,
+      attributesEx6: s.attributesEx6,
+      attributesEx7: s.attributesEx7,
+      dispel: s.dispel,
+      mechanic: s.mechanic,
+      targets: s.targets,
+      spellFamilyName: s.spellFamilyName,
+      spellFamilyFlags: s.spellFamilyFlags,
+      preventionType: s.preventionType,
       schoolMask: s.schoolMask,
       dmgClass: s.dmgClass,
       castTimeMs: data.castTimes.get(s.castingTimeIndex)?.castTime ?? null,

@@ -16,6 +16,8 @@ Two common ways:
 - **An MPQ editor**: open the client's `Data/<locale>/` archives (the locale archive and its patch
   archives, applied in order) and export `DBFilesClient/<name>.dbc`. The latest patch archive's copy
   wins.
+  For a German client the archives are under `Data/deDE/`: `locale-deDE.MPQ`, then `patch-deDE.MPQ`,
+  `patch-deDE-2.MPQ`, `patch-deDE-3.MPQ`; the highest patch wins.
 
 Put the six files into one folder outside the repository, for example `C:\wow-dbc\`. The folder should be outside the repository (or in `client-data/`, which git ignores). German and other localized clients work: spell names are taken from the client's own language.
 

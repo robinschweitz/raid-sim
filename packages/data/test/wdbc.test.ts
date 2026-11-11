@@ -114,6 +114,17 @@ describe('parseWdbc', () => {
     expect(() => parseWdbc(file, 'ns')).toThrow('invalid UTF-8 in string at offset 1');
   });
 
+  it('yields null for invalid UTF-8 in a column the predicate marks non-strict', () => {
+    const file = withRawStrings([0, 0xff, 0xfe, 0], 1);
+    expect(parseWdbc(file, 'ns', { strictStringColumns: () => false }).rows.get(1)).toEqual([1, null]);
+    expect(() => parseWdbc(file, 'ns', { strictStringColumns: (c) => c === 1 })).toThrow('invalid UTF-8');
+    expect(parseWdbc(file, 'ns', { strictStringColumns: (c) => c !== 1 }).rows.get(1)).toEqual([1, null]);
+  });
+
+  it('still rejects structural string errors in a non-strict column', () => {
+    expect(() => parseWdbc(withRawStrings([0], 5), 'ns', { strictStringColumns: () => false })).toThrow(/outside the string block/);
+  });
+
   it('rejects a string offset outside the string block', () => {
     const file = withRawStrings([0], 5);
     expect(() => parseWdbc(file, 'ns')).toThrow(/outside the string block/);
