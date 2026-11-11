@@ -1,6 +1,7 @@
-import { startCast, type CastResult } from './casting';
+import { startCast, type CastOptions, type CastResult } from './casting';
 import { EventMap } from './eventmap';
 import { meleeIfReady } from './melee';
+import { edgeDistance } from './movement';
 import { EventClass } from './queue';
 import type { Simulation } from './sim';
 import { threatFor } from './threat';
@@ -24,7 +25,17 @@ export interface BossContext {
   readonly self: Unit;
   victim(): Unit | null;
   ai(name: string, data?: Readonly<Record<string, TraceValue>>, causes?: readonly string[]): string;
-  cast(spellId: string, targetId: string, causes: readonly string[]): CastResult;
+  cast(spellId: string, targetId: string, causes: readonly string[], options?: CastOptions): CastResult;
+  /** Living units on this boss's threat list, sorted by id. */
+  threatList(): Unit[];
+  /**
+   * SelectTarget(Random, ...) on the threat list from stream `boss:<id>.<mechanic>`. Distances are edge to edge (A-021):
+   * minDistanceYd = must be farther than, maxDistanceYd = must be within.
+   */
+  selectTarget(
+    mechanic: string,
+    options?: { minDistanceYd?: number; maxDistanceYd?: number; excludeVictim?: boolean },
+  ): Unit | null;
   /** Picks targets from the stream `boss:<bossId>.<mechanic>` (§8.7). */
   pick(mechanic: string, candidates: readonly Unit[], n: number): Unit[];
   publishTimer(ability: string, minMs: number, maxMs: number, causes: readonly string[]): string;
@@ -84,7 +95,19 @@ export function makeBossContext(sim: Simulation, bossId: string): BossContext {
     self,
     victim: () => victimOf(sim, bossId),
     ai: (name, data = {}, causes = []) => sim.emit('ai_event', { ...data, boss: bossId, event: name }, causes),
-    cast: (spellId, targetId, causes) => startCast(sim, bossId, spellId, targetId, causes),
+    cast: (spellId, targetId, causes, options) => startCast(sim, bossId, spellId, targetId, causes, options),
+    threatList: () => threatFor(sim)?.listed(bossId) ?? [],
+    selectTarget: (mechanic, options = {}) => {
+      const victim = victimOf(sim, bossId);
+      const candidates = (threatFor(sim)?.listed(bossId) ?? []).filter((u) => {
+        const d = edgeDistance(self, u, sim.now);
+        if (options.minDistanceYd !== undefined && !(d > options.minDistanceYd)) return false;
+        if (options.maxDistanceYd !== undefined && d > options.maxDistanceYd) return false;
+        if (options.excludeVictim && victim && u.id === victim.id) return false;
+        return true;
+      });
+      return sim.rng.stream(`boss:${bossId}.${mechanic}`).pick(candidates, 1)[0] ?? null;
+    },
     pick: (mechanic, candidates, n) => sim.rng.stream(`boss:${bossId}.${mechanic}`).pick(candidates, n),
     publishTimer: (ability, minMs, maxMs, causes) => {
       const w = { boss: bossId, ability, earliestMs: sim.now + minMs, latestMs: sim.now + maxMs };

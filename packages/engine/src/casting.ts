@@ -43,20 +43,43 @@ export function checkCast(sim: Simulation, casterId: string, spellId: string, ta
   return { ok: true };
 }
 
+export interface CastOptions {
+  /** AzerothCore CastSpell(..., triggered = true): no cast time, GCD, cooldown, casting or range checks (A-020). */
+  readonly triggered?: boolean;
+}
+
 export function startCast(
   sim: Simulation,
   casterId: string,
   spellId: string,
   targetId: string,
   causes: readonly string[],
+  options: CastOptions = {},
 ): CastResult {
   // No events once the outcome is decided; `event` is empty because nothing was written.
   if (sim.over) return { ok: false, reason: 'fight_over', event: '' };
-  const check = checkCast(sim, casterId, spellId, targetId);
-  if (!check.ok) {
-    const event = sim.emit('cast_failed', { caster: casterId, spell: spellId, target: targetId, reason: check.reason }, causes);
-    return { ok: false, reason: check.reason, event };
+  const failed = (reason: CastFailure): CastResult => {
+    const event = sim.emit('cast_failed', { caster: casterId, spell: spellId, target: targetId, reason }, causes);
+    return { ok: false, reason, event };
+  };
+  if (options.triggered) {
+    if (!sim.catalog.hasSpell(spellId)) return failed('unknown_spell');
+    const spell = sim.catalog.spell(spellId);
+    const caster = sim.unit(casterId);
+    const tId = resolveTarget(spell, casterId, targetId);
+    const target = sim.units.get(tId);
+    if (!caster.alive) return failed('dead');
+    if (!target || !target.alive) return failed('target_dead');
+    const event = sim.emit(
+      'cast_start',
+      { caster: casterId, spell: spellId, target: tId, castTimeMs: 0, endMs: sim.now, triggered: true },
+      causes,
+    );
+    complete(sim, caster, spell, tId, event, true);
+    return { ok: true, event };
   }
+  const check = checkCast(sim, casterId, spellId, targetId);
+  if (!check.ok) return failed(check.reason);
   const spell = sim.catalog.spell(spellId);
   const caster = sim.unit(casterId);
   const tId = resolveTarget(spell, casterId, targetId);
@@ -88,18 +111,18 @@ export function startCast(
   return { ok: true, event: cast.startEvent };
 }
 
-function complete(sim: Simulation, caster: Unit, spell: SpellDef, targetId: string, startEvent: string): void {
+function complete(sim: Simulation, caster: Unit, spell: SpellDef, targetId: string, startEvent: string, triggered = false): void {
   if (!caster.alive) return;
   const target = sim.unit(targetId);
   if (!target.alive) {
     sim.emit('cast_failed', { caster: caster.id, spell: spell.id, target: targetId, reason: 'target_dead' }, [startEvent]);
     return;
   }
-  if (target.id !== caster.id && edgeDistance(caster, target, sim.now) > spell.rangeYd) {
+  if (!triggered && target.id !== caster.id && edgeDistance(caster, target, sim.now) > spell.rangeYd) {
     sim.emit('cast_failed', { caster: caster.id, spell: spell.id, target: targetId, reason: 'out_of_range' }, [startEvent]);
     return;
   }
-  if (spell.cooldownMs > 0) caster.cooldowns.set(spell.id, sim.now + spell.cooldownMs);
+  if (!triggered && spell.cooldownMs > 0) caster.cooldowns.set(spell.id, sim.now + spell.cooldownMs);
   const success = sim.emit('cast_success', { caster: caster.id, spell: spell.id, target: targetId }, [startEvent]);
   if (spell.travelSpeedYdPerSec && target.id !== caster.id) {
     const delay = travelTimeMs(positionAt(caster, sim.now), positionAt(target, sim.now), spell.travelSpeedYdPerSec);
