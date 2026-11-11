@@ -97,3 +97,33 @@ spawn row; 25n 40,440,500; 10h 13,666,100; 25h 52,293,750.
 - Healing threat (`Unit.cpp` 8204 → `ThreatManager::ForwardThreatForAssistingMe`, ~797): half the
   healing, split evenly over every creature that has the healed unit on its threat list, with
   threat modifiers ignored. Damage threat is the damage dealt (class modifiers in Plan 3).
+
+## Spell.dbc columns (3.3.5a)
+
+Derived by aligning `SpellEntryfmt` (DBCfmt.h line 112, 234 columns, 187 not skipped) with the
+fields of `struct SpellEntry` in order (187 scalars). Zero-based column indexes:
+
+Id 0, Attributes 4, AttributesEx 5, CastingTimeIndex 28, RecoveryTime 29, CategoryRecoveryTime 30,
+InterruptFlags 31, AuraInterruptFlags 32, ProcFlags 34, ProcChance 35, DurationIndex 40,
+RangeIndex 46, Speed 47 (float), StackAmount 49, Effect[0..2] 71–73, EffectDieSides 74–76,
+EffectBasePoints 80–82, EffectImplicitTargetA 86–88, EffectImplicitTargetB 89–91,
+EffectRadiusIndex 92–94, EffectApplyAuraName 95–97, EffectAmplitude 98–100,
+EffectChainTarget 104–106, EffectMiscValue 110–112, EffectTriggerSpell 116–118,
+SpellName[0] 136 (string), StartRecoveryCategory 205, StartRecoveryTime 206,
+MaxAffectedTargets 212, DmgClass 213, SchoolMask 225.
+
+Other formats: SpellCastTimes `nixx`, SpellDifficulty `niiii` (10n, 25n, 10h, 25h spell ids),
+SpellDuration `niii` (base, per level, max), SpellRadius `nfff` (radius, per level, max),
+SpellRange `nffff i …` (min hostile, min friendly, max hostile, max friendly, flags).
+
+## Melee worked example (Festergut 10n)
+
+AP/14 × variance = 805/14 × 1 = 57.5; attack-time multiplier 2000/1000 = 2.0.
+min = (177.074 + 57.5) × 75 × 2.0 = 35,186.1 → 35,186; max = (1.5 × 177.074 + 57.5) × 75 × 2.0 =
+48,466.65 → 48,466 (truncated to whole numbers before the roll).
+
+## Threat update
+
+`THREAT_UPDATE_INTERVAL` is 1000 ms (ThreatManager.h line 94): the victim is reselected once per
+second, immediately after a taunt (ThreatManager.cpp ~583), and immediately when the current
+victim becomes unavailable (`GetCurrentVictim`, ~266).

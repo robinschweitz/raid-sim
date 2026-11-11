@@ -17,6 +17,13 @@ Files referenced so far:
 | `src/server/apps/worldserver/worldserver.conf.dist` line 1330 | `MapUpdateInterval` default 10 ms |
 | `src/server/game/Entities/Unit/Unit.cpp` line 84 | Default run speed 7.0 yd/s |
 | `src/server/game/Entities/Object/ObjectDefines.h` lines 44–45 | Default object size 0.389, default combat reach 1.5 |
+| `src/server/shared/DataStores/DBCfmt.h` lines 108–117 | DBC column formats (`packages/data/src/dbc/spell.ts`) |
+| `src/server/shared/DataStores/DBCStructure.h` `struct SpellEntry` (line 1677) | Spell DBC column names and order |
+| `src/server/game/Combat/ThreatManager.cpp`, `ThreatManager.h` line 94 | Victim selection, taunt, healing threat, 1 s threat update (`threat.ts`) |
+| `src/server/game/Entities/Unit/Unit.cpp` lines 807–811, 2233–2300, 8204, 13306 | Melee range, armor reduction, healing threat, attack-power multiplier |
+| `src/server/game/Entities/Unit/StatSystem.cpp` line 1117 | Creature melee damage (`melee.ts`) |
+| `src/server/game/Entities/Creature/Creature.cpp` line 1554, `CreatureData.h` lines 313–335 | Creature base damage, health, armor |
+| `data/sql/base/db_world/creature_template.sql`, `creature_classlevelstats.sql`, `creature_model_info.sql`, `creature_template_model.sql`, `creature.sql` | Festergut stats, size and spawn (Plan 2b) |
 
 ## Spell data
 
