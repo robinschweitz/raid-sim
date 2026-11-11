@@ -5,6 +5,20 @@ export interface Vec2 {
   readonly y: number;
 }
 
+export interface Avoidance {
+  readonly missPct: number;
+  readonly dodgePct: number;
+  readonly parryPct: number;
+}
+
+export interface MeleeStats {
+  readonly minDamage: number;
+  readonly maxDamage: number;
+  readonly attackTimeMs: number;
+}
+
+export const NO_AVOIDANCE: Avoidance = Object.freeze({ missPct: 0, dodgePct: 0, parryPct: 0 });
+
 export type Role = 'tank' | 'healer' | 'melee' | 'ranged' | 'boss' | 'add';
 
 export const ID_PATTERN = /^[a-z0-9_-]+$/;
@@ -54,6 +68,15 @@ export interface Unit {
   readonly speedYdPerSec: number;
   readonly combatReach: number;
   readonly boundingRadius: number;
+  readonly level: number;
+  readonly armor: number;
+  readonly avoidance: Avoidance;
+  /** Auto-attack stats; null for units that do not swing (players until Plan 3). */
+  readonly melee: MeleeStats | null;
+  /** Multiplier on threat from this unit's damage (stances, presences). */
+  readonly threatMultiplier: number;
+  /** Earliest time of the next melee swing. */
+  nextSwingMs: number;
   /** Key: auraKey(auraId, casterId). */
   readonly auras: Map<string, AuraInstance>;
   cast: CastState | null;
@@ -76,6 +99,11 @@ export interface UnitInit {
   readonly speedYdPerSec: number;
   readonly combatReach: number;
   readonly boundingRadius: number;
+  readonly level?: number;
+  readonly armor?: number;
+  readonly avoidance?: Avoidance;
+  readonly melee?: MeleeStats | null;
+  readonly threatMultiplier?: number;
 }
 
 export function createUnit(init: UnitInit): Unit {
@@ -88,6 +116,25 @@ export function createUnit(init: UnitInit): Unit {
     throw new Error(`negative or invalid speed or size for ${init.id}`);
   }
   if (!Number.isFinite(init.pos.x) || !Number.isFinite(init.pos.y)) throw new Error(`invalid position for ${init.id}`);
+  const level = init.level ?? 80;
+  const armor = init.armor ?? 0;
+  const avoidance = init.avoidance ?? NO_AVOIDANCE;
+  const melee = init.melee ?? null;
+  const threatMultiplier = init.threatMultiplier ?? 1;
+  if (!Number.isInteger(level) || level < 1 || level > 83) throw new Error(`invalid level ${level} for ${init.id}`);
+  if (!Number.isFinite(armor) || armor < 0) throw new Error(`invalid armor ${armor} for ${init.id}`);
+  const av = [avoidance.missPct, avoidance.dodgePct, avoidance.parryPct];
+  if (av.some((v) => !Number.isFinite(v) || v < 0) || av.reduce((a, b) => a + b, 0) > 100) {
+    throw new Error(`invalid avoidance for ${init.id}`);
+  }
+  if (
+    melee &&
+    (!Number.isFinite(melee.minDamage) || melee.minDamage < 0 || !(melee.maxDamage >= melee.minDamage) ||
+      !Number.isInteger(melee.attackTimeMs) || melee.attackTimeMs <= 0)
+  ) {
+    throw new Error(`invalid melee stats for ${init.id}`);
+  }
+  if (!Number.isFinite(threatMultiplier) || threatMultiplier < 0) throw new Error(`invalid threat multiplier for ${init.id}`);
   return {
     id: init.id,
     name: init.name,
@@ -102,6 +149,12 @@ export function createUnit(init: UnitInit): Unit {
     speedYdPerSec: init.speedYdPerSec,
     combatReach: init.combatReach,
     boundingRadius: init.boundingRadius,
+    level,
+    armor,
+    avoidance: { ...avoidance },
+    melee: melee ? { ...melee } : null,
+    threatMultiplier,
+    nextSwingMs: 0,
     auras: new Map(),
     cast: null,
     gcdUntilMs: 0,

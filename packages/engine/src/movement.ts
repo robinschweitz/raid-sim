@@ -33,3 +33,16 @@ export function edgeDistance(a: Unit, b: Unit, t: number): number {
 export function pointToEdge(p: Vec2, u: Unit, t: number): number {
   return Math.max(0, centerDistance(p, positionAt(u, t)) - u.combatReach);
 }
+
+/** AzerothCore NOMINAL_MELEE_RANGE (ObjectDefines.h line 47). */
+export const NOMINAL_MELEE_RANGE_YD = 5;
+
+/** AzerothCore Unit::GetMeleeRange (Unit.cpp lines 807–811): both combat reaches + 4/3, at least 5 yd, centre to centre. */
+export function meleeRange(a: Unit, b: Unit): number {
+  return Math.max(a.combatReach + b.combatReach + 4 / 3, NOMINAL_MELEE_RANGE_YD);
+}
+
+/** Without AzerothCore's leeway bonus for two moving units (adaptation A-022). */
+export function withinMeleeRange(a: Unit, b: Unit, t: number): boolean {
+  return centerDistance(positionAt(a, t), positionAt(b, t)) <= meleeRange(a, b);
+}
