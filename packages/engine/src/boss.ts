@@ -41,6 +41,10 @@ export interface BossContext {
   publishTimer(ability: string, minMs: number, maxMs: number, causes: readonly string[]): string;
   setPhase(phase: string, causes: readonly string[]): string;
   meleeIfReady(): string | null;
+  setData(key: string, value: number): void;
+  getData(key: string): number | undefined;
+  /** Removes a published timer window (after a reschedule or delay) and records it. */
+  clearTimer(ability: string, causes: readonly string[]): string | null;
 }
 
 export interface BossScript {
@@ -90,6 +94,7 @@ export abstract class EventScriptedAI implements BossScript {
 
 export function makeBossContext(sim: Simulation, bossId: string): BossContext {
   const self = sim.unit(bossId);
+  const data = new Map<string, number>();
   return {
     sim,
     self,
@@ -114,6 +119,12 @@ export function makeBossContext(sim: Simulation, bossId: string): BossContext {
       sim.timerWindows.set(`${bossId}|${ability}`, w);
       return sim.emit('timer_window', { ...w }, causes);
     },
+    clearTimer: (ability, causes) => {
+      if (!sim.timerWindows.delete(`${bossId}|${ability}`)) return null;
+      return sim.emit('timer_window', { boss: bossId, ability, earliestMs: null, latestMs: null, cleared: true }, causes);
+    },
+    setData: (key, value) => void data.set(key, value),
+    getData: (key) => data.get(key),
     meleeIfReady: () => meleeIfReady(sim, bossId, victimOf(sim, bossId)),
     setPhase: (phase, causes) => {
       sim.phase = phase;

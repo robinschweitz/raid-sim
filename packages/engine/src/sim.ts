@@ -45,6 +45,8 @@ export class Simulation {
   readonly units = new Map<string, Unit>();
   /** Boss-mod style timer windows, keyed `${boss}|${ability}`; visible to actors (§8.6). */
   readonly timerWindows = new Map<string, TimerWindow>();
+  /** Units that must all die for a kill; when empty, every boss-role unit must die. */
+  readonly mustKill = new Set<string>();
   private readonly listeners: Array<(ev: TraceEvent) => void> = [];
   private nextSampleMs = 0;
   private lastSampleMs = -1;
@@ -237,9 +239,9 @@ export class Simulation {
 
   private checkOutcome(cause: string): void {
     if (this.outcome || this.ending) return;
-    const bosses = this.bosses();
+    const required = this.mustKill.size > 0 ? this.sortedUnits((u) => this.mustKill.has(u.id)) : this.bosses();
     const players = this.players();
-    if (bosses.length > 0 && bosses.every((b) => !b.alive)) this.finish('kill', [cause]);
+    if (required.length > 0 && required.every((b) => !b.alive)) this.finish('kill', [cause]);
     else if (players.length > 0 && players.every((p) => !p.alive)) this.finish('wipe', [cause]);
   }
 

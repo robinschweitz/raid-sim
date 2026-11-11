@@ -30,7 +30,7 @@ function newSim(p: Plan, extra: [string, ActionHandler][] = [], maxDurationMs = 
   const tank = { id: 't1' };
   for (const aura of ['spore', 'other', 'third', 'bloat']) sim.catalog.addAura({ id: aura, durationMs: 60000, maxStacks: 20 });
   sim.catalog.addSpell({ id: 'long', castTimeMs: 3000, gcdMs: 0, cooldownMs: 0, rangeYd: 100, usableWhileMoving: false, target: 'self', effects: [] });
-  const engine = new RuleEngine(sim, p, new Map([...BUILTIN_ACTIONS, ...extra]), { currentTank: () => sim.unit(tank.id) });
+  const engine = new RuleEngine(sim, p, new Map([...BUILTIN_ACTIONS, ...extra]), { currentTank: () => sim.unit(tank.id), primaryBoss: () => sim.unit('boss') });
   engine.install();
   return { sim, engine, tank };
 }

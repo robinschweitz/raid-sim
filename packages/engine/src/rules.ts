@@ -25,6 +25,7 @@ export type ActionHandler = (ctx: ActionContext) => ActionResult;
 
 export interface RuleHooks {
   currentTank(): Unit | null;
+  primaryBoss(): Unit | null;
 }
 
 const MOVE_ACTIONS = new Set(['move_to', 'return_to_assignment']);
@@ -208,7 +209,7 @@ export class RuleEngine {
     if (typeof unitId !== 'string') return false;
     if (ref === 'self') return unitId === actorId;
     if (ref === 'current_tank') return this.hooks.currentTank()?.id === unitId;
-    if (ref === 'boss') return this.sim.bosses().some((b) => b.id === unitId);
+    if (ref === 'boss') return this.hooks.primaryBoss()?.id === unitId;
     return ref === unitId;
   }
 
@@ -260,7 +261,7 @@ export class RuleEngine {
       resolve: (ref) => {
         if (ref === 'self') return actor;
         if (ref === 'current_tank') return this.hooks.currentTank();
-        if (ref === 'boss') return this.sim.bosses()[0] ?? null;
+        if (ref === 'boss') return this.hooks.primaryBoss();
         return this.sim.units.get(ref) ?? null;
       },
       spot: (id) => this.spotOf(id),

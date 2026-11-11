@@ -51,7 +51,7 @@ describe('taunt', () => {
       ],
     });
     const actions = new Map([...BUILTIN_ACTIONS, ['taunt', createTauntAction({ rangeYd: 30, cooldownMs: 8000, durationMs: 3000 })]]);
-    new RuleEngine(sim, plan, actions, { currentTank: () => null }).install();
+    new RuleEngine(sim, plan, actions, { currentTank: () => null, primaryBoss: () => sim.unit('boss') }).install();
     sim.run();
     const failed = sim.trace.list().filter((e) => e.kind === 'action_failed').map((e) => [e.t, e.data.actor, e.data.reason]);
     expect(failed).toEqual([

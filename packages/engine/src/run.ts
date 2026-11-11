@@ -30,6 +30,8 @@ export interface PolicyFactory {
 export interface BossSetup {
   readonly script: BossScript;
   readonly bossUnitId: string;
+  /** Units that must all die for a kill; defaults to the primary boss alone. */
+  readonly mustKill?: readonly string[];
   /** Sets initial aggro once every player exists. */
   pull(sim: Simulation): void;
 }
@@ -117,6 +119,7 @@ export function runScenario(prepared: PreparedRun, registry: ContentRegistry): R
   } catch (e) {
     return setupFailure(`boss:${boss.id}`, e);
   }
+  for (const id of setup.mustKill ?? [setup.bossUnitId]) sim.mustKill.add(id);
   const handlers = new Map<string, ActionHandler>(BUILTIN_ACTIONS);
   if (plan.rules.some((r) => r.do.do === 'taunt')) {
     handlers.set(
@@ -131,6 +134,7 @@ export function runScenario(prepared: PreparedRun, registry: ContentRegistry): R
   for (const [name, handler] of registry.actions) handlers.set(name, handler);
   const rules = new RuleEngine(sim, plan, handlers, {
     currentTank: () => threat.victim(setup.bossUnitId),
+    primaryBoss: () => sim.unit(setup.bossUnitId),
   });
   const hooks = {
     isRuleMoving: (id: string) => rules.isMoving(id),

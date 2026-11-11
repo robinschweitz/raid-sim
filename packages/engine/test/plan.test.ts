@@ -185,7 +185,7 @@ describe('phase assignments', () => {
     const { plan } = parsed();
     plan.phases.push({ phase: 'two', assignments: { t1: 'far' } });
     const sim = new Simulation({ seed: 1, maxDurationMs: 1000, sampleIntervalMs: 1000 });
-    const engine = new RuleEngine(sim, plan, BUILTIN_ACTIONS, { currentTank: () => null });
+    const engine = new RuleEngine(sim, plan, BUILTIN_ACTIONS, { currentTank: () => null, primaryBoss: () => sim.units.get('boss') ?? null });
     sim.phase = 'two';
     expect(engine.assignment('t1')).toBe('far');
     expect(engine.assignment('p1')).toBe('ranged');
