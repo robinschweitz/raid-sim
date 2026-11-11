@@ -70,7 +70,7 @@ describe('boss melee', () => {
 const swingsOf = (sim: Simulation) => sim.trace.list().filter((e) => e.kind === 'damage' && e.data.ability === 'melee');
 
 describe('boss melee details', () => {
-  it('rounds the armor-reduced hit up like AzerothCore, before modifiers', () => {
+  it('rounds the armor-reduced hit up like AzerothCore', () => {
     // armor 200 at level 83: 10000 * (1 - reduction) = 9881.1999
     const red = armorReduction(200, 83);
     expect(10000 * (1 - red)).toBeCloseTo(9881.1999, 3);
@@ -91,6 +91,33 @@ describe('boss melee details', () => {
     sim.at(0, EventClass.SpellHit, () => void applyAura(sim, 'ward', 't1', 't1', []));
     sim.run();
     expect(swingsOf(sim)[0].data.amount).toBe(4000); // 5000 after armor, times 0.8
+  });
+
+  it('applies damage done, then damage taken (each truncated), then armor with ceil', () => {
+    // raw 10000, +500 % done = 60000, armor 200 (reduction .01188): ceil(60000 * 0.98812) = 59288; armor first would give ceil(9881.2) * 6 = 59292
+    const sim = newSim(undefined, 200, 10000);
+    sim.catalog.addAura({ id: 'frenzy', durationMs: null, maxStacks: 1, modifiers: [{ kind: 'damage_done_pct', pct: 500, perStack: false }] });
+    sim.at(0, EventClass.SpellHit, () => void applyAura(sim, 'frenzy', 'boss', 'boss', []));
+    sim.run();
+    expect(swingsOf(sim)[0].data.amount).toBe(59288);
+  });
+
+  it('truncates after the done and the taken factor', () => {
+    // raw 3: done x1.5 = 4.5 -> 4, taken x1.5 = 6 (6.75 without the first truncation)
+    const sim = newSim(undefined, 0, 3);
+    sim.catalog.addAura({ id: 'frenzy', durationMs: null, maxStacks: 1, modifiers: [{ kind: 'damage_done_pct', pct: 50, perStack: false }] });
+    sim.catalog.addAura({ id: 'vuln', durationMs: null, maxStacks: 1, modifiers: [{ kind: 'damage_taken_pct', pct: 50, perStack: false }] });
+    sim.at(0, EventClass.SpellHit, () => {
+      applyAura(sim, 'frenzy', 'boss', 'boss', []);
+      applyAura(sim, 'vuln', 't1', 't1', []);
+    });
+    sim.run();
+    expect(swingsOf(sim)[0].data.amount).toBe(6);
+  });
+
+  it('a roll of 10000 is a hit even with 100 % avoidance (roll < sum, like AzerothCore)', () => {
+    expect(meleeOutcome(10000, { missPct: 100, dodgePct: 0, parryPct: 0 })).toBe('hit');
+    expect(meleeOutcome(9999, { missPct: 100, dodgePct: 0, parryPct: 0 })).toBe('miss');
   });
 
   it('first swing lands at the first AI update once the victim is in range', () => {

@@ -1,4 +1,4 @@
-import { damageMultiplier } from './modifiers';
+import { damageDoneFactor, damageTakenFactor } from './modifiers';
 import { withinMeleeRange } from './movement';
 import type { Simulation } from './sim';
 import type { Avoidance, Unit } from './units';
@@ -36,7 +36,11 @@ function hundredths(pct: number): number {
   return Math.trunc(Math.fround(Math.fround(pct) * 100));
 }
 
-/** Attack table roll in hundredths of a percent (0..9999): miss, then dodge, then parry; each chance is converted to whole hundredths first. */
+/**
+ * Attack table roll in hundredths of a percent: AzerothCore rolls `urand(0, 10000)`, so 0..10000 inclusive. Miss, then dodge, then parry;
+ * each chance is converted to whole hundredths first. The checks are `roll < running sum` (Unit.cpp 3040+), so a roll equal to the total
+ * avoidance falls through to a hit, even for 100 % avoidance on a roll of exactly 10000.
+ */
 export function meleeOutcome(roll: number, avoidance: Avoidance): 'miss' | 'dodge' | 'parry' | 'hit' {
   const miss = hundredths(avoidance.missPct);
   const dodge = miss + hundredths(avoidance.dodgePct);
@@ -54,11 +58,13 @@ export function meleeIfReady(sim: Simulation, attackerId: string, victim: Unit |
   if (sim.now < a.nextSwingMs || !withinMeleeRange(a, victim, sim.now)) return null;
   a.nextSwingMs = sim.now + a.melee.attackTimeMs;
   const rng = sim.rng.stream(`unit:${a.id}.melee`);
-  const result = meleeOutcome(rng.int(0, 9999), victim.avoidance);
+  const result = meleeOutcome(rng.int(0, 10000), victim.avoidance);
   if (result !== 'hit') return sim.emit('melee_avoided', { source: a.id, target: victim.id, result }, causes);
   const raw = rng.int(a.melee.minDamage, a.melee.maxDamage);
-  // Unit.cpp CalcArmorReducedDamage, end of function: `return uint32(ceil(damage * (1 - armorReduction)))`; sim.damage rounds only after the modifiers.
-  const mitigated = Math.ceil(raw * (1 - armorReduction(victim.armor, a.level)));
-  const amount = mitigated * damageMultiplier(sim, a.id, victim.id, 'physical');
-  return sim.damage(victim.id, amount, { sourceId: a.id, ability: 'melee', school: 'physical' }, causes);
+  // CalculateMeleeDamage (Unit.cpp 1760-1790): the uint32 damage goes through MeleeDamageBonusDone, then MeleeDamageBonusTaken (each
+  // truncated), then CalcArmorReducedDamage, which ends in `uint32(ceil(damage * (1 - armorReduction)))`.
+  const afterDone = Math.trunc(raw * damageDoneFactor(sim, a.id, 'physical'));
+  const afterTaken = Math.trunc(afterDone * damageTakenFactor(sim, victim.id, 'physical'));
+  const mitigated = Math.ceil(afterTaken * (1 - armorReduction(victim.armor, a.level)));
+  return sim.damage(victim.id, mitigated, { sourceId: a.id, ability: 'melee', school: 'physical' }, causes);
 }

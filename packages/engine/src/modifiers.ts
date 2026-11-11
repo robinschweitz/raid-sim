@@ -18,10 +18,18 @@ function factor(sim: Simulation, unit: Unit, kind: DamageModifier['kind'], schoo
   return f;
 }
 
-/** Product of the source's damage-done and the target's damage-taken modifiers, never negative. */
-export function damageMultiplier(sim: Simulation, sourceId: string, targetId: string, school: School): number {
+/** Product of the source's damage-done modifiers for the school (1 when the source no longer exists). */
+export function damageDoneFactor(sim: Simulation, sourceId: string, school: School): number {
   const source = sim.units.get(sourceId);
-  const target = sim.unit(targetId);
-  const done = source ? factor(sim, source, 'damage_done_pct', school) : 1;
-  return Math.max(0, done * factor(sim, target, 'damage_taken_pct', school));
+  return source ? factor(sim, source, 'damage_done_pct', school) : 1;
+}
+
+/** Product of the target's damage-taken modifiers for the school. */
+export function damageTakenFactor(sim: Simulation, targetId: string, school: School): number {
+  return factor(sim, sim.unit(targetId), 'damage_taken_pct', school);
+}
+
+/** Product of the source's damage-done and the target's damage-taken modifiers, never negative (spell effects). */
+export function damageMultiplier(sim: Simulation, sourceId: string, targetId: string, school: School): number {
+  return Math.max(0, damageDoneFactor(sim, sourceId, school) * damageTakenFactor(sim, targetId, school));
 }
