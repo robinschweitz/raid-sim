@@ -44,7 +44,9 @@ export function checkCast(sim: Simulation, casterId: string, spellId: string, ta
 }
 
 export interface CastOptions {
-  /** AzerothCore CastSpell(..., triggered = true): no cast time, GCD, cooldown, casting or range checks (A-020). */
+  /** AzerothCore CastSpell(..., triggered = true): no cast time, GCD, cooldown, casting or range checks (A-020).
+   * A triggered cast still has projectile travel time, can still fail with `target_dead` while in flight, and is traced
+   * with `castTimeMs: 0` and `triggered: true`. */
   readonly triggered?: boolean;
 }
 

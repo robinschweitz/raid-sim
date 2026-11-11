@@ -103,7 +103,10 @@ export function makeBossContext(sim: Simulation, bossId: string): BossContext {
     cast: (spellId, targetId, causes, options) => startCast(sim, bossId, spellId, targetId, causes, options),
     threatList: () => threatFor(sim)?.listed(bossId) ?? [],
     selectTarget: (mechanic, options = {}) => {
-      const victim = victimOf(sim, bossId);
+      for (const [name, v] of [['minDistanceYd', options.minDistanceYd], ['maxDistanceYd', options.maxDistanceYd]] as const) {
+        if (v !== undefined && (!Number.isFinite(v) || v < 0)) throw new Error(`invalid distance bound ${name}=${v}`);
+      }
+      const victim = options.excludeVictim ? victimOf(sim, bossId) : null;
       const candidates = (threatFor(sim)?.listed(bossId) ?? []).filter((u) => {
         const d = edgeDistance(self, u, sim.now);
         if (options.minDistanceYd !== undefined && !(d > options.minDistanceYd)) return false;

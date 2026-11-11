@@ -35,7 +35,7 @@ export interface AuraHookContext {
   readonly casterId: string;
   readonly auraId: string;
   readonly stacks: number;
-  /** Stacks before this event: 0 on apply; equal to `stacks` when re-applied at max stacks. */
+  /** Stacks before this event: 0 on apply; equal to `stacks` when re-applied at max stacks and in afterRemove. */
   readonly previousStacks: number;
   readonly appliedMs: number;
   readonly refreshedMs: number;

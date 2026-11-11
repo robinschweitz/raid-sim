@@ -155,4 +155,38 @@ describe('aura extensions', () => {
     expect(sim.unit('p1').alive).toBe(false);
     expect(calls).toEqual([]);
   });
+
+  it('afterHitTarget is skipped when the spell effects kill the target', () => {
+    const sim = newSim();
+    const hits: string[] = [];
+    sim.catalog.addSpell({ id: 'smite', castTimeMs: 0, gcdMs: 0, cooldownMs: 0, rangeYd: 100, usableWhileMoving: true, target: 'unit', effects: [{ type: 'damage', school: 'nature', min: 1e9, max: 1e9 }] });
+    sim.catalog.addSpellScript('smite', { afterHitTarget: (c) => hits.push(c.targetId) });
+    sim.at(0, EventClass.Decision, () => void startCast(sim, 'boss', 'smite', 'p1', []));
+    sim.run();
+    expect(sim.unit('p1').alive).toBe(false);
+    expect(hits).toEqual([]);
+  });
+
+  it('a hook that kills the holder prevents later removal hooks (death removes the other instances silently)', () => {
+    // removeAuras on an already-dead holder cannot happen: death removes auras first, without hooks.
+    const sim = newSim();
+    const calls: string[] = [];
+    sim.catalog.addAura({ id: 'spore', durationMs: 12000, maxStacks: 1 });
+    sim.catalog.addAuraScript('spore', {
+      afterRemove: (c) => {
+        calls.push(c.casterId);
+        c.sim.damage(c.unitId, 1e9, { sourceId: 'boss', ability: 'x', school: 'nature' }, c.causes);
+      },
+    });
+    sim.at(0, EventClass.SpellHit, () => {
+      applyAura(sim, 'spore', 'p2', 'p1', []);
+      applyAura(sim, 'spore', 'boss', 'p1', []);
+    });
+    sim.at(10, EventClass.SpellHit, () => void removeAuras(sim, 'p1', 'spore', 'removed', []));
+    sim.run();
+    expect(sim.unit('p1').alive).toBe(false);
+    expect(calls).toHaveLength(1);
+    const reasons = sim.trace.list().filter((e) => e.kind === 'aura_removed').map((e) => e.data.reason);
+    expect(reasons).toEqual(['removed', 'death']);
+  });
 });
