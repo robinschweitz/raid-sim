@@ -20,12 +20,6 @@ function plan(rules: unknown[]): Plan {
   });
 }
 
-function topThreat(sim: Simulation) {
-  let best: string | null = null;
-  for (const [id, v] of sim.unit('boss').threat) if (best === null || v > sim.unit('boss').threat.get(best)!) best = id;
-  return best === null ? null : sim.unit(best);
-}
-
 function newSim(p: Plan, extra: [string, ActionHandler][] = [], maxDurationMs = 12000) {
   const sim = new Simulation({ seed: 4, maxDurationMs, sampleIntervalMs: 1000 });
   installCoreRules(sim);
@@ -33,12 +27,12 @@ function newSim(p: Plan, extra: [string, ActionHandler][] = [], maxDurationMs = 
   for (const id of ['t1', 't2', 'p1']) {
     sim.addUnit({ id, name: id, kind: 'player', role: 'ranged', maxHealth: 10000, pos: { x: 0, y: 0 }, speedYdPerSec: 7, combatReach: 1.5, boundingRadius: 0.389 });
   }
-  sim.unit('boss').threat.set('t1', 100);
+  const tank = { id: 't1' };
   for (const aura of ['spore', 'other', 'third', 'bloat']) sim.catalog.addAura({ id: aura, durationMs: 60000, maxStacks: 20 });
   sim.catalog.addSpell({ id: 'long', castTimeMs: 3000, gcdMs: 0, cooldownMs: 0, rangeYd: 100, usableWhileMoving: false, target: 'self', effects: [] });
-  const engine = new RuleEngine(sim, p, new Map([...BUILTIN_ACTIONS, ...extra]), { currentTank: () => topThreat(sim) });
+  const engine = new RuleEngine(sim, p, new Map([...BUILTIN_ACTIONS, ...extra]), { currentTank: () => sim.unit(tank.id) });
   engine.install();
-  return { sim, engine };
+  return { sim, engine, tank };
 }
 
 const of = (sim: Simulation, kind: string) => sim.trace.list().filter((e) => e.kind === kind);
@@ -137,13 +131,13 @@ describe('RuleEngine (§8.5)', () => {
   it('keeps condition state per watched unit, so a tank swap re-arms the rule', () => {
     const calls: number[] = [];
     const taunt: ActionHandler = (ctx) => (calls.push(ctx.sim.now), { ok: true });
-    const { sim } = newSim(
+    const { sim, tank } = newSim(
       plan([{ id: 'swap', who: ['t2'], when: { on: 'aura_stacks', aura: 'bloat', target: 'current_tank', atLeast: 3 }, do: { do: 'taunt', target: 'boss' } }]),
       [['taunt', taunt]],
     );
     for (const t of [1500, 2500]) at(sim, t, () => void applyAura(sim, 'bloat', 'boss', 't2', []));
     for (const t of [1000, 2000, 3000]) at(sim, t, () => void applyAura(sim, 'bloat', 'boss', 't1', []));
-    at(sim, 4000, () => void sim.unit('boss').threat.set('t2', 200));
+    at(sim, 4000, () => void (tank.id = 't2'));
     at(sim, 5000, () => void applyAura(sim, 'bloat', 'boss', 't2', []));
     sim.run();
     expect(calls).toEqual([3300, 5300]);
@@ -152,14 +146,14 @@ describe('RuleEngine (§8.5)', () => {
   it('tracks unit conditions even while the unit is not the reference (removal during a tank swap re-arms)', () => {
     const calls: number[] = [];
     const taunt: ActionHandler = (ctx) => (calls.push(ctx.sim.now), { ok: true });
-    const { sim } = newSim(
+    const { sim, tank } = newSim(
       plan([{ id: 'swap', who: ['p1'], when: { on: 'aura_stacks', aura: 'bloat', target: 'current_tank', atLeast: 1 }, do: { do: 'taunt', target: 'boss' } }]),
       [['taunt', taunt]],
     );
     at(sim, 1000, () => void applyAura(sim, 'bloat', 'boss', 't1', []));
-    at(sim, 2000, () => void sim.unit('boss').threat.set('t2', 200));
+    at(sim, 2000, () => void (tank.id = 't2'));
     at(sim, 3000, () => void removeAuras(sim, 't1', 'bloat', 'removed', []));
-    at(sim, 4000, () => void sim.unit('boss').threat.set('t1', 300));
+    at(sim, 4000, () => void (tank.id = 't1'));
     at(sim, 5000, () => void applyAura(sim, 'bloat', 'boss', 't1', []));
     sim.run();
     expect(calls).toEqual([1300, 5300]);

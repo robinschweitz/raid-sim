@@ -2,8 +2,9 @@ import { startCast, type CastResult } from './casting';
 import { EventMap } from './eventmap';
 import { EventClass } from './queue';
 import type { Simulation } from './sim';
+import { threatFor } from './threat';
 import type { TraceValue } from './trace';
-import { compareStrings, type Unit } from './units';
+import type { Unit } from './units';
 
 export type MechanicStatusKind = 'implemented' | 'partial' | 'not_implemented';
 export type ValidationStatus = 'unvalidated' | 'azerothcore_source' | 'rising_gods_logs';
@@ -39,21 +40,9 @@ export interface BossScript {
 }
 
 
-/** Highest threat among living units on the boss's threat table; ties go to the lowest id. */
+/** The creature's current victim according to the threat manager. */
 export function victimOf(sim: Simulation, bossId: string): Unit | null {
-  const boss = sim.unit(bossId);
-  let best: Unit | null = null;
-  let bestThreat = Number.NEGATIVE_INFINITY;
-  for (const id of [...boss.threat.keys()].sort(compareStrings)) {
-    const u = sim.units.get(id);
-    const threat = boss.threat.get(id)!;
-    if (!u || !u.alive) continue;
-    if (threat > bestThreat) {
-      best = u;
-      bestThreat = threat;
-    }
-  }
-  return best;
+  return threatFor(sim)?.victim(bossId) ?? null;
 }
 
 /** Base for scripts written like AzerothCore's EventMap-driven boss AIs. */

@@ -48,6 +48,11 @@ export const CORE_DATA: readonly unknown[] = [
     value: 0.389,
     source: { kind: 'code', file: 'src/server/game/Entities/Object/ObjectDefines.h', commit, line: 44 },
   },
+  {
+    key: 'core.threat_update_interval_ms',
+    value: 1000,
+    source: { kind: 'code', file: 'src/server/game/Combat/ThreatManager.h', commit, line: 94 },
+  },
   standin('core.standin_tick_ms', 1000, 'Stand-ins deal damage or healing once per second'),
   standin('core.standin_range_tank_yd', 5, 'A tank stand-in hits the boss from melee range'),
   standin('core.standin_range_melee_yd', 5, 'A melee stand-in hits the boss from melee range'),

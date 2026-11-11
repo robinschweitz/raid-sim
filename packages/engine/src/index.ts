@@ -20,6 +20,7 @@ export * from './run';
 export * from './sim';
 export * from './standin';
 export * from './summary';
+export * from './threat';
 export * from './trace';
 export * from './units';
 export * from './view';

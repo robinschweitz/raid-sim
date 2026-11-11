@@ -1,5 +1,5 @@
 import { DataRegistry, DataValidationError, PINS, type Difficulty } from '@raid/data';
-import { attachBoss, victimOf, type BossScript } from './boss';
+import { attachBoss, type BossScript } from './boss';
 import { installCoreRules } from './casting';
 import { ActorController, type ActorPolicy } from './controller';
 import { CORE_DATA } from './core-data';
@@ -12,6 +12,7 @@ import { BUILTIN_ACTIONS, RuleEngine, type ActionHandler } from './rules';
 import { Simulation, type OutcomeKind } from './sim';
 import { installStandin, type StandinParams } from './standin';
 import { buildSummary, type Summary } from './summary';
+import { ThreatManager } from './threat';
 import { canonicalStringify, type Trace } from './trace';
 import { byId, type Role, type UnitInit } from './units';
 
@@ -107,6 +108,8 @@ export function runScenario(prepared: PreparedRun, registry: ContentRegistry): R
     sampleIntervalMs: data.num('core.sample_interval_ms'),
   });
   installCoreRules(sim);
+  const threat = new ThreatManager(sim, data.num('core.threat_update_interval_ms'));
+  threat.install();
   // Content setup errors (an unknown data key, a throwing model factory) are reported as invalid input.
   let setup!: BossSetup;
   try {
@@ -115,7 +118,7 @@ export function runScenario(prepared: PreparedRun, registry: ContentRegistry): R
     return setupFailure(`boss:${boss.id}`, e);
   }
   const rules = new RuleEngine(sim, plan, new Map([...BUILTIN_ACTIONS, ...registry.actions]), {
-    currentTank: () => victimOf(sim, setup.bossUnitId),
+    currentTank: () => threat.victim(setup.bossUnitId),
   });
   const hooks = {
     isRuleMoving: (id: string) => rules.isMoving(id),
@@ -147,11 +150,6 @@ export function runScenario(prepared: PreparedRun, registry: ContentRegistry): R
       sim.addUnit({ ...playerBody, id: m.id, name: m.name, kind: 'player', role: m.role, approximate: true, maxHealth: m.maxHealth, pos });
     }
   }
-  try {
-    setup.pull(sim);
-  } catch (e) {
-    return setupFailure(`boss:${boss.id}`, e);
-  }
   rules.install();
   for (const c of controllers) c.install();
   const standins = roster.filter((m) => m.kind === 'standin');
@@ -169,6 +167,11 @@ export function runScenario(prepared: PreparedRun, registry: ContentRegistry): R
   }
   const aiUpdateIntervalMs = data.num('core.ai_update_interval_ms');
   attachBoss(sim, setup.script, setup.bossUnitId, aiUpdateIntervalMs);
+  try {
+    setup.pull(sim);
+  } catch (e) {
+    return setupFailure(`boss:${boss.id}`, e);
+  }
   const outcome = sim.run();
 
   const trace = sim.trace.build({

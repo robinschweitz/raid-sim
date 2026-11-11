@@ -83,8 +83,6 @@ export interface Unit {
   gcdUntilMs: number;
   /** spellId → time the spell is ready again. */
   readonly cooldowns: Map<string, number>;
-  /** unitId → threat; used on creatures. */
-  readonly threat: Map<string, number>;
   diedAtEvent: string | null;
 }
 
@@ -159,7 +157,6 @@ export function createUnit(init: UnitInit): Unit {
     cast: null,
     gcdUntilMs: 0,
     cooldowns: new Map(),
-    threat: new Map(),
     diedAtEvent: null,
   };
 }

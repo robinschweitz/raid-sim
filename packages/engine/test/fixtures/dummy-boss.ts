@@ -2,6 +2,7 @@ import { applyAura } from '../../src/auras';
 import { EventScriptedAI, type BossContext, type MechanicStatus } from '../../src/boss';
 import { edgeDistance } from '../../src/movement';
 import type { BossModule } from '../../src/run';
+import { threatFor } from '../../src/threat';
 
 const FILE = 'packages/engine/test/fixtures/dummy-boss.ts';
 const configured = { kind: 'configured', file: FILE } as const;
@@ -59,7 +60,9 @@ export const dummyBoss: BossModule = {
       bossUnitId: 'dummy',
       pull(s) {
         const tank = s.players().find((p) => p.role === 'tank');
-        if (tank) s.unit('dummy').threat.set(tank.id, 1);
+        const threat = threatFor(s)!;
+        if (tank) threat.add('dummy', tank.id, 1);
+        for (const p of s.players()) threat.add('dummy', p.id, 0);
       },
     };
   },

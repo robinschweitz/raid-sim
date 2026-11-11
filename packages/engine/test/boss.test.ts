@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { EventScriptedAI, attachBoss, makeBossContext, victimOf, type BossContext, type MechanicStatus } from '../src/boss';
+import { EventScriptedAI, attachBoss, makeBossContext, type BossContext, type MechanicStatus } from '../src/boss';
 import { installCoreRules } from '../src/casting';
 import { EventClass } from '../src/queue';
 import { Simulation } from '../src/sim';
+import { ThreatManager } from '../src/threat';
 
 class TestAI extends EventScriptedAI {
   readonly bossId = 'boss';
@@ -27,7 +28,9 @@ function newSim(withVictim = true) {
   for (const id of ['p1', 'p2', 'p3']) {
     sim.addUnit({ id, name: id, kind: 'player', role: 'ranged', maxHealth: 1000, pos: { x: 10, y: 0 }, speedYdPerSec: 7, combatReach: 1.5, boundingRadius: 0.389 });
   }
-  if (withVictim) sim.unit('boss').threat.set('p1', 100);
+  const threat = new ThreatManager(sim, 1000);
+  threat.install();
+  if (withVictim) threat.add('boss', 'p1', 100);
   sim.catalog.addSpell({ id: 'channel', castTimeMs: 2000, gcdMs: 0, cooldownMs: 0, rangeYd: 0, usableWhileMoving: false, target: 'self', effects: [] });
   return sim;
 }
@@ -55,16 +58,6 @@ describe('boss AI (§5.1)', () => {
     attachBoss(sim, new TestAI(), 'boss', 10);
     sim.run();
     expect(aiEvents(sim)).toEqual([]);
-  });
-
-  it('picks the victim by highest threat, ties by id, skipping the dead', () => {
-    const sim = newSim(false);
-    const boss = sim.unit('boss');
-    boss.threat.set('p3', 50);
-    boss.threat.set('p2', 50);
-    expect(victimOf(sim, 'boss')?.id).toBe('p2');
-    sim.unit('p2').alive = false;
-    expect(victimOf(sim, 'boss')?.id).toBe('p3');
   });
 
   it('publishes timer windows and uses one random stream per mechanic', () => {

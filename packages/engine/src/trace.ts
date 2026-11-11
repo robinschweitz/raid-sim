@@ -18,6 +18,8 @@ export const EVENT_KINDS = [
   'action_failed',
   'phase_change',
   'timer_window',
+  'threat_target',
+  'taunt',
   'death',
   'outcome',
 ] as const;
