@@ -20,6 +20,15 @@ Files referenced so far:
 
 ## Spell data
 
-Not chosen yet. `PINS.spellDataVersions` is empty, so the data registry rejects every `spelldata`
-source until the owner picks one (local client 3.3.5a build 12340 extraction, or a named and dated
-public database snapshot). The choice is the first task of Plan 2.
+Decided 2026-11-11: **the owner's own WotLK 3.3.5a (build 12340) client** is the source. AzerothCore
+loads its spell data from exactly these client files, so the numbers match what the scripts were
+written against. A public 3.3.5a database may be used only as a cross-check, never as a source.
+
+- The owner extracts the needed `DBFilesClient\*.dbc` files from the client locally. They are never
+  committed (they are Blizzard game data); only the individual values we use go into our data files.
+- Each extracted file is pinned by its SHA-256. A version string `client-12340:<file>:<sha256 prefix>`
+  goes into `PINS.spellDataVersions`; `spelldata` sources must name one of them.
+- AzerothCore's own corrections on top of the client data (`spell_dbc` table, `SpellInfoCorrections.cpp`)
+  are applied and sourced separately as `db`/`code`.
+
+`PINS.spellDataVersions` stays empty until the extraction has been done.
