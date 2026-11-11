@@ -1,9 +1,12 @@
+import { isAbsolute, relative, resolve, sep } from 'node:path';
 import { DBC_NAMES, difficultyVariants, type ClientSpellData, type DbcName } from '@raid/data';
 
 export interface ExtractedFile {
   readonly name: string;
   readonly sha256: string;
   readonly dataVersion: string;
+  /** The client archive the file came from (relative to the client folder), when read from the archives. */
+  readonly archive?: string;
 }
 
 export interface ExtractedEffect {
@@ -187,4 +190,24 @@ export function findDbcFiles(fileNames: readonly string[]): Record<DbcName, stri
   }
   if (missing.length > 0) throw new Error(`missing ${missing.join(', ')}`);
   return out;
+}
+
+/** The locale to read: the requested one, or the only installed one. */
+export function pickLocale(installed: readonly string[], requested: string | undefined): string {
+  if (requested) return requested;
+  if (installed.length === 1) return installed[0]!;
+  if (installed.length === 0) throw new Error('no locale folder (Data/xxXX) found: pass --locale');
+  throw new Error(`several locales installed (${installed.join(', ')}): pass --locale`);
+}
+
+/** Extracted DBC files must not land in the repository, except under the git-ignored client-data/. */
+export function checkSaveDbcDir(repoRoot: string, dir: string): void {
+  const fold = (p: string): string => (process.platform === 'win32' ? p.toLowerCase() : p);
+  const inside = (parent: string, child: string): boolean => {
+    const rel = relative(fold(resolve(parent)), fold(resolve(child)));
+    return rel === '' || (!rel.startsWith(`..${sep}`) && rel !== '..' && !isAbsolute(rel));
+  };
+  if (inside(repoRoot, dir) && !inside(resolve(repoRoot, 'client-data'), dir)) {
+    throw new Error(`--save-dbc ${dir} is inside the repository: use a folder outside it or under client-data/`);
+  }
 }

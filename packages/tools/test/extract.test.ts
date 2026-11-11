@@ -1,7 +1,8 @@
+import { join, resolve } from 'node:path';
 import { DBC_FORMATS, SPELL_COLUMNS, loadClientSpellData } from '@raid/data';
 import { describe, expect, it } from 'vitest';
 import { buildWdbc } from '../../data/test/dbc-builder';
-import { dataVersionOf, extractSpells, findDbcFiles, parseSpellIds } from '../src/extract';
+import { checkSaveDbcDir, dataVersionOf, extractSpells, findDbcFiles, parseSpellIds, pickLocale } from '../src/extract';
 
 function spell(id: number, name: string, triggers: number[] = []): (number | string)[] {
   const row: (number | string)[] = Array.from({ length: DBC_FORMATS.Spell.length }, (_, i) => (DBC_FORMATS.Spell[i] === 's' ? '' : 0));
@@ -91,5 +92,32 @@ describe('findDbcFiles', () => {
   });
   it('rejects names that differ only by case', () => {
     expect(() => findDbcFiles([...all, 'SPELL.DBC'])).toThrow('two files match Spell.dbc: Spell.dbc, SPELL.DBC');
+  });
+});
+
+describe('pickLocale', () => {
+  it('uses the requested locale, or the only installed one', () => {
+    expect(pickLocale(['deDE', 'enGB'], 'enGB')).toBe('enGB');
+    expect(pickLocale(['deDE'], undefined)).toBe('deDE');
+  });
+  it('asks for --locale when several or none are installed', () => {
+    expect(() => pickLocale(['deDE', 'enGB'], undefined)).toThrow('several locales installed (deDE, enGB): pass --locale');
+    expect(() => pickLocale([], undefined)).toThrow('no locale folder (Data/xxXX) found: pass --locale');
+  });
+});
+
+describe('checkSaveDbcDir', () => {
+  const root = resolve('/');
+  const repo = join(root, 'repo');
+  it('allows folders outside the repository and under client-data/', () => {
+    expect(() => checkSaveDbcDir(repo, join(root, 'elsewhere', 'dbc'))).not.toThrow();
+    expect(() => checkSaveDbcDir(repo, join(root, 'repo-other'))).not.toThrow();
+    expect(() => checkSaveDbcDir(repo, join(repo, 'client-data'))).not.toThrow();
+    expect(() => checkSaveDbcDir(repo, join(repo, 'client-data', 'dbc'))).not.toThrow();
+  });
+  it('refuses other folders inside the repository', () => {
+    for (const bad of [repo, join(repo, 'packages'), join(repo, 'client-data-x'), join(repo, 'docs', '..', 'out')]) {
+      expect(() => checkSaveDbcDir(repo, bad), bad).toThrow(/is inside the repository: use a folder outside it or under client-data\//);
+    }
   });
 });
