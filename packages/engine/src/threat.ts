@@ -74,7 +74,8 @@ export class ThreatManager {
   victim(creatureId: string): Unit | null {
     if (!this.victimAlive(creatureId)) this.reselect(creatureId, []);
     const id = this.victims.get(creatureId);
-    return id ? this.sim.unit(id) : null;
+    const unit = id ? this.sim.units.get(id) : undefined;
+    return unit?.alive ? unit : null;
   }
 
   /**
@@ -115,15 +116,16 @@ export class ThreatManager {
     const d = ev.data;
     if (typeof d.source !== 'string' && ev.kind !== 'death') return;
     if (ev.kind === 'damage' && typeof d.target === 'string') {
-      const source = this.sim.unit(d.source as string);
-      const target = this.sim.unit(d.target);
+      const source = this.sim.units.get(d.source as string);
+      const target = this.sim.units.get(d.target);
       const amount = Number(d.amount);
+      if (!source || !target) return;
       if (source.kind === 'player' && target.kind === 'creature' && amount > 0) this.add(target.id, source.id, amount * source.threatMultiplier, [ev.id]);
     } else if (ev.kind === 'heal' && typeof d.target === 'string') {
-      const healer = this.sim.unit(d.source as string);
+      const healer = this.sim.units.get(d.source as string);
       const amount = Number(d.amount);
-      if (healer.kind !== 'player' || !(amount > 0)) return;
       const target = d.target;
+      if (!healer || !this.sim.units.has(target) || healer.kind !== 'player' || !(amount > 0)) return;
       const threatened = [...this.lists.keys()].sort(compareStrings).filter((c) => this.lists.get(c)!.has(target) && this.sim.unit(c).alive);
       if (threatened.length === 0) return;
       const share = amount / 2 / threatened.length; // Unit.cpp 8204: half the healing, split evenly, no modifiers
@@ -131,6 +133,7 @@ export class ThreatManager {
     } else if (ev.kind === 'death' && typeof d.unit === 'string') {
       this.lists.delete(d.unit);
       this.victims.delete(d.unit);
+      for (const c of [...this.victims.keys()].sort(compareStrings)) if (this.victims.get(c) === d.unit) this.reselect(c, [ev.id]);
     }
   }
 

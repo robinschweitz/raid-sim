@@ -77,4 +77,66 @@ describe('ThreatManager', () => {
     threat.add('boss', 'h1', 5);
     expect(threat.listed('boss').map((u) => u.id)).toEqual(['h1', 'm1']);
   });
+
+  it('reselects at the death time with the death event as cause', () => {
+    const { sim, threat } = newSim();
+    threat.add('boss', 't1', 1000);
+    threat.add('boss', 'm1', 10);
+    sim.at(500, EventClass.SpellHit, () => {
+      sim.damage('t1', 1e6, hit('boss'), []);
+    });
+    sim.run();
+    const death = sim.trace.list().find((e) => e.kind === 'death' && e.data.unit === 't1')!;
+    const sel = sim.trace.list().find((e) => e.kind === 'threat_target' && e.data.target === 'm1')!;
+    expect(sel.t).toBe(500);
+    expect(sel.causes).toContain(death.id);
+  });
+
+  it('victim() is null when the victim is dead and the fight is over', () => {
+    const { sim, threat } = newSim();
+    threat.add('boss', 't1', 1000);
+    sim.at(500, EventClass.SpellHit, () => {
+      for (const id of ['t1', 'm1', 'r1', 'h1']) sim.damage(id, 1e6, hit('boss'), []);
+    });
+    sim.run();
+    expect(threat.victim('boss')).toBeNull();
+  });
+
+  it('ignores events from unknown units instead of throwing', () => {
+    const { sim } = newSim();
+    sim.at(10, EventClass.SpellHit, () => {
+      sim.emit('damage', { source: 'ghost', target: 'boss', amount: 5 }, []);
+      sim.emit('heal', { source: 'h1', target: 'ghost', amount: 5 }, []);
+      sim.emit('heal', { source: 'ghost', target: 'h1', amount: 5 }, []);
+    });
+    expect(() => sim.run()).not.toThrow();
+  });
+
+  it('splits healing threat over two creatures that list the healed unit', () => {
+    const { sim, threat } = newSim();
+    sim.addUnit({ id: 'boss2', name: 'Boss2', kind: 'creature', role: 'boss', maxHealth: 1e7, pos: { x: 50, y: 0 }, speedYdPerSec: 0, combatReach: 8, boundingRadius: 0.31 });
+    threat.add('boss', 't1', 0);
+    threat.add('boss2', 't1', 0);
+    sim.at(10, EventClass.SpellHit, () => {
+      sim.damage('t1', 500, hit('boss'), []);
+      sim.heal('t1', 400, hit('h1'), []);
+    });
+    sim.run();
+    expect(threat.threatOf('boss', 'h1')).toBe(100);
+    expect(threat.threatOf('boss2', 'h1')).toBe(100);
+  });
+
+  it('drops the list of a dead creature and hides dead units from listed()', () => {
+    const { sim, threat } = newSim();
+    threat.add('boss', 't1', 10);
+    threat.add('boss', 'm1', 5);
+    sim.at(10, EventClass.SpellHit, () => {
+      sim.damage('m1', 1e6, hit('boss'), []);
+      expect(threat.listed('boss').map((u) => u.id)).toEqual(['t1']);
+      sim.damage('boss', 1e8, hit('t1'), []);
+    });
+    sim.run();
+    expect(threat.listed('boss')).toEqual([]);
+    expect(threat.threatOf('boss', 't1')).toBe(0);
+  });
 });
