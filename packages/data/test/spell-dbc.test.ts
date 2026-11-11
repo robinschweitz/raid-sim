@@ -30,6 +30,47 @@ describe('spell DBC layout', () => {
 });
 
 describe('decoding', () => {
+  it('never reports variants for spell id 0, even when a row has empty (0) slots', () => {
+    const data = loadClientSpellData({
+      Spell: buildWdbc(DBC_FORMATS.Spell, []),
+      SpellCastTimes: buildWdbc(DBC_FORMATS.SpellCastTimes, []),
+      SpellDifficulty: buildWdbc(DBC_FORMATS.SpellDifficulty, [[1, 100, 101, 0, 0]]),
+      SpellDuration: buildWdbc(DBC_FORMATS.SpellDuration, []),
+      SpellRadius: buildWdbc(DBC_FORMATS.SpellRadius, []),
+      SpellRange: buildWdbc(DBC_FORMATS.SpellRange, []),
+    });
+    expect(difficultyVariants(data, 0)).toBeNull();
+  });
+
+  it('pins every decoded field to its literal column', () => {
+    const fmt = DBC_FORMATS.Spell;
+    const row: (number | string)[] = Array.from({ length: fmt.length }, (_, i) =>
+      fmt[i] === 's' ? `s${i}` : fmt[i] === 'f' ? i + 0.5 : fmt[i] === 'x' ? 0 : i + 1000,
+    );
+    // Expected values are written from literal zero-based columns (value = column + 1000, or + 0.5 for floats).
+    const eff = (c: readonly number[], k: number) => c[k]! + 1000;
+    const E = {
+      effect: [71, 72, 73], dieSides: [74, 75, 76], basePoints: [80, 81, 82], implicitTargetA: [86, 87, 88],
+      implicitTargetB: [89, 90, 91], radiusIndex: [92, 93, 94], applyAuraName: [95, 96, 97], amplitude: [98, 99, 100],
+      chainTarget: [104, 105, 106], miscValue: [110, 111, 112], triggerSpell: [116, 117, 118],
+    };
+    const effectAt = (k: number) => ({
+      effect: eff(E.effect, k), dieSides: eff(E.dieSides, k), basePoints: eff(E.basePoints, k),
+      implicitTargetA: eff(E.implicitTargetA, k), implicitTargetB: eff(E.implicitTargetB, k),
+      radiusIndex: eff(E.radiusIndex, k), applyAuraName: eff(E.applyAuraName, k), amplitude: eff(E.amplitude, k),
+      chainTarget: eff(E.chainTarget, k), miscValue: eff(E.miscValue, k), triggerSpell: eff(E.triggerSpell, k),
+    });
+    expect(decodeSpell(row)).toEqual({
+      id: 1000, attributes: 1004, attributesEx: 1005, castingTimeIndex: 1028, recoveryTime: 1029,
+      categoryRecoveryTime: 1030, interruptFlags: 1031, auraInterruptFlags: 1032, procFlags: 1034,
+      procChance: 1035, durationIndex: 1040, rangeIndex: 1046, speed: 47.5, stackAmount: 1049,
+      name: 's136', startRecoveryCategory: 1205, startRecoveryTime: 1206, maxAffectedTargets: 1212,
+      dmgClass: 1213, schoolMask: 1225,
+      effects: [effectAt(0), effectAt(1), effectAt(2)],
+    });
+    expect(effectAt(2).triggerSpell).toBe(1118);
+  });
+
   it('decodes a spell row and its effects', () => {
     const row = spellRow(
       { id: 69278, name: 'Gas Spore', durationIndex: 9, schoolMask: 8, maxAffectedTargets: 3, castingTimeIndex: 1 },
@@ -57,5 +98,6 @@ describe('decoding', () => {
     expect(data.ranges.get(6)).toEqual({ minHostile: 0, minFriendly: 0, maxHostile: 100, maxFriendly: 100, flags: 0 });
     expect(difficultyVariants(data, 69280)).toEqual([69278, 69279, 69280, 69281]);
     expect(difficultyVariants(data, 1)).toBeNull();
+    expect(difficultyVariants(data, 0)).toBeNull();
   });
 });

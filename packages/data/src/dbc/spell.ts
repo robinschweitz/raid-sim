@@ -180,6 +180,7 @@ export function loadClientSpellData(files: Readonly<Record<DbcName, Uint8Array>>
 
 /** The [10n, 25n, 10h, 25h] variants of a spell, like AzerothCore's GetSpellIdForDifficulty; null if none. */
 export function difficultyVariants(data: ClientSpellData, spellId: number): readonly [number, number, number, number] | null {
+  if (spellId === 0) return null;
   for (const id of [...data.difficulty.keys()].sort((a, b) => a - b)) {
     const row = data.difficulty.get(id)!;
     if (row.includes(spellId)) return row;
