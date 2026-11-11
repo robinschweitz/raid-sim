@@ -29,6 +29,18 @@ describe('spell DBC layout', () => {
   });
 });
 
+describe('localized names', () => {
+  it('takes the name from the first non-empty locale slot', () => {
+    const row = spellRow({});
+    row[SPELL_COLUMNS.name + 3] = 'Gasspore';
+    expect(decodeSpell(row)).toMatchObject({ name: 'Gasspore', nameLocale: 3 });
+  });
+
+  it('gives an empty name and locale -1 when every slot is empty', () => {
+    expect(decodeSpell(spellRow({}))).toMatchObject({ name: '', nameLocale: -1 });
+  });
+});
+
 describe('decoding', () => {
   it('never reports variants for spell id 0, even when a row has empty (0) slots', () => {
     const data = loadClientSpellData({
@@ -64,7 +76,7 @@ describe('decoding', () => {
       id: 1000, attributes: 1004, attributesEx: 1005, castingTimeIndex: 1028, recoveryTime: 1029,
       categoryRecoveryTime: 1030, interruptFlags: 1031, auraInterruptFlags: 1032, procFlags: 1034,
       procChance: 1035, durationIndex: 1040, rangeIndex: 1046, speed: 47.5, stackAmount: 1049,
-      name: 's136', startRecoveryCategory: 1205, startRecoveryTime: 1206, maxAffectedTargets: 1212,
+      name: 's136', nameLocale: 0, startRecoveryCategory: 1205, startRecoveryTime: 1206, maxAffectedTargets: 1212,
       dmgClass: 1213, schoolMask: 1225,
       effects: [effectAt(0), effectAt(1), effectAt(2)],
     });

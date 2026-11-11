@@ -17,7 +17,7 @@ Two common ways:
   archives, applied in order) and export `DBFilesClient/<name>.dbc`. The latest patch archive's copy
   wins.
 
-Put the six files into one folder outside the repository, for example `C:\wow-dbc\`.
+Put the six files into one folder outside the repository, for example `C:\wow-dbc\`. The folder should be outside the repository (or in `client-data/`, which git ignores). German and other localized clients work: spell names are taken from the client's own language.
 
 ## 2. Run the extraction
 

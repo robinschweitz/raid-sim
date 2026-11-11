@@ -1,4 +1,4 @@
-import { difficultyVariants, type ClientSpellData } from '@raid/data';
+import { DBC_NAMES, difficultyVariants, type ClientSpellData, type DbcName } from '@raid/data';
 
 export interface ExtractedFile {
   readonly name: string;
@@ -25,6 +25,7 @@ export interface ExtractedEffect {
 export interface ExtractedSpell {
   readonly id: number;
   readonly name: string;
+  readonly nameLocale: number;
   readonly attributes: number;
   readonly attributesEx: number;
   readonly schoolMask: number;
@@ -99,6 +100,7 @@ export function extractSpells(data: ClientSpellData, files: readonly ExtractedFi
     out.push({
       id: s.id,
       name: s.name,
+      nameLocale: s.nameLocale,
       attributes: s.attributes,
       attributesEx: s.attributesEx,
       schoolMask: s.schoolMask,
@@ -124,4 +126,29 @@ export function extractSpells(data: ClientSpellData, files: readonly ExtractedFi
   }
   out.sort((a, b) => a.id - b.id);
   return { client: '3.3.5a (12340)', files: [...files], spells: out, missing: [...missing].sort((a, b) => a - b) };
+}
+
+export function parseSpellIds(text: string): number[] {
+  if (text.trim() === '') throw new Error('no spell ids given');
+  const ids = text.split(',').map((raw) => {
+    const token = raw.trim();
+    if (!/^[1-9]\d*$/.test(token)) throw new Error(`invalid spell id "${token}"`);
+    return Number(token);
+  });
+  return ids;
+}
+
+/** Maps each required DBC to its actual file name, matching `<Name>.dbc` case-insensitively. */
+export function findDbcFiles(fileNames: readonly string[]): Record<DbcName, string> {
+  const out = {} as Record<DbcName, string>;
+  const missing: string[] = [];
+  for (const name of DBC_NAMES) {
+    const wanted = `${name}.dbc`.toLowerCase();
+    const matches = fileNames.filter((f) => f.toLowerCase() === wanted);
+    if (matches.length > 1) throw new Error(`two files match ${name}.dbc: ${matches.join(', ')}`);
+    if (matches.length === 0) missing.push(`${name}.dbc`);
+    else out[name] = matches[0]!;
+  }
+  if (missing.length > 0) throw new Error(`missing ${missing.join(', ')}`);
+  return out;
 }

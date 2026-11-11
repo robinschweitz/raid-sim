@@ -1,7 +1,7 @@
 import { DBC_FORMATS, SPELL_COLUMNS, loadClientSpellData } from '@raid/data';
 import { describe, expect, it } from 'vitest';
 import { buildWdbc } from '../../data/test/dbc-builder';
-import { dataVersionOf, extractSpells } from '../src/extract';
+import { dataVersionOf, extractSpells, findDbcFiles, parseSpellIds } from '../src/extract';
 
 function spell(id: number, name: string, triggers: number[] = []): (number | string)[] {
   const row: (number | string)[] = Array.from({ length: DBC_FORMATS.Spell.length }, (_, i) => (DBC_FORMATS.Spell[i] === 's' ? '' : 0));
@@ -37,6 +37,11 @@ describe('extractSpells', () => {
     expect(x.missing).toEqual([]);
   });
 
+  it('carries the name locale through', () => {
+    const x = extractSpells(data(), files, [100]);
+    expect(x.spells[0]).toMatchObject({ name: 'Root', nameLocale: 0 });
+  });
+
   it('resolves durations, ranges and effect radii through their index tables', () => {
     const root = extractSpells(data(), files, [100]).spells[0];
     expect(root.durationMs).toEqual({ base: 12000, perLevel: 0, max: 12000 });
@@ -52,5 +57,33 @@ describe('extractSpells', () => {
 
   it('builds version strings from the file name and hash prefix', () => {
     expect(dataVersionOf('Spell.dbc', 'abcdef0123456789'.repeat(4))).toBe('client-12340:Spell.dbc:abcdef012345');
+  });
+});
+
+describe('parseSpellIds', () => {
+  it('parses a comma list with whitespace', () => {
+    expect(parseSpellIds('69278, 69279,3')).toEqual([69278, 69279, 3]);
+  });
+  it('rejects bad tokens and empty input', () => {
+    for (const bad of ['1,x', '1,,2', '0', '-5', '1.5', '1e3', '12abc', '1,']) expect(() => parseSpellIds(bad), bad).toThrow(/invalid spell id/);
+    expect(() => parseSpellIds('1,x')).toThrow('invalid spell id "x"');
+    expect(() => parseSpellIds('')).toThrow('no spell ids given');
+    expect(() => parseSpellIds(' ')).toThrow('no spell ids given');
+  });
+});
+
+describe('findDbcFiles', () => {
+  const all = ['Spell.dbc', 'spellcasttimes.DBC', 'SpellDifficulty.dbc', 'SPELLDURATION.DBC', 'SpellRadius.dbc', 'SpellRange.dbc'];
+  it('finds files case-insensitively', () => {
+    const m = findDbcFiles([...all, 'other.txt']);
+    expect(m.SpellCastTimes).toBe('spellcasttimes.DBC');
+    expect(m.SpellDuration).toBe('SPELLDURATION.DBC');
+    expect(Object.keys(m).sort()).toEqual(['Spell', 'SpellCastTimes', 'SpellDifficulty', 'SpellDuration', 'SpellRadius', 'SpellRange']);
+  });
+  it('lists all missing files', () => {
+    expect(() => findDbcFiles(['Spell.dbc'])).toThrow('missing SpellCastTimes.dbc, SpellDifficulty.dbc, SpellDuration.dbc, SpellRadius.dbc, SpellRange.dbc');
+  });
+  it('rejects names that differ only by case', () => {
+    expect(() => findDbcFiles([...all, 'SPELL.DBC'])).toThrow('two files match Spell.dbc: Spell.dbc, SPELL.DBC');
   });
 });

@@ -76,6 +76,8 @@ export interface SpellEffectRecord {
 export interface SpellRecord {
   readonly id: number;
   readonly name: string;
+  /** Index (0..15) of the client locale the name came from; -1 if every locale slot is empty. */
+  readonly nameLocale: number;
   readonly attributes: number;
   readonly attributesEx: number;
   readonly castingTimeIndex: number;
@@ -135,10 +137,20 @@ function effect(row: DbcRow, i: number): SpellEffectRecord {
 
 export function decodeSpell(row: DbcRow): SpellRecord {
   const c = SPELL_COLUMNS;
-  const name = row[c.name];
+  let name = '';
+  let nameLocale = -1;
+  for (let i = 0; i < 16; i++) {
+    const v = row[c.name + i];
+    if (typeof v === 'string' && v !== '') {
+      name = v;
+      nameLocale = i;
+      break;
+    }
+  }
   return {
     id: num(row, c.id),
-    name: typeof name === 'string' ? name : '',
+    name,
+    nameLocale,
     attributes: num(row, c.attributes),
     attributesEx: num(row, c.attributesEx),
     castingTimeIndex: num(row, c.castingTimeIndex),

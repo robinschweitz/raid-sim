@@ -3,3 +3,6 @@ node_modules/
 dist/
 out/
 coverage/
+*.dbc
+*.DBC
+client-data/
