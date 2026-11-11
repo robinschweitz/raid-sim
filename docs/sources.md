@@ -38,4 +38,15 @@ written against. A public 3.3.5a database may be used only as a cross-check, nev
 - AzerothCore's own corrections on top of the client data (`spell_dbc` table, `SpellInfoCorrections.cpp`)
   are applied and sourced separately as `db`/`code`.
 
-`PINS.spellDataVersions` stays empty until the extraction has been done.
+Extracted 2026-11-11 with `pnpm extract-spells` from the owner's client (folder `WoW_3.3.5a_rising-gods.de`,
+locale deDE), read straight from the MPQ archives; the output is `packages/content/data/spelldata/festergut.json`.
+Pinned files (version string, full SHA-256, source archive relative to the client folder):
+
+| File | Version (`PINS.spellDataVersions`) | SHA-256 | Source archive |
+|---|---|---|---|
+| Spell.dbc | `client-12340:Spell.dbc:a17bfd2d4b0a` | `a17bfd2d4b0ac0dbf8263371c771651e783f123329995d0ae609a08bc05a8bf7` | `Data/deDE/patch-deDE-3.MPQ` |
+| SpellCastTimes.dbc | `client-12340:SpellCastTimes.dbc:919ca9b65cb1` | `919ca9b65cb144a3a9cf0ce10d2a25fcc7cdccf33c752ed376e086ff62f8ccec` | `Data/deDE/patch-deDE-2.MPQ` |
+| SpellDifficulty.dbc | `client-12340:SpellDifficulty.dbc:9173f9a8c97e` | `9173f9a8c97e690fb5a7ce1d6730c1449da214752c52a3885f79d58952bb95a4` | `Data/deDE/patch-deDE-3.MPQ` |
+| SpellDuration.dbc | `client-12340:SpellDuration.dbc:caa2cbec7fa7` | `caa2cbec7fa711bba180af10c253ab0d111609ec2bda1c354fef09e54bc279e4` | `Data/deDE/patch-deDE-3.MPQ` |
+| SpellRadius.dbc | `client-12340:SpellRadius.dbc:409b1612d19b` | `409b1612d19bb7860de2a2ea0f18669be1cf40477f85f5c6e12c4758277f3475` | `Data/deDE/patch-deDE.MPQ` |
+| SpellRange.dbc | `client-12340:SpellRange.dbc:dec6105c88d1` | `dec6105c88d166377a96f8b1c0af7864849c6727c60ba5b481f0f03be15d4e6c` | `Data/deDE/patch-deDE-3.MPQ` |

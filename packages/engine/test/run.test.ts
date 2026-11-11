@@ -148,7 +148,7 @@ describe('runScenario', () => {
 
   it('pins the dummy clean trace (regression pin: update deliberately when the engine output changes)', () => {
     const hash = createHash('sha256').update(canonicalStringify(run(prepared()).trace)).digest('hex');
-    expect(hash).toBe('fe2e67ed493b6144fd9bb60ea2a10d5bfb7e1ce60877d1d4ce4a1f13816fb886');
+    expect(hash).toBe('4251d809e59f4669069443b701f583958140ca2415545b74056079e547209461');
   });
 
   describe('bad content is reported as invalid, not thrown', () => {
