@@ -27,7 +27,9 @@ export function createFormatter(trace: Trace, dict: Dictionary): (ev: TraceEvent
     return String(v);
   };
   return (ev) => {
-    const template = dict[ev.data.cleared === true ? `event.${ev.kind}_cleared` : `event.${ev.kind}`] ?? ev.kind;
+    // A cleared timer window or a boss without a target (target: null) has its own wording.
+    const cleared = ev.data.cleared === true || ev.data.target === null;
+    const template = (cleared ? dict[`event.${ev.kind}_cleared`] : undefined) ?? dict[`event.${ev.kind}`] ?? ev.kind;
     const text = template.replace(/\{(\w+)\}/g, (_m, key: string) => render(key, ev.data[key]));
     return `[${clock(ev.t)}] ${text}`;
   };

@@ -33,6 +33,17 @@ function newSim() {
 const events = (sim: Simulation, kind: string) => sim.trace.list().filter((e) => e.kind === kind);
 
 describe('auras', () => {
+  it('sets refreshedMs before aura_stack is emitted', () => {
+    const sim = newSim();
+    const seen: number[] = [];
+    sim.subscribe((ev) => {
+      if (ev.kind === 'aura_stack') seen.push([...sim.unit('p1').auras.values()][0]!.refreshedMs);
+    });
+    for (const t of [0, 1500]) sim.at(t, EventClass.SpellHit, () => void applyAura(sim, 'stacker', 'boss', 'p1', []));
+    sim.run();
+    expect(seen).toEqual([1500]);
+  });
+
   it('stacks up to the maximum and refreshes the duration (A-009)', () => {
     const sim = newSim();
     for (const t of [0, 1000, 2000, 3000]) sim.at(t, EventClass.SpellHit, () => void applyAura(sim, 'stacker', 'boss', 'p1', []));

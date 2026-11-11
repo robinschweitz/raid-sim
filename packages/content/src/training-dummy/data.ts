@@ -10,9 +10,7 @@ export const TRAINING_DUMMY_DATA: readonly unknown[] = [
   ['training_dummy.mark_interval_ms', 12000],
   ['training_dummy.mark_range_yd', 30],
   ['training_dummy.mark_duration_ms', 3000],
-  ['training_caster.health', 20000],
-  ['training_caster.bolt_min', 1000],
-  ['training_caster.bolt_max', 1200],
-  ['training_caster.bolt_cast_ms', 1500],
-  ['training_caster.bolt_range_yd', 40],
+  ['training_dummy.level', 83],
+  ['training_dummy.bounding_radius_yd', 1],
+  ['training_dummy.speed_yd_s', 0],
 ].map(([key, value]) => ({ key, value, source: configured }));

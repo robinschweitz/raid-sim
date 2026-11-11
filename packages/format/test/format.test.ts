@@ -63,6 +63,12 @@ describe('formatter', () => {
     const dict = { ...EN, 'event.aura_applied': '{unit} gets {aura} until {expiresMs}' };
     expect(formatLog({ ...t, events: [ev] }, dict, {})).toEqual(['[00:00.000] Alice gets blight until never']);
   });
+  it('renders a boss without a target readably', () => {
+    const t = trace();
+    const ev = { id: 'e9', t: 0, kind: 'threat_target', causes: [], data: { boss: 'boss', target: null, previous: 'p1' } } as Trace['events'][number];
+    expect(formatLog({ ...t, events: [ev] }, EN, {})).toEqual([`[00:00.000] ${t.meta.units.find((u) => u.id === 'boss')!.name} has no target`]);
+  });
+
   it('renders a cleared timer window readably', () => {
     const t = trace();
     const ev = { id: 'e9', t: 0, kind: 'timer_window', causes: [], data: { boss: 'boss', ability: 'smash', earliestMs: null, latestMs: null, cleared: true } } as Trace['events'][number];

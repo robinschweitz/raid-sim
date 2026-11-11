@@ -14,12 +14,14 @@ import { installStandin, type StandinParams } from './standin';
 import { buildSummary, type Summary } from './summary';
 import { ThreatManager } from './threat';
 import { canonicalStringify, type Trace } from './trace';
-import { byId, type Role, type UnitInit } from './units';
+import { byId, compareStrings, type Role, type UnitInit } from './units';
 
 export const ENGINE_VERSION = '0.1.0';
 
 export interface PolicyFactory {
   readonly spec: string;
+  /** Data entries of this spec; merged into the registry (once per spec) after the boss data. */
+  readonly data?: readonly unknown[];
   readonly role: Exclude<Role, 'boss' | 'add'>;
   create(args: { readonly sim: Simulation; readonly member: ModelledMember; readonly data: DataRegistry }): {
     readonly unit: Pick<UnitInit, 'maxHealth' | 'speedYdPerSec' | 'combatReach' | 'boundingRadius'>;
@@ -115,9 +117,13 @@ export function runScenario(prepared: PreparedRun, registry: ContentRegistry): R
   // Engine data is validated on its own so a problem in it is not blamed on the boss content.
   const coreProblems = dataProblems('engine:core-data', () => new DataRegistry(CORE_DATA));
   if (coreProblems.length > 0) return { outcome: 'invalid', problems: coreProblems };
+  const specData: unknown[] = [];
+  for (const spec of [...new Set(plan.roster.flatMap((m) => (m.kind === 'modelled' ? [m.spec] : [])))].sort(compareStrings)) {
+    specData.push(...(registry.policies.get(spec)!.data ?? []));
+  }
   let data!: DataRegistry;
   const bossProblems = dataProblems(`boss:${boss.id}`, () => {
-    data = new DataRegistry([...CORE_DATA, ...boss.data], boss.overrides, scenario.profile);
+    data = new DataRegistry([...CORE_DATA, ...boss.data, ...specData], boss.overrides, scenario.profile);
   });
   if (bossProblems.length > 0) return { outcome: 'invalid', problems: bossProblems };
 

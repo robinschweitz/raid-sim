@@ -181,6 +181,23 @@ describe('runScenario', () => {
       expect(problems[0]).toEqual({ file: 'spec:test_caster', path: '(setup)', message: 'boom' });
     });
 
+    it('spec data entries are merged into the registry once per spec', () => {
+      const withData = {
+        ...testCaster,
+        data: [{ key: 'test_caster.hp', value: 25000, source: { kind: 'configured', file: 'test' } }],
+        create: (args: Parameters<typeof testCaster.create>[0]) => {
+          const made = testCaster.create(args);
+          return { ...made, unit: { ...made.unit, maxHealth: args.data.num('test_caster.hp') } };
+        },
+      };
+      const r = runScenario(prepared(), { ...registry, policies: new Map([['test_caster', withData]]) });
+      if (r.outcome === 'invalid') throw new Error(JSON.stringify(r.problems));
+      expect(r.outcome).toBe('timeout');
+      // Two modelled members use the spec: its entries must not be reported as duplicates.
+      const dup = runScenario(prepared(), { ...registry, policies: new Map([['test_caster', { ...withData, data: [...withData.data, withData.data[0]] }]]) });
+      expect(dup.outcome).toBe('invalid');
+    });
+
     it('a boss data entry with a duplicate key', () => {
       const dup = { ...dummyBoss, data: [...dummyBoss.data, dummyBoss.data[0]] };
       const problems = invalid(prepared(), { ...registry, bosses: new Map([['dummy', dup]]) });

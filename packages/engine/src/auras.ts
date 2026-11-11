@@ -27,12 +27,12 @@ export function applyAura(
     sim.cancel(existing.expiry);
     existing.expiresMs = expiresMs;
     existing.expiry = schedule(existing);
+    existing.refreshedMs = sim.now;
     const id = sim.emit(
       'aura_stack',
       { unit: targetId, aura: auraId, caster: casterId, stacks: existing.stacks, expiresMs: traceExpiry },
       causes,
     );
-    existing.refreshedMs = sim.now;
     if (def.periodic && existing.tick === null && target.auras.get(key) === existing) {
       // Resume at the kept tick anchor (A-009). It is always after now: a chain only stops when the anchor passes the expiry.
       scheduleTick(sim, targetId, key, existing);

@@ -1,8 +1,17 @@
 import type { PolicyFactory } from '@raid/engine';
 
-/** An invented spec for demos: casts a bolt at the boss whenever it can. */
+const configured = { kind: 'configured', file: 'packages/content/src/training-dummy/caster.ts' } as const;
+
+/** An invented spec for demos: casts a bolt at the boss whenever it can. Its values are invented, not taken from the game. */
 export const trainingCaster: PolicyFactory = {
   spec: 'training_caster',
+  data: [
+    ['training_caster.health', 20000],
+    ['training_caster.bolt_min', 1000],
+    ['training_caster.bolt_max', 1200],
+    ['training_caster.bolt_cast_ms', 1500],
+    ['training_caster.bolt_range_yd', 40],
+  ].map(([key, value]) => ({ key, value, source: configured })),
   role: 'ranged',
   create({ sim, data }) {
     if (!sim.catalog.hasSpell('training_bolt')) {

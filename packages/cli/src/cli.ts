@@ -73,10 +73,22 @@ export function runCli(argv: readonly string[], io: Io, registry: ContentRegistr
     return 2;
   }
   const dir = outDir ?? join('out', result.trace.meta.scenario);
-  io.mkdir(dir);
-  io.writeFile(join(dir, 'trace.json'), `${canonicalStringify(result.trace)}\n`);
-  io.writeFile(join(dir, 'summary.json'), `${canonicalStringify(result.summary)}\n`);
-  io.writeFile(join(dir, 'log.txt'), `${formatLog(result.trace, EN, text).join('\n')}\n`);
+  const files: Array<[string, string]> = [
+    [join(dir, 'trace.json'), `${canonicalStringify(result.trace)}\n`],
+    [join(dir, 'summary.json'), `${canonicalStringify(result.summary)}\n`],
+    [join(dir, 'log.txt'), `${formatLog(result.trace, EN, text).join('\n')}\n`],
+  ];
+  let failing = dir;
+  try {
+    io.mkdir(dir);
+    for (const [path, content] of files) {
+      failing = path;
+      io.writeFile(path, content);
+    }
+  } catch (e) {
+    io.out(`cannot write ${failing}: ${e instanceof Error ? e.message : String(e)}`);
+    return 1;
+  }
   const s = result.summary;
   io.out(`${result.trace.meta.scenario}: ${s.outcome} at ${clock(s.durationMs)}`);
   io.out(`deaths: ${s.deaths.length}`);

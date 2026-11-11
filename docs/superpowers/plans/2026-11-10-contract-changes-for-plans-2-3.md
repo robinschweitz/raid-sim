@@ -7,34 +7,34 @@ discovered mid-implementation.
 
 ## Plan 2 — Festergut
 
-1. **Victim and threat.** `victimOf` is a pure threat maximum with ties to the lowest id. Needed:  (done in Plan 2a)
+1. **Victim and threat.** `victimOf` is a pure threat maximum with ties to the lowest id. Needed:
    a stateful current victim, AzerothCore's 110 %/130 % target-switch rule, taunt (copy top
    threat + fixate), and threat generated centrally in `Simulation.damage`/`heal` so stand-ins
-   generate threat too (§6.3). The runner's `currentTank` must follow this victim.
-2. **Melee.** `EventScriptedAI.updateAI` needs an `afterEvents(ctx)` step (only when not casting)  (done in Plan 2a)
-   for `DoMeleeAttackIfReady`, with a swing timer, armor mitigation and avoidance.
-3. **Cast options in `BossContext.cast`:** triggered casts (skip cast state, GCD and range, e.g.  (done in Plan 2a; casting as another unit remains for Gate 4)
+   generate threat too (§6.3). The runner's `currentTank` must follow this victim.  (done in Plan 2a)
+2. **Melee.** `EventScriptedAI.updateAI` needs an `afterEvents(ctx)` step (only when not casting)
+   for `DoMeleeAttackIfReady`, with a swing timer, armor mitigation and avoidance.  (done in Plan 2a)
+3. **Cast options in `BossContext.cast`:** triggered casts (skip cast state, GCD and range, e.g.
    applying the next Gaseous Blight while inhaling); a maximum target count chosen at launch
    (Gas Spore 2 or 3, `SPELLVALUE_MAX_TARGETS`); casting as another unit (Putricide's Malleable
-   Goo from Festergut's script).
-4. **Aura model:** permanent auras (no duration); a removal hook that knows the reason (Blighted  (done in Plan 2a)
+   Goo from Festergut's script).  (partly: triggered casts done; max targets at launch and casting as another unit are needed in Plan 2b)
+4. **Aura model:** permanent auras (no duration); a removal hook that knows the reason (Blighted
    Spores granting Inoculated and recording the count on the boss); an on-stack hook (Gastric
    Bloat at its limit → Gastric Explosion); per-target hit hooks ordered relative to damage
    (Pungent Blight removes Inoculated after its damage); a stacking-scope flag (today auras
-   always stack per caster). Then reword A-012 again.
-5. **Damage modifiers** driven by auras (Inoculated reduction, Inhaled Blight boss damage,  (done in Plan 2a)
-   berserk). Design together with Plan 3's crit and armor.
-6. **Target selection helpers** on the threat list, like AzerothCore `SelectTarget(Random,  (done in Plan 2a)
-   minDist)`: Vile Gas prefers targets beyond a distance; Goo picks a random non-tank.
-7. **Several scripted units per encounter.** `role: 'boss'` currently drives the kill outcome,  (done in Plan 2a)
+   always stack per caster). Then reword A-012 again.  (done in Plan 2a)
+5. **Damage modifiers** driven by auras (Inoculated reduction, Inhaled Blight boss damage,
+   berserk). Design together with Plan 3's crit and armor.  (done in Plan 2a)
+6. **Target selection helpers** on the threat list, like AzerothCore `SelectTarget(Random,
+   minDist)`: Vile Gas prefers targets beyond a distance; Goo picks a random non-tank.  (done in Plan 2a)
+7. **Several scripted units per encounter.** `role: 'boss'` currently drives the kill outcome,
    stand-in damage targets and the `boss` reference (inconsistently: rules match any boss but
    resolve to the first). Add an explicit set of units the encounter must kill; Putricide is
-   not one of them.
-8. **Timer windows go stale** after `delayEventsToMax`/`reschedule`. Add an EventMap query like  (partly: `clearTimer`)
-   `GetTimeUntilEvent` and derive published windows from it.
+   not one of them.  (done in Plan 2a)
+8. **Timer windows go stale** after `delayEventsToMax`/`reschedule`. Add an EventMap query like
+   `GetTimeUntilEvent` and derive published windows from it.  (partly: `clearTimer`)
 9. **Script state** (AzerothCore `SetData`/`GetData`) for spore and Inoculated bookkeeping.  (done in Plan 2a)
-10. **Plan validation against content:** after setup, check rule trigger aura and spell ids  (done in Plan 2a)
-    against the catalog. Today a typo means a rule silently never fires.
+10. **Plan validation against content:** after setup, check rule trigger aura and spell ids
+    against the catalog. Today a typo means a rule silently never fires.  (done in Plan 2a)
 11. **"Cause chain links it to the rule threshold"** (§10.3): a rule that never fired is not in
     any chain. Use a custom observation check or a threshold annotation.
 12. **Point-targeted areas** (Goo on a location; area effects are always centred on a unit).
@@ -65,3 +65,21 @@ discovered mid-implementation.
    need a place in the summary.
 8. `action_failed.reason` is a free string from content handlers; restrict it to the text-key
    pattern (D6). `Unit.boundingRadius` is not read yet (melee range in Plan 2).
+
+## Found in the Plan 2a final review (for Plan 2b)
+
+- Area and cast max targets from a named stream (Gas Spore 2 or 3 targets chosen at launch).
+- Casting as another unit from scripts and hooks (Gastric Explosion, Inoculated).
+- An aura replacement scope for Blighted Spores: a different caster replaces the old instance with reason `replaced`, firing `afterRemove`.
+- Spell-hook order: AzerothCore `OnEffectHitTarget` runs before the effect's default handler; hooks are needed for units hit by area sub-effects. Decide whether Inoculated reduces the same Pungent Blight hit.
+- Periodic amounts that scale with stacks.
+- Attack-speed modifiers (Berserk).
+- Whether removing a spore by death triggers its effects.
+- Engage order and the engage "who".
+- Stale timer windows (EventMap time-until query).
+- `basePoints` are raw: value = basePoints + 1..dieSides.
+- Research before implementing:
+  - who applies the first ambient blight (Putricide's `ACTION_FESTERGUT_COMBAT` / the gas dummy);
+  - how Gas Spore's removal produces Blighted Spores 69290;
+  - the conditions rows for Inhale and Gaseous Blight targets;
+  - the exact `SelectTarget` distance rule (inclusive vs strict).

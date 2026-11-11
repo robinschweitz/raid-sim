@@ -43,12 +43,12 @@ export const trainingDummy: BossModule = {
       name: 'Training Dummy',
       kind: 'creature',
       role: 'boss',
-      level: 83,
+      level: data.num('training_dummy.level'),
       maxHealth: data.num('training_dummy.health'),
       pos: { x: 0, y: 0 },
-      speedYdPerSec: 0,
+      speedYdPerSec: data.num('training_dummy.speed_yd_s'),
       combatReach: data.num('training_dummy.combat_reach_yd'),
-      boundingRadius: 1,
+      boundingRadius: data.num('training_dummy.bounding_radius_yd'),
       melee: { minDamage: data.num('training_dummy.melee_min'), maxDamage: data.num('training_dummy.melee_max'), attackTimeMs: data.num('training_dummy.attack_time_ms') },
     });
     sim.catalog.addAura({ id: 'mark', durationMs: data.num('training_dummy.mark_duration_ms'), maxStacks: 1 });

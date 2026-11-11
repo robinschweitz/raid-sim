@@ -22,6 +22,7 @@ export const EN: Dictionary = {
   'event.phase_change': 'Phase: {phase}',
   'event.timer_window_cleared': '{ability} timer cleared',
   'event.timer_window': '{ability} expected between {earliestMs} and {latestMs}',
+  'event.threat_target_cleared': '{boss} has no target',
   'event.threat_target': '{boss} turns to {target}',
   'event.taunt': '{actor} taunts {boss}',
   'event.melee_avoided': '{target} avoids {source} ({result})',

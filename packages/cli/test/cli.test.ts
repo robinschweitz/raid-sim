@@ -25,6 +25,17 @@ describe('raid-sim run', () => {
     expect(JSON.parse(written.get('out/test/trace.json')!).schemaVersion).toBe(1);
   });
 
+  it('reports a write failure instead of throwing', () => {
+    const { io, lines } = memoryIo();
+    const failing: Io = { ...io, writeFile: () => { throw new Error('disk full'); } };
+    expect(runCli(['run', 'scenarios/training-dummy/clean.yaml', '--out', 'out/test'], failing)).toBe(1);
+    expect(lines.at(-1)?.replaceAll('\\', '/')).toBe('cannot write out/test/trace.json: disk full');
+    const noDir: Io = { ...io, mkdir: () => { throw new Error('read-only'); } };
+    const out = memoryIo();
+    expect(runCli(['run', 'scenarios/training-dummy/clean.yaml', '--out', 'out/test'], { ...out.io, mkdir: noDir.mkdir })).toBe(1);
+    expect(out.lines.at(-1)).toBe('cannot write out/test: read-only');
+  });
+
   it('overrides the seed', () => {
     const { io, written } = memoryIo();
     runCli(['run', 'scenarios/training-dummy/clean.yaml', '--out', 'o', '--seed', '7'], io);
