@@ -1,0 +1,56 @@
+import { DBC_FORMATS, SPELL_COLUMNS, loadClientSpellData } from '@raid/data';
+import { describe, expect, it } from 'vitest';
+import { buildWdbc } from '../../data/test/dbc-builder';
+import { dataVersionOf, extractSpells } from '../src/extract';
+
+function spell(id: number, name: string, triggers: number[] = []): (number | string)[] {
+  const row: (number | string)[] = Array.from({ length: DBC_FORMATS.Spell.length }, (_, i) => (DBC_FORMATS.Spell[i] === 's' ? '' : 0));
+  row[SPELL_COLUMNS.id] = id;
+  row[SPELL_COLUMNS.name] = name;
+  row[SPELL_COLUMNS.durationIndex] = 9;
+  row[SPELL_COLUMNS.rangeIndex] = 6;
+  triggers.forEach((t, i) => {
+    row[SPELL_COLUMNS.effect + i] = 64;
+    row[SPELL_COLUMNS.effectTriggerSpell + i] = t;
+    row[SPELL_COLUMNS.effectRadiusIndex + i] = 13;
+  });
+  return row;
+}
+
+function data() {
+  return loadClientSpellData({
+    Spell: buildWdbc(DBC_FORMATS.Spell, [spell(100, 'Root', [200]), spell(200, 'Triggered'), spell(101, 'Root 25'), spell(300, 'Unrelated')]),
+    SpellCastTimes: buildWdbc(DBC_FORMATS.SpellCastTimes, [[1, 0]]),
+    SpellDifficulty: buildWdbc(DBC_FORMATS.SpellDifficulty, [[7, 100, 101, 0, 0]]),
+    SpellDuration: buildWdbc(DBC_FORMATS.SpellDuration, [[9, 12000, 0, 12000]]),
+    SpellRadius: buildWdbc(DBC_FORMATS.SpellRadius, [[13, 8, 0, 8]]),
+    SpellRange: buildWdbc(DBC_FORMATS.SpellRange, [[6, 0, 0, 100, 100, 0]]),
+  });
+}
+
+const files = [{ name: 'Spell.dbc', sha256: 'a'.repeat(64), dataVersion: dataVersionOf('Spell.dbc', 'a'.repeat(64)) }];
+
+describe('extractSpells', () => {
+  it('follows triggered spells and difficulty variants, and nothing else', () => {
+    const x = extractSpells(data(), files, [100]);
+    expect(x.spells.map((s) => s.id)).toEqual([100, 101, 200]);
+    expect(x.missing).toEqual([]);
+  });
+
+  it('resolves durations, ranges and effect radii through their index tables', () => {
+    const root = extractSpells(data(), files, [100]).spells[0];
+    expect(root.durationMs).toEqual({ base: 12000, perLevel: 0, max: 12000 });
+    expect(root.rangeYd).toEqual({ minHostile: 0, minFriendly: 0, maxHostile: 100, maxFriendly: 100 });
+    expect(root.effects).toHaveLength(1);
+    expect(root.effects[0]).toMatchObject({ index: 0, effect: 64, triggerSpell: 200, radiusYd: { radius: 8, max: 8 } });
+    expect(root.difficultyVariants).toEqual([100, 101, 0, 0]);
+  });
+
+  it('reports ids that are not in the client data', () => {
+    expect(extractSpells(data(), files, [100, 999]).missing).toEqual([999]);
+  });
+
+  it('builds version strings from the file name and hash prefix', () => {
+    expect(dataVersionOf('Spell.dbc', 'abcdef0123456789'.repeat(4))).toBe('client-12340:Spell.dbc:abcdef012345');
+  });
+});
