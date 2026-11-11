@@ -115,11 +115,17 @@ describe('boss melee details', () => {
 });
 
 describe('melee outcome table', () => {
-  it('rounds each chance to whole hundredths', () => {
+  it('converts a 5.6 % chance to 560 hundredths', () => {
     const av = { missPct: 5.6, dodgePct: 0, parryPct: 0 };
     expect(meleeOutcome(0, av)).toBe('miss');
     expect(meleeOutcome(559, av)).toBe('miss');
     expect(meleeOutcome(560, av)).toBe('hit');
+  });
+  it('truncates each chance in 32-bit float arithmetic like int32(chance * 100.0f)', () => {
+    // fround(0.53) * 100 in float32 is 52.999996, so the table has 52 steps (rounding would give 53).
+    const av = { missPct: 0.53, dodgePct: 0, parryPct: 0 };
+    expect(meleeOutcome(51, av)).toBe('miss');
+    expect(meleeOutcome(52, av)).toBe('hit');
   });
   it('a 100 % single chance always produces that outcome', () => {
     for (const roll of [0, 5000, 9999]) {

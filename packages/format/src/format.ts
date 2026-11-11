@@ -27,7 +27,7 @@ export function createFormatter(trace: Trace, dict: Dictionary): (ev: TraceEvent
     return String(v);
   };
   return (ev) => {
-    const template = dict[`event.${ev.kind}`] ?? ev.kind;
+    const template = dict[ev.data.cleared === true ? `event.${ev.kind}_cleared` : `event.${ev.kind}`] ?? ev.kind;
     const text = template.replace(/\{(\w+)\}/g, (_m, key: string) => render(key, ev.data[key]));
     return `[${clock(ev.t)}] ${text}`;
   };

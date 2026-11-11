@@ -26,7 +26,7 @@ class TrainingDummyAI extends EventScriptedAI {
     if (id !== EVENT_MARK) return;
     const eligible = ctx.threatList().filter((p) => edgeDistance(ctx.self, p, ctx.sim.now) <= this.rangeYd);
     const picked = ctx.pick('mark', eligible, 2);
-    const ev = ctx.ai('mark', { eligible: eligible.map((u) => u.id).join(','), picked: picked.map((u) => u.id).join(',') });
+    const ev = ctx.ai('mark', { eligible: eligible.map((u) => u.id), picked: picked.map((u) => u.id) });
     for (const u of picked) applyAura(ctx.sim, 'mark', ctx.self.id, u.id, [ev]);
     ctx.publishTimer('mark', this.intervalMs, this.intervalMs, [ev]);
     this.events.schedule(EVENT_MARK, this.intervalMs);

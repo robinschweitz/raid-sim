@@ -20,6 +20,7 @@ export const EN: Dictionary = {
   'event.rule_fired': '{actor} reacts: {rule}',
   'event.action_failed': '{actor} fails {action} ({reason})',
   'event.phase_change': 'Phase: {phase}',
+  'event.timer_window_cleared': '{ability} timer cleared',
   'event.timer_window': '{ability} expected between {earliestMs} and {latestMs}',
   'event.threat_target': '{boss} turns to {target}',
   'event.taunt': '{actor} taunts {boss}',

@@ -136,7 +136,13 @@ export function runScenario(prepared: PreparedRun, registry: ContentRegistry): R
   } catch (e) {
     return setupFailure(`boss:${boss.id}`, e);
   }
-  for (const id of setup.mustKill ?? [setup.bossUnitId]) sim.mustKill.add(id);
+  const killSet = setup.mustKill ?? [setup.bossUnitId];
+  if (killSet.length === 0) return setupFailure(`boss:${boss.id}`, new Error('mustKill must not be empty'));
+  const existing = new Set(sim.sortedUnits().map((u) => u.id));
+  for (const id of killSet) {
+    if (!existing.has(id)) return setupFailure(`boss:${boss.id}`, new Error(`mustKill references unknown unit ${id}`));
+  }
+  for (const id of killSet) sim.mustKill.add(id);
   const handlers = new Map<string, ActionHandler>(BUILTIN_ACTIONS);
   if (plan.rules.some((r) => r.do.do === 'taunt')) {
     handlers.set(

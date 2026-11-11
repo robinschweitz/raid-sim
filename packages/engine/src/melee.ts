@@ -28,11 +28,19 @@ export function creatureMeleeDamage(p: CreatureMeleeInput): { min: number; max: 
   return { min: Math.trunc((p.baseDamage + ap) * mult), max: Math.trunc((p.baseDamage * 1.5 + ap) * mult) };
 }
 
-/** Attack table roll in hundredths of a percent (0..9999): miss, then dodge, then parry; each chance is rounded to whole hundredths first. */
+/**
+ * Unit::RollMeleeOutcomeAgainst converts each chance with `int32(chance * 100.0f)` (Unit.cpp ~3478 and ~3500): float32 arithmetic,
+ * truncated toward zero.
+ */
+function hundredths(pct: number): number {
+  return Math.trunc(Math.fround(Math.fround(pct) * 100));
+}
+
+/** Attack table roll in hundredths of a percent (0..9999): miss, then dodge, then parry; each chance is converted to whole hundredths first. */
 export function meleeOutcome(roll: number, avoidance: Avoidance): 'miss' | 'dodge' | 'parry' | 'hit' {
-  const miss = Math.round(avoidance.missPct * 100);
-  const dodge = miss + Math.round(avoidance.dodgePct * 100);
-  const parry = dodge + Math.round(avoidance.parryPct * 100);
+  const miss = hundredths(avoidance.missPct);
+  const dodge = miss + hundredths(avoidance.dodgePct);
+  const parry = dodge + hundredths(avoidance.parryPct);
   return roll < miss ? 'miss' : roll < dodge ? 'dodge' : roll < parry ? 'parry' : 'hit';
 }
 

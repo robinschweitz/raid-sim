@@ -195,4 +195,19 @@ describe('runScenario', () => {
       expect(problems[0]).toMatchObject({ file: 'boss:dummy', path: '(data)' });
     });
   });
+
+  describe('kill set validation', () => {
+    const withKill = (mustKill: readonly string[] | undefined): ContentRegistry => ({
+      ...registry,
+      bosses: new Map([['dummy', { ...dummyBoss, setup: (a) => ({ ...dummyBoss.setup(a), ...(mustKill === undefined ? {} : { mustKill }) }) }]]),
+    });
+    it('rejects a kill set naming an unknown unit', () => {
+      const r = runScenario(prepared(), withKill(['dummy', 'ghost']));
+      expect(r).toEqual({ outcome: 'invalid', problems: [{ file: 'boss:dummy', path: '(setup)', message: 'mustKill references unknown unit ghost' }] });
+    });
+    it('rejects an explicitly empty kill set', () => {
+      const r = runScenario(prepared(), withKill([]));
+      expect(r).toEqual({ outcome: 'invalid', problems: [{ file: 'boss:dummy', path: '(setup)', message: 'mustKill must not be empty' }] });
+    });
+  });
 });
