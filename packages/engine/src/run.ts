@@ -75,6 +75,23 @@ function checkContent(p: PreparedRun, reg: ContentRegistry): LoadProblem[] {
   return problems;
 }
 
+function checkCatalogReferences(p: PreparedRun, sim: Simulation): LoadProblem[] {
+  const problems: LoadProblem[] = [];
+  p.plan.rules.forEach((r, i) => {
+    const w = r.when;
+    if ((w.on === 'aura_applied' || w.on === 'aura_stacks') && !sim.catalog.hasAura(w.aura)) {
+      problems.push({ file: p.planFile, path: `rules.${i}.when.aura`, message: `unknown aura ${w.aura}` });
+    }
+    if (w.on === 'cast_start' && !sim.catalog.hasSpell(w.spell)) {
+      problems.push({ file: p.planFile, path: `rules.${i}.when.spell`, message: `unknown spell ${w.spell}` });
+    }
+    if (r.do.do === 'use_cooldown' && !sim.catalog.hasSpell(r.do.spell)) {
+      problems.push({ file: p.planFile, path: `rules.${i}.do.spell`, message: `unknown spell ${r.do.spell}` });
+    }
+  });
+  return problems;
+}
+
 function dataProblems(file: string, build: () => unknown): LoadProblem[] {
   try {
     build();
@@ -166,6 +183,9 @@ export function runScenario(prepared: PreparedRun, registry: ContentRegistry): R
       sim.addUnit({ ...playerBody, id: m.id, name: m.name, kind: 'player', role: m.role, approximate: true, maxHealth: m.maxHealth, armor: m.armor, avoidance: m.avoidance, threatMultiplier: m.threatMultiplier, pos });
     }
   }
+  // Every spell and aura the boss and the specs define now exists, so the plan's references can be checked.
+  const referenceProblems = checkCatalogReferences(prepared, sim);
+  if (referenceProblems.length > 0) return { outcome: 'invalid', problems: referenceProblems };
   rules.install();
   for (const c of controllers) c.install();
   const standins = roster.filter((m) => m.kind === 'standin');

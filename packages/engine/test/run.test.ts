@@ -114,6 +114,15 @@ describe('runScenario', () => {
     if (noSpec.outcome === 'invalid') expect(noSpec.problems.map((p) => p.message)).toContain('no model for spec test_caster');
   });
 
+  it('reports rule references to auras or spells the content does not define', () => {
+    const typo = PLAN_YAML.replace('aura: mark, target: self', 'aura: mrak, target: self');
+    const r = runScenario(prepared([], typo), registry);
+    expect(r.outcome).toBe('invalid');
+    if (r.outcome === 'invalid') {
+      expect(r.problems).toEqual([{ file: 'dummy-plan.yaml', path: 'rules.0.when.aura', message: 'unknown aura mrak' }]);
+    }
+  });
+
   it('results do not depend on roster or rule `who` list order (§8.7)', () => {
     const base = prepared();
     const reversed: PreparedRun = {
