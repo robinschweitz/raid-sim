@@ -8,6 +8,8 @@
     "test": "vitest run --passWithNoTests",
     "typecheck": "tsc -p tsconfig.json",
     "sim": "tsx packages/cli/src/main.ts",
+    "golden": "tsx packages/cli/src/golden-cli.ts",
+    "golden:update": "tsx packages/cli/src/golden-cli.ts --update",
     "extract-spells": "tsx packages/tools/src/extract-cli.ts"
   },
   "devDependencies": {
