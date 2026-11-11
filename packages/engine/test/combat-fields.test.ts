@@ -19,6 +19,8 @@ describe('combat fields', () => {
     expect(mk({ melee: { minDamage: 1, maxDamage: 5, attackTimeMs: 0 } })).toThrow(/melee/);
     expect(mk({ threatMultiplier: Number.NaN })).toThrow(/threat multiplier/);
     expect(mk({ melee: { minDamage: 1, maxDamage: Infinity, attackTimeMs: 2000 } })).toThrow(/melee/);
+    expect(mk({ melee: { minDamage: 1.5, maxDamage: 5, attackTimeMs: 2000 } })).toThrow(/melee/);
+    expect(mk({ melee: { minDamage: 1, maxDamage: 5.5, attackTimeMs: 2000 } })).toThrow(/melee/);
   });
 
   it('stores valid non-default values', () => {

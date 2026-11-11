@@ -1,7 +1,7 @@
 import { damageMultiplier } from './modifiers';
 import { withinMeleeRange } from './movement';
 import type { Simulation } from './sim';
-import type { Unit } from './units';
+import type { Avoidance, Unit } from './units';
 
 /** Unit::CalcArmorReducedDamage (Unit.cpp 2233–2300): reduction = r / (1 + r), r = 0.1 armor / (8.5 L' + 40), capped at 75 %. */
 export function armorReduction(armor: number, attackerLevel: number): number {
@@ -28,6 +28,14 @@ export function creatureMeleeDamage(p: CreatureMeleeInput): { min: number; max: 
   return { min: Math.trunc((p.baseDamage + ap) * mult), max: Math.trunc((p.baseDamage * 1.5 + ap) * mult) };
 }
 
+/** Attack table roll in hundredths of a percent (0..9999): miss, then dodge, then parry; each chance is rounded to whole hundredths first. */
+export function meleeOutcome(roll: number, avoidance: Avoidance): 'miss' | 'dodge' | 'parry' | 'hit' {
+  const miss = Math.round(avoidance.missPct * 100);
+  const dodge = miss + Math.round(avoidance.dodgePct * 100);
+  const parry = dodge + Math.round(avoidance.parryPct * 100);
+  return roll < miss ? 'miss' : roll < dodge ? 'dodge' : roll < parry ? 'parry' : 'hit';
+}
+
 /**
  * DoMeleeAttackIfReady: one swing when the swing timer is ready, the attacker is not casting and the victim is in melee range.
  * Outcomes: miss, dodge, parry from the victim's avoidance; no crits, crushing, glancing or block (A-022).
@@ -38,14 +46,11 @@ export function meleeIfReady(sim: Simulation, attackerId: string, victim: Unit |
   if (sim.now < a.nextSwingMs || !withinMeleeRange(a, victim, sim.now)) return null;
   a.nextSwingMs = sim.now + a.melee.attackTimeMs;
   const rng = sim.rng.stream(`unit:${a.id}.melee`);
-  const roll = rng.int(0, 9999);
-  const av = victim.avoidance;
-  const miss = av.missPct * 100;
-  const dodge = miss + av.dodgePct * 100;
-  const parry = dodge + av.parryPct * 100;
-  const result = roll < miss ? 'miss' : roll < dodge ? 'dodge' : roll < parry ? 'parry' : 'hit';
+  const result = meleeOutcome(rng.int(0, 9999), victim.avoidance);
   if (result !== 'hit') return sim.emit('melee_avoided', { source: a.id, target: victim.id, result }, causes);
   const raw = rng.int(a.melee.minDamage, a.melee.maxDamage);
-  const amount = raw * (1 - armorReduction(victim.armor, a.level)) * damageMultiplier(sim, a.id, victim.id, 'physical');
+  // Unit.cpp CalcArmorReducedDamage, end of function: `return uint32(ceil(damage * (1 - armorReduction)))`; sim.damage rounds only after the modifiers.
+  const mitigated = Math.ceil(raw * (1 - armorReduction(victim.armor, a.level)));
+  const amount = mitigated * damageMultiplier(sim, a.id, victim.id, 'physical');
   return sim.damage(victim.id, amount, { sourceId: a.id, ability: 'melee', school: 'physical' }, causes);
 }
