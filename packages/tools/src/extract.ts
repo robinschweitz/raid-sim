@@ -211,3 +211,12 @@ export function checkSaveDbcDir(repoRoot: string, dir: string): void {
     throw new Error(`--save-dbc ${dir} is inside the repository: use a folder outside it or under client-data/`);
   }
 }
+
+/** Output files must not be written into the (read-only) client folder. */
+export function checkOutsideClient(clientDir: string, path: string, flag: string): void {
+  const fold = (p: string): string => (process.platform === 'win32' ? p.toLowerCase() : p);
+  const rel = relative(fold(resolve(clientDir)), fold(resolve(path)));
+  if (rel === '' || (!rel.startsWith(`..${sep}`) && rel !== '..' && !isAbsolute(rel))) {
+    throw new Error(`${flag} ${path}: refusing to write inside the client folder`);
+  }
+}

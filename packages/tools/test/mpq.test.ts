@@ -140,6 +140,47 @@ describe('openArchive', () => {
   });
 });
 
+describe('malformed archives', () => {
+  const file: SyntheticFile = { name: NAME, data: sample(1), storage: 'raw' };
+
+  it('rejects sector size shifts above 15', () => {
+    expect(() => openArchive('shift.MPQ', bytesSource(buildMpq([file], { sectorShift: 16 })))).toThrow('shift.MPQ: MPQ sector size shift 16 is not supported');
+    expect(() => openArchive('shift.MPQ', bytesSource(buildMpq([file], { sectorShift: 32 })))).toThrow(/sector size shift 32 is not supported/);
+    expect(openArchive('ok.MPQ', bytesSource(buildMpq([file], { sectorShift: 15 }))).sectorSize).toBe(512 << 15);
+  });
+
+  it('rejects huge file sizes before allocating', () => {
+    for (const storage of ['raw', 'single', 'zlib', 'single-zlib'] as const) {
+      const a = openArchive('big.MPQ', bytesSource(buildMpq([{ ...file, storage, declaredSize: 0xffffffff }])));
+      expect(() => a.read(NAME), storage).toThrow(`${NAME} in big.MPQ is too large (4294967295 bytes)`);
+    }
+  });
+
+  it('rejects uncompressed files that do not fit in the archive', () => {
+    const a = openArchive('short.MPQ', bytesSource(buildMpq([{ ...file, storage: 'single', declaredSize: 100000 }])));
+    expect(() => a.read(NAME)).toThrow(`${NAME} in short.MPQ is too large (100000 bytes)`);
+  });
+
+  it('maps an inflate that exceeds the sector size to a length error', () => {
+    expect(() => only({ storage: 'zlib', inflateBomb: true }).read(NAME)).toThrow(`${NAME} in test.MPQ: sector 0 inflates to more than 512 bytes, expected 512`);
+    expect(() => only({ storage: 'single-zlib', inflateBomb: true }).read(NAME)).toThrow(/inflates to more than 1501 bytes, expected 1501/);
+  });
+
+  it('rejects empty stored sectors', () => {
+    expect(() => only({ storage: 'zlib', emptySectors: true }).read(NAME)).toThrow(`${NAME} in test.MPQ: sector 0 is empty`);
+    expect(() => only({ storage: 'single-zlib', emptySectors: true }).read(NAME)).toThrow(`${NAME} in test.MPQ: sector 0 is empty`);
+  });
+
+  it('reads a format 1 archive (44-byte header, zero hi-block table)', () => {
+    const archive = buildMpq([{ name: NAME, data: sample(5), storage: 'zlib', encrypt: true, fixKey: true }, { name: 'b.txt', data: sample(6), storage: 'raw' }], { v1: true });
+    expect(new DataView(archive.buffer, archive.byteOffset).getUint32(4, true)).toBe(44);
+    const a = openArchive('v1.MPQ', bytesSource(archive));
+    expect(a.formatVersion).toBe(1);
+    expect(a.read(NAME)).toEqual(sample(5));
+    expect(a.read('b.txt')).toEqual(sample(6));
+  });
+});
+
 describe('findInArchives', () => {
   const older = { name: 'Data/common.MPQ', source: bytesSource(buildMpq([{ name: NAME, data: sample(1), storage: 'zlib' }, { name: 'only-old.txt', data: sample(2), storage: 'raw' }])) };
   const newer = { name: 'Data/patch.MPQ', source: bytesSource(buildMpq([{ name: NAME, data: sample(3), storage: 'raw' }])) };
@@ -186,10 +227,15 @@ describe('client archives on disk', () => {
     expect(clientArchiveOrder(root, 'deDE')[0]!.path).toBe(join(root, 'Data', 'deDE', 'patch-dede-3.MPQ'));
   });
 
-  it('puts extra numbered patches first, highest number first', () => {
-    const root = client(['Data/patch.MPQ', 'Data/patch-3.MPQ', 'Data/patch-12.MPQ', 'Data/patch-4.MPQ', 'Data/deDE/patch-deDE.MPQ', 'Data/deDE/patch-deDE-5.MPQ']);
+  it('puts custom base patches (patch-4 and up, patch-<letter>) before the locale group, newest first', () => {
+    const root = client([
+      'Data/patch.MPQ', 'Data/patch-2.MPQ', 'Data/patch-3.MPQ', 'Data/patch-12.MPQ', 'Data/patch-4.MPQ', 'Data/patch-A.MPQ', 'Data/patch-b.MPQ',
+      'Data/patch-ab.MPQ', 'Data/deDE/patch-deDE.MPQ', 'Data/deDE/patch-deDE-5.MPQ',
+    ]);
     expect(clientArchiveOrder(root, 'deDE').map((a) => a.name)).toEqual([
-      'Data/deDE/patch-deDE-5.MPQ', 'Data/deDE/patch-deDE.MPQ', 'Data/patch-12.MPQ', 'Data/patch-4.MPQ', 'Data/patch-3.MPQ', 'Data/patch.MPQ',
+      'Data/patch-b.MPQ', 'Data/patch-A.MPQ', 'Data/patch-12.MPQ', 'Data/patch-4.MPQ',
+      'Data/deDE/patch-deDE-5.MPQ', 'Data/deDE/patch-deDE.MPQ',
+      'Data/patch-3.MPQ', 'Data/patch-2.MPQ', 'Data/patch.MPQ',
     ]);
   });
 

@@ -15,6 +15,12 @@ export interface SyntheticFile {
   readonly fakeMask?: number;
   /** Extra block flags (for example DELETE_MARKER or PATCH_FILE). */
   readonly extraFlags?: number;
+  /** Store every compressed sector with no bytes at all. */
+  readonly emptySectors?: boolean;
+  /** Store compressed sectors that inflate to 8 times their real size. */
+  readonly inflateBomb?: boolean;
+  /** Write this file size into the block table instead of the real one. */
+  readonly declaredSize?: number;
 }
 
 export interface BuildOptions {
@@ -24,6 +30,8 @@ export interface BuildOptions {
   readonly userData?: boolean;
   /** Hash table entries (power of two, default 16). */
   readonly hashTableSize?: number;
+  /** Write a format 1 archive: 44-byte header and an all-zero hi-block table. */
+  readonly v1?: boolean;
 }
 
 function words(bytes: Uint8Array): Uint32Array {
@@ -41,7 +49,15 @@ function encryptBytes(bytes: Uint8Array, key: number): Uint8Array {
   return out;
 }
 
-function compressSector(sector: Uint8Array, fakeMask: number | undefined): Uint8Array {
+function compressSector(sector: Uint8Array, fakeMask: number | undefined, f?: SyntheticFile): Uint8Array {
+  if (f?.emptySectors) return new Uint8Array(0);
+  if (f?.inflateBomb) {
+    const z = deflateSync(new Uint8Array(sector.length * 8));
+    const out = new Uint8Array(z.length + 1);
+    out[0] = 0x02;
+    out.set(z, 1);
+    return out;
+  }
   if (fakeMask !== undefined) return Uint8Array.from([fakeMask, 1, 2, 3]);
   const z = deflateSync(sector);
   if (z.length + 1 >= sector.length) return sector;
@@ -73,7 +89,7 @@ function storeFile(f: SyntheticFile, filePos: number, sectorSize: number): { sto
     let body = f.data;
     if (f.storage === 'single-zlib') {
       flags |= MPQ_FLAGS.COMPRESS;
-      body = compressSector(f.data, f.fakeMask);
+      body = compressSector(f.data, f.fakeMask, f);
     }
     return { stored: enc(body, key), flags };
   }
@@ -81,7 +97,7 @@ function storeFile(f: SyntheticFile, filePos: number, sectorSize: number): { sto
   for (let o = 0; o < f.data.length; o += sectorSize) sectors.push(f.data.subarray(o, Math.min(o + sectorSize, f.data.length)));
   if (f.storage === 'raw') return { stored: concat(sectors.map((s, i) => enc(s, key + i))), flags };
   flags |= MPQ_FLAGS.COMPRESS;
-  const bodies = sectors.map((s, i) => enc(compressSector(s, f.fakeMask), key + i));
+  const bodies = sectors.map((s, i) => enc(compressSector(s, f.fakeMask, f), key + i));
   const table = new Uint32Array(sectors.length + 1);
   table[0] = table.length * 4;
   bodies.forEach((b, i) => (table[i + 1] = table[i]! + b.length));
@@ -95,11 +111,12 @@ export function buildMpq(files: readonly SyntheticFile[], opts: BuildOptions = {
   const sectorSize = 512 << sectorShift;
   const hashSize = opts.hashTableSize ?? 16;
   const parts: Uint8Array[] = [];
-  let pos = 32;
+  const headerSize = opts.v1 ? 44 : 32;
+  let pos = headerSize;
   const blocks: number[] = [];
   for (const f of files) {
     const { stored, flags } = storeFile(f, pos, sectorSize);
-    blocks.push(pos, stored.length, f.data.length, flags);
+    blocks.push(pos, stored.length, f.declaredSize ?? f.data.length, flags);
     parts.push(stored);
     pos += stored.length;
   }
@@ -117,18 +134,21 @@ export function buildMpq(files: readonly SyntheticFile[], opts: BuildOptions = {
   encryptBlock(block, hashString('(block table)', 3));
   const hashPos = pos;
   const blockPos = hashPos + hash.length * 4;
-  const archiveSize = blockPos + block.length * 4;
-  const header = new DataView(new ArrayBuffer(32));
+  const hiBlock = new Uint8Array(opts.v1 ? files.length * 2 : 0);
+  const hiPos = blockPos + block.length * 4;
+  const archiveSize = hiPos + hiBlock.length;
+  const header = new DataView(new ArrayBuffer(headerSize));
   header.setUint32(0, 0x1a51504d, true);
-  header.setUint32(4, 32, true);
+  header.setUint32(4, headerSize, true);
   header.setUint32(8, archiveSize, true);
-  header.setUint16(12, 0, true);
+  header.setUint16(12, opts.v1 ? 1 : 0, true);
   header.setUint16(14, sectorShift, true);
   header.setUint32(16, hashPos, true);
   header.setUint32(20, blockPos, true);
   header.setUint32(24, hashSize, true);
   header.setUint32(28, files.length, true);
-  const archive = concat([new Uint8Array(header.buffer), ...parts, new Uint8Array(hash.buffer), new Uint8Array(block.buffer)]);
+  if (opts.v1) header.setUint32(32, hiPos, true); // hi-block table position (low dword); the high parts stay 0
+  const archive = concat([new Uint8Array(header.buffer), ...parts, new Uint8Array(hash.buffer), new Uint8Array(block.buffer), hiBlock]);
   if (!opts.userData) return archive;
   const user = new DataView(new ArrayBuffer(512));
   user.setUint32(0, 0x1b51504d, true);

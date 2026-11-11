@@ -154,6 +154,10 @@ const MAGIC_HEADER = 0x1a51504d; // 'MPQ\x1A'
 const MAGIC_USER_DATA = 0x1b51504d; // 'MPQ\x1B'
 const HASH_EMPTY = 0xffffffff;
 const HASH_DELETED = 0xfffffffe;
+/** Largest sector size shift we accept (512 << 15 = 16 MiB); anything above is a corrupt header. */
+const MAX_BLOCK_SIZE_SHIFT = 15;
+/** Largest file we are willing to allocate a buffer for (DBC files are a few MB at most). */
+const MAX_FILE_SIZE = 256 * 1024 * 1024;
 /** How far into a file we look for the header (at 512-byte steps). */
 const HEADER_SCAN_LIMIT = 64 * 1024 * 1024;
 
@@ -220,7 +224,10 @@ export function openArchive(name: string, source: ByteSource): MpqArchive {
   const formatVersion = u16(header, 12);
   if (formatVersion > 1) throw new Error(`${name}: MPQ format version ${formatVersion} is not supported (only 0 and 1)`);
   if (formatVersion === 1 && (headerSize < 44 || header.length < 44)) throw new Error(`${name}: format 1 header is too short (${headerSize} bytes)`);
-  const sectorSize = 512 << u16(header, 14);
+  const blockSizeShift = u16(header, 14);
+  if (blockSizeShift > MAX_BLOCK_SIZE_SHIFT) throw new Error(`${name}: MPQ sector size shift ${blockSizeShift} is not supported`);
+  const sectorSize = 512 << blockSizeShift;
+  if (!(sectorSize > 0)) throw new Error(`${name}: invalid sector size ${sectorSize}`);
   const hi = (o: number): number => (formatVersion === 1 ? u16(header, o) * 0x100000000 : 0);
   const hashPos = base + u32(header, 16) + hi(40);
   const blockPos = base + u32(header, 20) + hi(42);
@@ -272,6 +279,7 @@ export function openArchive(name: string, source: ByteSource): MpqArchive {
   }
 
   function sector(fileName: string, index: number, stored: Uint8Array, expected: number, compressed: boolean): Uint8Array {
+    if (stored.length === 0) throw new Error(`${fileName} in ${name}: sector ${index} is empty`);
     if (!compressed || stored.length >= expected) return stored.subarray(0, expected);
     const mask = stored[0]!;
     if (mask !== 0x02) {
@@ -281,9 +289,12 @@ export function openArchive(name: string, source: ByteSource): MpqArchive {
     }
     let out: Uint8Array;
     try {
-      const z = inflateSync(stored.subarray(1));
+      const z = inflateSync(stored.subarray(1), { maxOutputLength: expected });
       out = new Uint8Array(z.buffer, z.byteOffset, z.length);
     } catch (e) {
+      if (e instanceof RangeError && (e as NodeJS.ErrnoException).code === 'ERR_BUFFER_TOO_LARGE') {
+        throw new Error(`${fileName} in ${name}: sector ${index} inflates to more than ${expected} bytes, expected ${expected}`);
+      }
       throw new Error(`${fileName} in ${name}: sector ${index}: zlib data is broken (${e instanceof Error ? e.message : String(e)})`);
     }
     if (out.length !== expected) throw new Error(`${fileName} in ${name}: sector ${index} inflates to ${out.length} bytes, expected ${expected}`);
@@ -298,8 +309,11 @@ export function openArchive(name: string, source: ByteSource): MpqArchive {
     if (flags & MPQ_FLAGS.PATCH_FILE) throw new Error(`${fileName} in ${name} is an incremental patch file: not supported`);
     if (flags & MPQ_FLAGS.IMPLODE) throw new Error(`${fileName} in ${name} is imploded (PKWARE): not supported; export the file with an MPQ editor instead`);
     if (fileSize === 0) return new Uint8Array(0);
+    if (fileSize > MAX_FILE_SIZE) throw new Error(`${fileName} in ${name} is too large (${fileSize} bytes)`);
     const encrypted = (flags & MPQ_FLAGS.ENCRYPTED) !== 0;
     const compressed = (flags & MPQ_FLAGS.COMPRESS) !== 0;
+    // Stored uncompressed, the data takes exactly fileSize bytes and must lie inside the archive.
+    if (!compressed && e.offset + fileSize > source.size) throw new Error(`${fileName} in ${name} is too large (${fileSize} bytes)`);
     const key = encrypted ? fileKey(fileName, e.blockFilePos, fileSize, flags) : 0;
     const decrypt = (bytes: Uint8Array, k: number): Uint8Array => (encrypted ? decryptBytes(bytes, k >>> 0) : bytes);
 
@@ -422,9 +436,22 @@ export function clientArchiveOrder(clientDir: string, locale: string): ClientArc
     `expansion-locale-${l}.mpq`,
     `locale-${l}.mpq`,
   ]);
-  const baseNames = ordered(entriesOf(dataDir), /^patch-(\d+)\.mpq$/, ['patch.mpq', 'lichking.mpq', 'expansion.mpq', 'common-2.mpq', 'common.mpq']);
+  const dataNames = entriesOf(dataDir);
+  // Custom base patches follow the commonly documented client load order (custom patches are loaded
+  // last, so they win): patch-N with N >= 4, then patch-<letter>, which sorts after the digits, so
+  // newest first the letters come before the numbers. The owner's client has none, so this does not
+  // affect the data extracted so far.
+  const custom = dataNames
+    .map((n) => ({ n, m: /^patch-(?:(\d+)|([a-z]))\.mpq$/.exec(n.toLowerCase()) }))
+    .filter((x): x is { n: string; m: RegExpExecArray } => x.m !== null && (x.m[2] !== undefined || Number(x.m[1]) >= 4))
+    .sort((a, b) => (a.m[2] !== undefined ? 1000 + a.m[2].charCodeAt(0) : Number(a.m[1])) - (b.m[2] !== undefined ? 1000 + b.m[2].charCodeAt(0) : Number(b.m[1])))
+    .reverse()
+    .map((x) => x.n);
+  const stock = new Map(dataNames.map((n) => [n.toLowerCase(), n]));
+  const stockNames = ['patch-3.mpq', 'patch-2.mpq', 'patch.mpq', 'lichking.mpq', 'expansion.mpq', 'common-2.mpq', 'common.mpq'].flatMap((f) => (stock.has(f) ? [stock.get(f)!] : []));
   return [
+    ...custom.map((n) => ({ name: `${data}/${n}`, path: join(dataDir, n) })),
     ...locNames.map((n) => ({ name: `${data}/${loc}/${n}`, path: join(dataDir, loc, n) })),
-    ...baseNames.map((n) => ({ name: `${data}/${n}`, path: join(dataDir, n) })),
+    ...stockNames.map((n) => ({ name: `${data}/${n}`, path: join(dataDir, n) })),
   ];
 }

@@ -2,7 +2,7 @@ import { join, resolve } from 'node:path';
 import { DBC_FORMATS, SPELL_COLUMNS, loadClientSpellData } from '@raid/data';
 import { describe, expect, it } from 'vitest';
 import { buildWdbc } from '../../data/test/dbc-builder';
-import { checkSaveDbcDir, dataVersionOf, extractSpells, findDbcFiles, parseSpellIds, pickLocale } from '../src/extract';
+import { checkOutsideClient, checkSaveDbcDir, dataVersionOf, extractSpells, findDbcFiles, parseSpellIds, pickLocale } from '../src/extract';
 
 function spell(id: number, name: string, triggers: number[] = []): (number | string)[] {
   const row: (number | string)[] = Array.from({ length: DBC_FORMATS.Spell.length }, (_, i) => (DBC_FORMATS.Spell[i] === 's' ? '' : 0));
@@ -119,5 +119,22 @@ describe('checkSaveDbcDir', () => {
     for (const bad of [repo, join(repo, 'packages'), join(repo, 'client-data-x'), join(repo, 'docs', '..', 'out')]) {
       expect(() => checkSaveDbcDir(repo, bad), bad).toThrow(/is inside the repository: use a folder outside it or under client-data\//);
     }
+  });
+});
+
+describe('checkOutsideClient', () => {
+  const root = resolve('/');
+  const client = join(root, 'games', 'WoW');
+  it('allows paths outside the client folder', () => {
+    expect(() => checkOutsideClient(client, join(root, 'games', 'WoW-out', 'x.json'), '--out')).not.toThrow();
+    expect(() => checkOutsideClient(client, join(root, 'out.json'), '--out')).not.toThrow();
+  });
+  it('refuses the client folder and anything inside it', () => {
+    for (const bad of [client, join(client, 'out.json'), join(client, 'Data', 'dbc'), join(client, 'Data', '..', 'x')]) {
+      expect(() => checkOutsideClient(client, bad, '--out'), bad).toThrow('refusing to write inside the client folder');
+    }
+  });
+  it.runIf(process.platform === 'win32')('compares case-insensitively on Windows', () => {
+    expect(() => checkOutsideClient(client, join(client.toUpperCase(), 'out.json'), '--save-dbc')).toThrow(/--save-dbc .*refusing to write inside the client folder/);
   });
 });

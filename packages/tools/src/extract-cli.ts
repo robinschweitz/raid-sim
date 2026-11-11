@@ -3,7 +3,7 @@ import { mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { DBC_FORMATS, DBC_NAMES, loadClientSpellData, parseWdbc, type DbcName } from '@raid/data';
-import { checkSaveDbcDir, dataVersionOf, extractSpells, findDbcFiles, parseSpellIds, pickLocale, type ExtractedFile } from './extract';
+import { checkOutsideClient, checkSaveDbcDir, dataVersionOf, extractSpells, findDbcFiles, parseSpellIds, pickLocale, type ExtractedFile } from './extract';
 import { clientArchiveOrder, fileByteSource, findInArchives, installedLocales, type FileByteSource } from './mpq';
 
 const USAGE = [
@@ -93,6 +93,10 @@ function run(): void {
   const outFile = arg('out');
   const saveDir = optional('save-dbc');
   if (saveDir !== undefined) checkSaveDbcDir(REPO_ROOT, saveDir);
+  if (clientDir !== undefined) {
+    checkOutsideClient(clientDir, outFile, '--out');
+    if (saveDir !== undefined) checkOutsideClient(clientDir, saveDir, '--save-dbc');
+  }
 
   const raw = clientDir !== undefined ? fromClient(clientDir, optional('locale')) : fromFolder(dbcDir!);
   const bytes = {} as Record<DbcName, Uint8Array>;
