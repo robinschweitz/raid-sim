@@ -39,14 +39,23 @@ export function parseWdbc(bytes: Uint8Array, fmt: string): DbcTable {
   if (width !== recordSize) throw new DbcFormatError(`format record size ${width} does not match file record size ${recordSize}`);
   const indexColumn = chars.indexOf('n');
   if (indexColumn < 0) throw new DbcFormatError('format has no index column (n)');
+  if (chars.lastIndexOf('n') !== indexColumn) throw new DbcFormatError('format has more than one index column (n)');
   const stringStart = 20 + recordCount * recordSize;
   if (stringStart + stringSize > bytes.byteLength) throw new DbcFormatError('file is truncated');
-  const decoder = new TextDecoder('utf-8');
+  if (stringStart + stringSize < bytes.byteLength) {
+    throw new DbcFormatError(`file has ${bytes.byteLength - stringStart - stringSize} unexpected trailing bytes`);
+  }
+  const decoder = new TextDecoder('utf-8', { fatal: true });
   const readString = (offset: number): string => {
     if (offset >= stringSize) throw new DbcFormatError(`string offset ${offset} outside the string block`);
     let end = stringStart + offset;
     while (end < stringStart + stringSize && bytes[end] !== 0) end++;
-    return decoder.decode(bytes.subarray(stringStart + offset, end));
+    if (end >= stringStart + stringSize) throw new DbcFormatError(`unterminated string at offset ${offset}`);
+    try {
+      return decoder.decode(bytes.subarray(stringStart + offset, end));
+    } catch {
+      throw new DbcFormatError(`invalid UTF-8 in string at offset ${offset}`);
+    }
   };
   const rows = new Map<number, DbcRow>();
   for (let r = 0; r < recordCount; r++) {
@@ -69,8 +78,13 @@ export function parseWdbc(bytes: Uint8Array, fmt: string): DbcTable {
         case 'b':
           row.push(view.getUint8(o));
           break;
-        default:
+        case 'x':
+        case 'd':
+        case 'X':
           row.push(null);
+          break;
+        default:
+          throw new DbcFormatError(`unreachable format character ${c}`);
       }
       o += fieldWidth(c);
     }
