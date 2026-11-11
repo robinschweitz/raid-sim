@@ -1,0 +1,9 @@
+{
+  "name": "@raid/cli",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "license": "GPL-2.0-only",
+  "exports": { ".": "./src/cli.ts" },
+  "dependencies": { "@raid/content": "workspace:*", "@raid/engine": "workspace:*", "@raid/format": "workspace:*" }
+}

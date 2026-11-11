@@ -21,6 +21,18 @@ importers:
         specifier: 2.1.8
         version: 2.1.8(@types/node@22.10.2)
 
+  packages/cli:
+    dependencies:
+      '@raid/content':
+        specifier: workspace:*
+        version: link:../content
+      '@raid/engine':
+        specifier: workspace:*
+        version: link:../engine
+      '@raid/format':
+        specifier: workspace:*
+        version: link:../format
+
   packages/content:
     dependencies:
       '@raid/data':
