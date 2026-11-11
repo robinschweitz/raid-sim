@@ -3,32 +3,41 @@
 This is done once, on your own machine, with your own 3.3.5a (build 12340) client. The `.dbc`
 files are Blizzard game data and are never committed; only the numbers we need end up in the repo.
 
-## 1. Get the six DBC files
+## 1. Run the extraction straight from the client
 
-You need these files from the client's `DBFilesClient` folder (inside the client's MPQ archives):
-`Spell.dbc`, `SpellCastTimes.dbc`, `SpellDifficulty.dbc`, `SpellDuration.dbc`, `SpellRadius.dbc`,
-`SpellRange.dbc`.
+The tool reads the six DBC files it needs (`Spell.dbc`, `SpellCastTimes.dbc`, `SpellDifficulty.dbc`,
+`SpellDuration.dbc`, `SpellRadius.dbc`, `SpellRange.dbc`) directly from the client's MPQ archives,
+read-only. Run it from the repository folder:
 
-Two common ways:
-- **AzerothCore's extractor**: the `map_extractor` tool from an AzerothCore build writes all DBC files
-  of a client into a `dbc` folder (it is the same tool server owners use, so the files are exactly what
-  the server reads).
-- **An MPQ editor**: open the client's `Data/<locale>/` archives (the locale archive and its patch
-  archives, applied in order) and export `DBFilesClient/<name>.dbc`. The latest patch archive's copy
-  wins.
-  For a German client the archives are under `Data/deDE/`: `locale-deDE.MPQ`, then `patch-deDE.MPQ`,
-  `patch-deDE-2.MPQ`, `patch-deDE-3.MPQ`; the highest patch wins.
+    corepack pnpm extract-spells --client E:\WoW_3.3.5a_rising-gods.de --locale deDE --spells <spell ids> --out packages/content/data/spelldata/festergut.json
 
-Put the six files into one folder outside the repository, for example `C:\wow-dbc\`. The folder should be outside the repository (or in `client-data/`, which git ignores). German and other localized clients work: spell names are taken from the client's own language.
+In Windows PowerShell or cmd, write `corepack pnpm` (plain `pnpm` is usually not on the path there) and
+run the command from the repository folder.
 
-## 2. Run the extraction
-
-    pnpm extract-spells --dbc C:\wow-dbc --spells <spell ids> --out packages/content/data/spelldata/festergut.json
+- `--locale` picks the language folder under `Data\` (`deDE`, `enGB`, ...). Spell names come out in that
+  language. It may be left out when only one locale folder is installed.
+- The archives are searched newest first, the way the client applies them: `Data\<locale>\patch-<locale>-3.MPQ`,
+  `-2`, `patch-<locale>.MPQ`, `lichking-locale-`, `expansion-locale-`, `locale-<locale>.MPQ`, then
+  `Data\patch-3.MPQ` ... `common.MPQ` (extra numbered server patches first). For each file the command
+  prints which archive it came from; the output JSON records it as `archive`.
+- `--save-dbc <folder>` also writes the six extracted files, for cross-checks with other tools. The
+  folder must be outside the repository or under `client-data\` (which git ignores).
 
 Plan 2b lists the Festergut spell ids. The command prints one version string per file, for example
 `client-12340:Spell.dbc:0123456789ab`, and any id it could not find.
 
-## 3. Pin the versions
+### Fallback: loose DBC files
+
+If the command reports a compression it does not support (it names the file, the archive and the
+compression), export the six files with an MPQ editor (from the archives listed above; the newest
+archive's copy wins) or with AzerothCore's `map_extractor`, put them in one folder outside the
+repository (or in `client-data\`), and run:
+
+    corepack pnpm extract-spells --dbc C:\wow-dbc --spells <spell ids> --out packages/content/data/spelldata/festergut.json
+
+Both ways give the same hashes and the same output for the same client files.
+
+## 2. Pin the versions
 
 Add the printed version strings to `PINS.spellDataVersions` in `packages/data/src/pins.ts` and to the
 "Spell data" section of `docs/sources.md` together with the full SHA-256 hashes, then commit the JSON
