@@ -7,7 +7,8 @@ export interface AuraView {
   readonly aura: string;
   readonly caster: string;
   readonly stacks: number;
-  readonly remainingMs: number;
+  /** Null for a permanent aura. */
+  readonly remainingMs: number | null;
 }
 
 export interface CastView {
@@ -49,7 +50,7 @@ export interface ActorView {
 function unitView(u: Unit, now: number): UnitView {
   const p = positionAt(u, now);
   const auras = [...u.auras.values()]
-    .map((a) => Object.freeze({ aura: a.auraId, caster: a.casterId, stacks: a.stacks, remainingMs: a.expiresMs - now }))
+    .map((a) => Object.freeze({ aura: a.auraId, caster: a.casterId, stacks: a.stacks, remainingMs: Number.isFinite(a.expiresMs) ? a.expiresMs - now : null }))
     .sort((a, b) => compareStrings(a.aura, b.aura) || compareStrings(a.caster, b.caster));
   return Object.freeze({
     id: u.id,

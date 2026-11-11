@@ -1,5 +1,6 @@
 import { applyAura, removeAuras } from './auras';
 import type { Effect } from './catalog';
+import { damageMultiplier } from './modifiers';
 import { pointToEdge, positionAt } from './movement';
 import type { Simulation } from './sim';
 import { threatFor } from './threat';
@@ -26,7 +27,8 @@ function applyEffect(sim: Simulation, e: Effect, ctx: EffectContext): void {
   switch (e.type) {
     case 'damage': {
       if (!target.alive) return;
-      const amount = sim.rng.stream(`unit:${ctx.casterId}.amount`).int(e.min, e.max);
+      const rolled = sim.rng.stream(`unit:${ctx.casterId}.amount`).int(e.min, e.max);
+      const amount = rolled * damageMultiplier(sim, ctx.casterId, target.id, e.school);
       sim.damage(target.id, amount, { sourceId: ctx.casterId, ability: ctx.ability, school: e.school }, ctx.causes);
       return;
     }

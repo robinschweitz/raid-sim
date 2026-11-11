@@ -1,3 +1,4 @@
+import type { Simulation } from './sim';
 import { ID_PATTERN } from './units';
 
 export type School = 'physical' | 'holy' | 'fire' | 'nature' | 'frost' | 'shadow' | 'arcane';
@@ -16,12 +17,59 @@ export type Effect =
       readonly effects: readonly Effect[];
     };
 
+export interface DamageModifier {
+  readonly kind: 'damage_done_pct' | 'damage_taken_pct';
+  /** Percent change, e.g. -25 for 25 % less. */
+  readonly pct: number;
+  /** Multiply the percentage by the aura's stacks. */
+  readonly perStack: boolean;
+  /** Limit to these schools; all schools when absent. */
+  readonly schools?: readonly School[];
+}
+
+export type AuraRemoveReason = 'expired' | 'removed' | 'dispelled';
+
+export interface AuraHookContext {
+  readonly sim: Simulation;
+  readonly unitId: string;
+  readonly casterId: string;
+  readonly auraId: string;
+  readonly stacks: number;
+  readonly appliedMs: number;
+  readonly refreshedMs: number;
+  readonly causes: readonly string[];
+}
+
+export interface AuraScript {
+  afterApply?(ctx: AuraHookContext): void;
+  afterStack?(ctx: AuraHookContext): void;
+  /** Not called when the aura is removed by death (A-012). */
+  afterRemove?(ctx: AuraHookContext & { readonly reason: AuraRemoveReason }): void;
+}
+
+export interface SpellHitContext {
+  readonly sim: Simulation;
+  readonly spellId: string;
+  readonly casterId: string;
+  readonly targetId: string;
+  readonly causes: readonly string[];
+}
+
+export interface SpellScript {
+  /** Runs after all effects of the spell were applied to the target (A-024). */
+  afterHitTarget?(ctx: SpellHitContext): void;
+}
+
 export interface AuraDef {
   readonly id: string;
-  readonly durationMs: number;
+  /** Milliseconds, or null for a permanent aura. */
+  readonly durationMs: number | null;
   readonly maxStacks: number;
+  /** 'caster' (default): one instance per caster; 'unit': one instance per unit, any caster stacks it. */
+  readonly stackScope?: 'caster' | 'unit';
   readonly periodic?: { readonly intervalMs: number; readonly effects: readonly Effect[] };
   readonly onExpire?: readonly Effect[];
+  readonly modifiers?: readonly DamageModifier[];
 }
 
 export interface SpellDef {
@@ -39,6 +87,8 @@ export interface SpellDef {
 export class Catalog {
   private readonly spells = new Map<string, SpellDef>();
   private readonly auras = new Map<string, AuraDef>();
+  private readonly auraScripts = new Map<string, AuraScript>();
+  private readonly spellScripts = new Map<string, SpellScript>();
 
   addSpell(def: SpellDef): void {
     if (!ID_PATTERN.test(def.id)) throw new Error(`invalid spell id ${def.id}`);
@@ -52,11 +102,34 @@ export class Catalog {
   addAura(def: AuraDef): void {
     if (!ID_PATTERN.test(def.id)) throw new Error(`invalid aura id ${def.id}`);
     if (this.auras.has(def.id)) throw new Error(`duplicate aura ${def.id}`);
-    if (def.durationMs <= 0 || !Number.isInteger(def.maxStacks) || def.maxStacks < 1) {
+    if ((def.durationMs !== null && !(def.durationMs > 0)) || !Number.isInteger(def.maxStacks) || def.maxStacks < 1) {
       throw new Error(`aura ${def.id} needs a positive duration and maxStacks >= 1`);
     }
     if (def.periodic && def.periodic.intervalMs <= 0) throw new Error(`aura ${def.id} needs a positive tick interval`);
+    for (const m of def.modifiers ?? []) {
+      if (!Number.isFinite(m.pct)) throw new Error(`aura ${def.id} has a non-finite modifier percentage`);
+    }
     this.auras.set(def.id, def);
+  }
+
+  addAuraScript(auraId: string, script: AuraScript): void {
+    this.aura(auraId);
+    if (this.auraScripts.has(auraId)) throw new Error(`duplicate aura script ${auraId}`);
+    this.auraScripts.set(auraId, script);
+  }
+
+  addSpellScript(spellId: string, script: SpellScript): void {
+    this.spell(spellId);
+    if (this.spellScripts.has(spellId)) throw new Error(`duplicate spell script ${spellId}`);
+    this.spellScripts.set(spellId, script);
+  }
+
+  auraScript(auraId: string): AuraScript | undefined {
+    return this.auraScripts.get(auraId);
+  }
+
+  spellScript(spellId: string): SpellScript | undefined {
+    return this.spellScripts.get(spellId);
   }
 
   spell(id: string): SpellDef {

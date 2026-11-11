@@ -117,6 +117,7 @@ describe('Simulation', () => {
         stacks: 1,
         appliedMs: 0,
         expiresMs: 5000,
+        refreshedMs: 0,
         expiry: sim.at(5000, EventClass.AuraExpiry, () => {}),
         tick: null,
         nextTickMs: 0,

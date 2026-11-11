@@ -113,6 +113,7 @@ function hit(sim: Simulation, casterId: string, spell: SpellDef, targetId: strin
   if (!sim.unit(targetId).alive) return;
   const hitId = sim.emit('spell_hit', { caster: casterId, spell: spell.id, target: targetId }, [cause]);
   applyEffects(sim, spell.effects, { casterId, targetId, ability: spell.id, causes: [hitId] });
+  sim.catalog.spellScript(spell.id)?.afterHitTarget?.({ sim, spellId: spell.id, casterId, targetId, causes: [hitId] });
 }
 
 export function interruptCast(

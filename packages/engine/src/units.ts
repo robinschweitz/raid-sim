@@ -37,8 +37,10 @@ export interface AuraInstance {
   readonly casterId: string;
   stacks: number;
   readonly appliedMs: number;
+  /** Expiry time, or Number.POSITIVE_INFINITY for a permanent aura (never put into trace data). */
   expiresMs: number;
-  expiry: Scheduled;
+  expiry: Scheduled | null;
+  refreshedMs: number;
   tick: Scheduled | null;
   /** Time of the next periodic tick anchor (applied + k * interval); keeps tick phase across refreshes. */
   nextTickMs: number;
@@ -161,7 +163,8 @@ export function createUnit(init: UnitInit): Unit {
   };
 }
 
-export const auraKey = (auraId: string, casterId: string): string => `${auraId}|${casterId}`;
+export const auraKey = (auraId: string, casterId: string, scope: 'caster' | 'unit' = 'caster'): string =>
+  scope === 'unit' ? `${auraId}|*` : `${auraId}|${casterId}`;
 
 /** Locale-independent string order (UTF-16 code units); the one comparator used wherever order must be deterministic. */
 export const compareStrings = (a: string, b: string): number => (a < b ? -1 : a > b ? 1 : 0);
