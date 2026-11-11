@@ -129,7 +129,7 @@ export function createUnit(init: UnitInit): Unit {
   }
   if (
     melee &&
-    (!Number.isFinite(melee.minDamage) || melee.minDamage < 0 || !(melee.maxDamage >= melee.minDamage) ||
+    (!Number.isFinite(melee.minDamage) || melee.minDamage < 0 || !Number.isFinite(melee.maxDamage) || !(melee.maxDamage >= melee.minDamage) ||
       !Number.isInteger(melee.attackTimeMs) || melee.attackTimeMs <= 0)
   ) {
     throw new Error(`invalid melee stats for ${init.id}`);
