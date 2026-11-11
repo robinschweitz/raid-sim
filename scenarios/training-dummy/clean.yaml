@@ -1,0 +1,11 @@
+id: training-dummy-clean
+plan: plan.yaml
+difficulty: 25n
+seed: 42
+maxDurationMs: 120000
+observation:
+  text: scenario.training_dummy_clean.observation
+  checks:
+    - { check: outcome_is, outcome: kill }
+    - { check: event_occurs, kind: aura_applied, where: { aura: mark } }
+    - { check: event_absent, kind: death, where: { unit: t1 } }

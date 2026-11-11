@@ -1,0 +1,22 @@
+id: training-dummy-basic
+boss: training_dummy
+roster:
+  - { id: t1, name: Tanky, kind: standin, role: tank, maxHealth: 40000, ratePerSecond: 600, armor: 25000, avoidance: { missPct: 5, dodgePct: 15, parryPct: 15 }, threatMultiplier: 3, reaction: { minMs: 300, maxMs: 300 } }
+  - { id: h1, name: Healy, kind: standin, role: healer, maxHealth: 20000, ratePerSecond: 2500, reaction: { minMs: 300, maxMs: 300 } }
+  - { id: p1, name: Alice, kind: modelled, spec: training_caster, profile: default, reaction: { minMs: 300, maxMs: 500 } }
+  - { id: p2, name: Bob, kind: modelled, spec: training_caster, profile: default, reaction: { minMs: 300, maxMs: 500 } }
+  - { id: p3, name: Cara, kind: standin, role: ranged, maxHealth: 20000, ratePerSecond: 1500, reaction: { minMs: 300, maxMs: 500 } }
+spots:
+  tank: { x: 6, y: 0 }
+  heal: { x: -20, y: 0 }
+  ranged: { x: 20, y: 0 }
+  out: { x: 40, y: 0 }
+phases:
+  - phase: default
+    assignments: { t1: tank, h1: heal, p1: ranged, p2: ranged, p3: ranged }
+rules:
+  - id: run-when-marked
+    who: [p1, p2, p3, h1]
+    when: { on: aura_applied, aura: mark, target: self }
+    do: { do: move_to, spot: out }
+    priority: 60

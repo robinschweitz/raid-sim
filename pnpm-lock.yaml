@@ -21,6 +21,15 @@ importers:
         specifier: 2.1.8
         version: 2.1.8(@types/node@22.10.2)
 
+  packages/content:
+    dependencies:
+      '@raid/data':
+        specifier: workspace:*
+        version: link:../data
+      '@raid/engine':
+        specifier: workspace:*
+        version: link:../engine
+
   packages/data:
     dependencies:
       zod:
