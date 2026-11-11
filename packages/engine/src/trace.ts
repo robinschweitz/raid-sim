@@ -20,6 +20,7 @@ export const EVENT_KINDS = [
   'timer_window',
   'threat_target',
   'taunt',
+  'melee_avoided',
   'death',
   'outcome',
 ] as const;

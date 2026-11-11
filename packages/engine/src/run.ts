@@ -159,7 +159,7 @@ export function runScenario(prepared: PreparedRun, registry: ContentRegistry): R
       sim.addUnit({ ...made.unit, id: m.id, name: m.name, kind: 'player', role: factory.role, pos });
       controllers.push(new ActorController(sim, m.id, made.policy, hooks));
     } else {
-      sim.addUnit({ ...playerBody, id: m.id, name: m.name, kind: 'player', role: m.role, approximate: true, maxHealth: m.maxHealth, pos });
+      sim.addUnit({ ...playerBody, id: m.id, name: m.name, kind: 'player', role: m.role, approximate: true, maxHealth: m.maxHealth, armor: m.armor, avoidance: m.avoidance, threatMultiplier: m.threatMultiplier, pos });
     }
   }
   rules.install();

@@ -16,6 +16,9 @@ export function crossValidate(plan: Plan, planFile: string, scenario: Scenario |
     if (roster.has(m.id)) inPlan(`roster.${i}.id`, `duplicate roster id ${m.id}`);
     if (RESERVED_REFS.includes(m.id)) inPlan(`roster.${i}.id`, `${m.id} is reserved`);
     if (m.reaction.minMs > m.reaction.maxMs) inPlan(`roster.${i}.reaction`, 'minMs must not exceed maxMs');
+    if (m.kind === 'standin' && m.avoidance.missPct + m.avoidance.dodgePct + m.avoidance.parryPct > 100) {
+      inPlan(`roster.${i}.avoidance`, `avoidance of ${m.id} adds up to more than 100 %`);
+    }
     roster.add(m.id);
   });
   const ref = (path: string, r: string) => {

@@ -191,3 +191,18 @@ describe('phase assignments', () => {
     expect(engine.assignment('p1')).toBe('ranged');
   });
 });
+
+describe('stand-in combat fields', () => {
+  it('default to no armor, no avoidance and threat multiplier 1', () => {
+    const { plan } = parsed();
+    expect(plan.roster.find((m) => m.id === 't1')).toMatchObject({ armor: 0, avoidance: { missPct: 0, dodgePct: 0, parryPct: 0 }, threatMultiplier: 1 });
+  });
+
+  it('reject avoidance above 100 % in total', () => {
+    const r = parsePlan('plan.yaml', PLAN.replace('ratePerSecond: 500,', 'ratePerSecond: 500, avoidance: { missPct: 50, dodgePct: 40, parryPct: 20 },'));
+    if (!r.ok) throw new Error('must parse');
+    const { scenario } = parsed();
+    const prepared = prepareRun({ plan: r.value, planFile: 'plan.yaml', scenario, scenarioFile: 's.yaml' });
+    expect(prepared.ok ? [] : prepared.problems.map((p) => p.message)).toContain('avoidance of t1 adds up to more than 100 %');
+  });
+});

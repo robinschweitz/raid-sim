@@ -30,6 +30,12 @@ export const StandinMemberSchema = z
     maxHealth: z.number().int().positive(),
     ratePerSecond: z.number().finite().min(0),
     buffs: z.array(IdSchema).default([]),
+    armor: z.number().int().min(0).default(0),
+    avoidance: z
+      .object({ missPct: z.number().finite().min(0).max(100), dodgePct: z.number().finite().min(0).max(100), parryPct: z.number().finite().min(0).max(100) })
+      .strict()
+      .default({ missPct: 0, dodgePct: 0, parryPct: 0 }),
+    threatMultiplier: z.number().finite().min(0).default(1),
     reaction: ReactionSchema,
   })
   .strict();

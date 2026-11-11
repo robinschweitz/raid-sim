@@ -23,6 +23,7 @@ export const EN: Dictionary = {
   'event.timer_window': '{ability} expected between {earliestMs} and {latestMs}',
   'event.threat_target': '{boss} turns to {target}',
   'event.taunt': '{actor} taunts {boss}',
+  'event.melee_avoided': '{target} avoids {source} ({result})',
   'event.death': '{unit} dies',
   'event.outcome': 'Outcome: {kind}',
 };

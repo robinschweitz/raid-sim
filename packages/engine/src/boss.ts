@@ -1,5 +1,6 @@
 import { startCast, type CastResult } from './casting';
 import { EventMap } from './eventmap';
+import { meleeIfReady } from './melee';
 import { EventClass } from './queue';
 import type { Simulation } from './sim';
 import { threatFor } from './threat';
@@ -28,6 +29,7 @@ export interface BossContext {
   pick(mechanic: string, candidates: readonly Unit[], n: number): Unit[];
   publishTimer(ability: string, minMs: number, maxMs: number, causes: readonly string[]): string;
   setPhase(phase: string, causes: readonly string[]): string;
+  meleeIfReady(): string | null;
 }
 
 export interface BossScript {
@@ -63,6 +65,12 @@ export abstract class EventScriptedAI implements BossScript {
     if (ctx.self.cast) return;
     const id = this.events.execute();
     if (id !== 0) this.executeEvent(id, ctx);
+    if (!ctx.self.cast) this.afterEvents(ctx);
+  }
+
+  /** DoMeleeAttackIfReady by default; override to change what happens after events. */
+  protected afterEvents(ctx: BossContext): void {
+    ctx.meleeIfReady();
   }
 
   protected abstract engage(ctx: BossContext): void;
@@ -83,6 +91,7 @@ export function makeBossContext(sim: Simulation, bossId: string): BossContext {
       sim.timerWindows.set(`${bossId}|${ability}`, w);
       return sim.emit('timer_window', { ...w }, causes);
     },
+    meleeIfReady: () => meleeIfReady(sim, bossId, victimOf(sim, bossId)),
     setPhase: (phase, causes) => {
       sim.phase = phase;
       return sim.emit('phase_change', { boss: bossId, phase }, causes);
