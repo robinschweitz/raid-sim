@@ -72,6 +72,87 @@ describe('trigger_spell and force_cast (A-030)', () => {
     ]);
   });
 
+  it('passes the original caster to the triggered cast and to the aura it applies', () => {
+    const sim = newSim();
+    sim.catalog.addSpell({ ...self, id: 'inhale', effects: [{ type: 'trigger_spell', spell: 'inhaled_blight', on: 'caster' }] });
+    sim.at(0, EventClass.AiUpdate, () => void startCast(sim, 'boss', 'inhale', 'boss', [], { triggered: true, originalCasterId: 'p1' }));
+    sim.run();
+    const start = sim.trace.list().find((e) => e.kind === 'cast_start' && e.data.spell === 'inhaled_blight');
+    expect(start?.data).toMatchObject({ caster: 'boss', triggered: true, originalCaster: 'p1' });
+    expect(sim.unit('boss').auras.get('inhaled|p1')?.casterId).toBe('p1');
+  });
+
+  it('force_cast from a spell cast for another unit still makes the forced unit own the aura', () => {
+    const sim = newSim();
+    sim.catalog.addSpell({ ...self, id: 'spore_holder', effects: [{ type: 'apply_aura', aura: 'holder' }] });
+    sim.catalog.addSpell({ ...self, id: 'gas_spore', effects: [{ type: 'area', radius: 30, center: 'caster', relation: 'enemy', effects: [{ type: 'force_cast', spell: 'spore_holder' }] }] });
+    sim.at(0, EventClass.AiUpdate, () => void startCast(sim, 'boss', 'gas_spore', 'boss', [], { triggered: true, originalCasterId: 'p1' }));
+    sim.run();
+    for (const id of ['p1', 'p2', 'p3']) expect(sim.unit(id).auras.get(`holder|${id}`)?.casterId, id).toBe(id);
+    expect(sim.unit('p2').auras.has('holder|p1')).toBe(false);
+  });
+
+  it('trigger_spell on the target casts at the explicit target', () => {
+    const sim = newSim();
+    sim.catalog.addSpell({ ...self, id: 'mark_target', target: 'unit', rangeYd: 50, effects: [{ type: 'trigger_spell', spell: 'tag', on: 'target' }] });
+    sim.catalog.addSpell({ ...self, id: 'tag', target: 'unit', rangeYd: 50, effects: [{ type: 'apply_aura', aura: 'inhaled' }] });
+    sim.at(0, EventClass.AiUpdate, () => void startCast(sim, 'boss', 'mark_target', 'p2', []));
+    sim.run();
+    const start = sim.trace.list().find((e) => e.kind === 'cast_start' && e.data.spell === 'tag');
+    expect(start?.data).toMatchObject({ caster: 'boss', target: 'p2', triggered: true });
+    expect(sim.unit('p2').auras.has('inhaled|boss')).toBe(true);
+    expect(sim.unit('p1').auras.size).toBe(0);
+  });
+
+  it('a trigger on the first unit of the deliveries changes the damage fixed for the later units', () => {
+    const sim = newSim();
+    sim.catalog.addSpell({ ...self, id: 'warding', effects: [{ type: 'area', radius: 30, center: 'caster', relation: 'enemy', effects: [{ type: 'apply_aura', aura: 'ward' }] }] });
+    sim.catalog.addSpell({
+      ...self,
+      id: 'pungent',
+      target: 'unit',
+      rangeYd: 50,
+      effects: [
+        { type: 'trigger_spell', spell: 'warding', on: 'caster' },
+        { type: 'area', radius: 30, center: 'caster', relation: 'enemy', effects: [{ type: 'damage', school: 'shadow', min: 1000, max: 1000 }] },
+      ],
+    });
+    // The trigger entry sits on the boss, first in the deliveries; its cast warns all players before any damage is fixed.
+    sim.at(0, EventClass.AiUpdate, () => void startCast(sim, 'boss', 'pungent', 'p1', []));
+    sim.run();
+    const list = sim.trace.list();
+    expect(list.filter((e) => e.kind === 'damage').map((e) => [e.data.target, e.data.amount])).toEqual([['p1', 500], ['p2', 500], ['p3', 500]]);
+    const firstDamage = list.findIndex((e) => e.kind === 'damage');
+    expect(list.slice(0, firstDamage).filter((e) => e.kind === 'aura_applied').length).toBe(3);
+  });
+
+  describe('trigger chains', () => {
+    it('stop a spell that triggers itself', () => {
+      const sim = newSim();
+      sim.catalog.addSpell({ ...self, id: 'loop', effects: [{ type: 'trigger_spell', spell: 'loop', on: 'caster' }] });
+      sim.at(0, EventClass.AiUpdate, () => void startCast(sim, 'boss', 'loop', 'boss', [], { triggered: true }));
+      expect(() => sim.run()).toThrow(/trigger depth > 16: spell chain loop->loop->/);
+    });
+
+    it('stop an A -> B -> A chain, also through force_cast, and leave the guard reset afterwards', () => {
+      const sim = newSim();
+      sim.catalog.addSpell({ ...self, id: 'a', effects: [{ type: 'trigger_spell', spell: 'b', on: 'caster' }] });
+      sim.catalog.addSpell({ ...self, id: 'b', effects: [{ type: 'force_cast', spell: 'a' }] });
+      sim.at(0, EventClass.AiUpdate, () => void startCast(sim, 'boss', 'a', 'boss', [], { triggered: true }));
+      expect(() => sim.run()).toThrow(/trigger depth > 16: spell chain a->b->a->b->/);
+      expect(sim.castChain).toEqual([]);
+    });
+
+    it('allow a chain of exactly the limit', () => {
+      const sim = newSim();
+      for (let i = 0; i < 16; i++) {
+        sim.catalog.addSpell({ ...self, id: `s${i}`, effects: i < 15 ? [{ type: 'trigger_spell', spell: `s${i + 1}`, on: 'caster' }] : [{ type: 'script' }] });
+      }
+      sim.at(0, EventClass.AiUpdate, () => void startCast(sim, 'boss', 's0', 'boss', [], { triggered: true }));
+      expect(() => sim.run()).not.toThrow();
+    });
+  });
+
   it('only spells use trigger_spell', () => {
     const sim = newSim();
     expect(() =>

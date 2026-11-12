@@ -200,9 +200,9 @@ describe('periodic amounts (A-029)', () => {
         applyAura(sim, 'parent', 'boss', 'p1', []);
       });
       sim.run();
-      // Child applied on the tick (1000) and on expiry (1500): both with the fury factor.
-      expect(ticks(sim).every(([, a]) => a === 200)).toBe(true);
-      expect(ticks(sim).length).toBeGreaterThan(0);
+      // Child applied on the parent's tick (1000) and refreshed at its expiry (1500, to 2500); the tick phase stays at 1000, so its
+      // single tick falls at 2000, with the fury factor (the child's own flag is unset).
+      expect(ticks(sim)).toEqual([[2000, 200]]);
     });
 
     it('a re-stack by an unflagged source keeps the flag; an unflagged spell still takes the factor', () => {

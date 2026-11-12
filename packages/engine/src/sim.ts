@@ -50,6 +50,8 @@ export class Simulation {
   readonly timerWindows = new Map<string, TimerWindow>();
   /** Units that must all die for a kill; when empty, every boss-role unit must die. */
   readonly mustKill = new Set<string>();
+  /** Spells being resolved through startCast, outermost first: guards trigger chains (casting.ts). */
+  readonly castChain: string[] = [];
   private readonly listeners: Array<(ev: TraceEvent) => void> = [];
   private nextSampleMs = 0;
   private lastSampleMs = -1;

@@ -37,6 +37,7 @@ describe('periodic_trigger and instakill (A-030)', () => {
       'aura_removed',
     ]);
     expect(at[1].data).toMatchObject({ caster: 'p1', spell: 'blighted_spores', originalCaster: 'boss' });
+    expect(at[1].causes).toContain(at[0].id);
     // The holder casts, but the spell is cast for the aura's caster (the boss): it owns the applied auras (A-020).
     expect(at.filter((e) => e.kind === 'aura_applied').map((e) => [e.data.unit, e.data.caster])).toEqual([
       ['p1', 'boss'],
@@ -57,12 +58,15 @@ describe('periodic_trigger and instakill (A-030)', () => {
       ],
     });
     sim.at(0, EventClass.SpellHit, () => {
+      sim.damage('tank', 60000, { sourceId: 'boss', ability: 'prior', school: 'physical' }, []);
       applyAura(sim, 'ward', 'tank', 'tank', []);
-      startCast(sim, 'tank', 'explosion', 'tank', [], { triggered: true });
+      startCast(sim, 'tank', 'explosion', 'tank', [], { triggered: true, originalCasterId: 'boss' });
     });
     sim.run();
-    const dmg = sim.trace.list().filter((e) => e.kind === 'damage').map((e) => [e.data.target, e.data.amount]);
-    expect(dmg).toEqual([['p1', 100], ['p2', 100], ['tank', 100000]]);
+    const hits = sim.trace.list().filter((e) => e.kind === 'damage' && e.data.ability === 'explosion');
+    expect(hits.map((e) => [e.data.target, e.data.amount])).toEqual([['p1', 100], ['p2', 100], ['tank', 40000]]);
+    // Current health, not maximum; dealt by the casting unit (not the original caster), physical, no overkill.
+    expect(hits[2].data).toMatchObject({ source: 'tank', school: 'physical', overkill: 0 });
     expect(sim.unit('tank').alive).toBe(false);
   });
 
@@ -71,6 +75,18 @@ describe('periodic_trigger and instakill (A-030)', () => {
     expect(() => sim.catalog.addSpell({ ...self, id: 'bad', effects: [{ type: 'periodic_trigger', spell: 'blighted_spores' }] })).toThrow(
       /bad: periodic_trigger is an aura effect/,
     );
+  });
+
+  it('periodic_trigger must be a top-level periodic effect', () => {
+    const sim = newSim();
+    const trig = { type: 'periodic_trigger', spell: 'blighted_spores' } as const;
+    expect(() => sim.catalog.addAura({ id: 'bad1', durationMs: 1000, maxStacks: 1, onExpire: [trig] })).toThrow(/bad1: periodic_trigger must be a top-level/);
+    expect(() =>
+      sim.catalog.addAura({ id: 'bad2', durationMs: 1000, maxStacks: 1, periodic: { intervalMs: 500, effects: [{ type: 'on_caster', effects: [trig] }] } }),
+    ).toThrow(/bad2: periodic_trigger must be a top-level/);
+    expect(() =>
+      sim.catalog.addAura({ id: 'bad3', durationMs: 1000, maxStacks: 1, periodic: { intervalMs: 500, effects: [{ type: 'area', radius: 3, center: 'caster', relation: 'any', effects: [trig] }] } }),
+    ).toThrow(/bad3: periodic_trigger must be a top-level/);
   });
 
   it('instakill on a unit with 40 health records overkill-free damage of 40 and runs the death hooks', () => {

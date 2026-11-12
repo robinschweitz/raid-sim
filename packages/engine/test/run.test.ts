@@ -175,6 +175,19 @@ describe('runScenario', () => {
       expect(problems).toEqual([{ file: 'boss:dummy', path: '(setup)', message: 'unknown data key: dummy.missing' }]);
     });
 
+    it('a spell that triggers or applies an id the catalog lacks', () => {
+      const bad = {
+        ...dummyBoss,
+        setup: (args: Parameters<typeof dummyBoss.setup>[0]) => {
+          const setup = dummyBoss.setup(args);
+          args.sim.catalog.addSpell({ id: 'dangling', castTimeMs: 0, gcdMs: 0, cooldownMs: 0, rangeYd: 0, usableWhileMoving: true, target: 'self', effects: [{ type: 'trigger_spell', spell: 'missing_spell', on: 'caster' }] });
+          return setup;
+        },
+      };
+      const problems = invalid(prepared(), { ...registry, bosses: new Map([['dummy', bad]]) });
+      expect(problems).toEqual([{ file: 'catalog', path: 'spell dangling', message: 'unknown spell missing_spell' }]);
+    });
+
     it('a model factory that throws is attributed to the spec', () => {
       const bad = { ...testCaster, create: () => { throw new Error('boom'); } };
       const problems = invalid(prepared(), { ...registry, policies: new Map([['test_caster', bad]]) });

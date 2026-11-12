@@ -1,6 +1,6 @@
 import { schoolMask } from './schools';
 import type { Simulation } from './sim';
-import { ID_PATTERN } from './units';
+import { compareStrings, ID_PATTERN } from './units';
 
 export type School = 'physical' | 'holy' | 'fire' | 'nature' | 'frost' | 'shadow' | 'arcane';
 
@@ -177,8 +177,11 @@ function checkSchools(owner: string, schools: SchoolSet): void {
   }
 }
 
-/** Validates effect definitions; `where` is a spell's effects, or an aura's periodic and on-expire effects. */
-function checkEffects(owner: string, effects: readonly Effect[], where: 'spell' | 'aura'): void {
+/**
+ * Validates effect definitions; `where` is a spell's effects, an aura's periodic effects or its on-expire effects. `nested`:
+ * inside an area or on_caster effect.
+ */
+function checkEffects(owner: string, effects: readonly Effect[], where: 'spell' | 'periodic' | 'expire', nested = false): void {
   for (const e of effects) {
     if (e.type === 'damage') checkSchools(owner, e.school);
     if (e.type === 'area') {
@@ -187,9 +190,12 @@ function checkEffects(owner: string, effects: readonly Effect[], where: 'spell' 
         throw new Error(`${owner}: invalid maxTargets ${e.maxTargets}`);
       }
     }
-    if (e.type === 'area' || e.type === 'on_caster') checkEffects(owner, e.effects, where);
-    if (e.type === 'periodic_trigger' && where !== 'aura') {
+    if (e.type === 'area' || e.type === 'on_caster') checkEffects(owner, e.effects, where, true);
+    if (e.type === 'periodic_trigger' && where === 'spell') {
       throw new Error(`${owner}: periodic_trigger is an aura effect; spells use trigger_spell or force_cast`);
+    }
+    if (e.type === 'periodic_trigger' && (where !== 'periodic' || nested)) {
+      throw new Error(`${owner}: periodic_trigger must be a top-level periodic effect of the aura`);
     }
     if ((e.type === 'trigger_spell' || e.type === 'force_cast' || e.type === 'periodic_trigger') && !ID_PATTERN.test(e.spell)) {
       throw new Error(`${owner}: invalid spell id ${e.spell}`);
@@ -198,6 +204,14 @@ function checkEffects(owner: string, effects: readonly Effect[], where: 'spell' 
       throw new Error(`${owner}: trigger_spell is a spell effect; auras use periodic_trigger`);
     }
   }
+}
+
+/** A spell or aura id that an effect refers to but the catalog does not hold. */
+export interface UnresolvedReference {
+  /** `spell <id>` or `aura <id>`: the definition whose effect refers to it. */
+  readonly owner: string;
+  readonly kind: 'spell' | 'aura';
+  readonly id: string;
 }
 
 export class Catalog {
@@ -227,7 +241,8 @@ export class Catalog {
       if (!Number.isFinite(m.pct)) throw new Error(`aura ${def.id} has a non-finite modifier percentage`);
       if (m.schools !== undefined) checkSchools(def.id, m.schools);
     }
-    checkEffects(def.id, [...(def.periodic?.effects ?? []), ...(def.onExpire ?? [])], 'aura');
+    checkEffects(def.id, def.periodic?.effects ?? [], 'periodic');
+    checkEffects(def.id, def.onExpire ?? [], 'expire');
     this.auras.set(def.id, def);
   }
 
@@ -261,6 +276,28 @@ export class Catalog {
     const a = this.auras.get(id);
     if (!a) throw new Error(`unknown aura ${id}`);
     return a;
+  }
+
+  /**
+   * Every spell and aura id used by trigger_spell, force_cast, periodic_trigger, apply_aura and remove_aura that is not
+   * defined, walking nested area and on_caster effects. Definitions may be added in any order, so call it once all exist.
+   * Sorted by owner, kind, id.
+   */
+  unresolvedReferences(): UnresolvedReference[] {
+    const out: UnresolvedReference[] = [];
+    const walk = (owner: string, effects: readonly Effect[]): void => {
+      for (const e of effects) {
+        if (e.type === 'area' || e.type === 'on_caster') walk(owner, e.effects);
+        else if ((e.type === 'trigger_spell' || e.type === 'force_cast' || e.type === 'periodic_trigger') && !this.spells.has(e.spell)) {
+          out.push({ owner, kind: 'spell', id: e.spell });
+        } else if ((e.type === 'apply_aura' || e.type === 'remove_aura') && !this.auras.has(e.aura)) {
+          out.push({ owner, kind: 'aura', id: e.aura });
+        }
+      }
+    };
+    for (const s of this.spells.values()) walk(`spell ${s.id}`, s.effects);
+    for (const a of this.auras.values()) walk(`aura ${a.id}`, [...(a.periodic?.effects ?? []), ...(a.onExpire ?? [])]);
+    return out.sort((x, y) => compareStrings(x.owner, y.owner) || compareStrings(x.kind, y.kind) || compareStrings(x.id, y.id));
   }
 
   hasSpell(id: string): boolean {

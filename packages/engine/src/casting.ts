@@ -90,7 +90,7 @@ export function startCast(
       { caster: casterId, spell: spellId, target: tId, castTimeMs: 0, endMs: sim.now, triggered: true, ...origin },
       causes,
     );
-    complete(sim, caster, spell, tId, event, options);
+    resolve(sim, caster, spell, tId, event, options);
     return { ok: true, event };
   }
   const check = checkCast(sim, casterId, spellId, targetId);
@@ -101,7 +101,7 @@ export function startCast(
   if (spell.gcdMs > 0) caster.gcdUntilMs = sim.now + spell.gcdMs;
   if (spell.castTimeMs === 0) {
     const event = sim.emit('cast_start', { caster: casterId, spell: spellId, target: tId, castTimeMs: 0, endMs: sim.now, ...origin }, causes);
-    complete(sim, caster, spell, tId, event, options);
+    resolve(sim, caster, spell, tId, event, options);
     return { ok: true, event };
   }
   const endMs = sim.now + spell.castTimeMs;
@@ -113,7 +113,7 @@ export function startCast(
     handle: sim.at(endMs, EventClass.SpellHit, () => {
       if (caster.cast !== cast) return;
       caster.cast = null;
-      complete(sim, caster, spell, tId, cast.startEvent, options);
+      resolve(sim, caster, spell, tId, cast.startEvent, options);
     }),
     startEvent: '',
   };
@@ -124,6 +124,22 @@ export function startCast(
     causes,
   );
   return { ok: true, event: cast.startEvent };
+}
+
+/** Longest chain of casts that trigger casts (trigger_spell, force_cast, periodic_trigger) before the engine gives up. */
+export const MAX_TRIGGER_DEPTH = 16;
+
+/** `complete` inside the trigger-chain guard: a spell that triggers itself (directly or through others) fails loudly. */
+function resolve(sim: Simulation, caster: Unit, spell: SpellDef, targetId: string, startEvent: string, options: CastOptions): void {
+  if (sim.castChain.length >= MAX_TRIGGER_DEPTH) {
+    throw new Error(`trigger depth > ${MAX_TRIGGER_DEPTH}: spell chain ${[...sim.castChain, spell.id].join('->')}`);
+  }
+  sim.castChain.push(spell.id);
+  try {
+    complete(sim, caster, spell, targetId, startEvent, options);
+  } finally {
+    sim.castChain.pop();
+  }
 }
 
 function complete(sim: Simulation, caster: Unit, spell: SpellDef, targetId: string, startEvent: string, options: CastOptions): void {

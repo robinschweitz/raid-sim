@@ -99,7 +99,8 @@ export function applyLeafEffect(sim: Simulation, e: LeafEffect, ctx: EffectConte
     case 'instakill':
       // No modifiers: the damage is the target's current health (SpellEffects.cpp 279-292); sim.damage handles death.
       if (!target.alive) return;
-      sim.damage(target.id, target.health, { sourceId: sourceOf(ctx), ability: ctx.ability, school: 'physical' }, ctx.causes);
+      // Dealt by the casting unit (GetUnitCasterForEffectHandlers, not the original caster) in SPELL_SCHOOL_MASK_NORMAL (SpellEffects.cpp 279-301).
+      sim.damage(target.id, target.health, { sourceId: ctx.casterId, ability: ctx.ability, school: 'physical' }, ctx.causes);
       return;
   }
 }

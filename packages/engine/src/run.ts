@@ -91,6 +91,10 @@ function checkCatalogReferences(p: PreparedRun, sim: Simulation): LoadProblem[] 
       problems.push({ file: p.planFile, path: `rules.${i}.do.spell`, message: `unknown spell ${r.do.spell}` });
     }
   });
+  // Spells and auras the content defines may only refer to ids that exist (trigger_spell, force_cast, periodic_trigger, apply_aura).
+  for (const r of sim.catalog.unresolvedReferences()) {
+    problems.push({ file: 'catalog', path: r.owner, message: `unknown ${r.kind} ${r.id}` });
+  }
   return problems;
 }
 
