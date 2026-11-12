@@ -55,14 +55,15 @@ phases:
     assignments: { t1: tank, t2: melee, h1: melee, h2: melee, h3: g22, h4: g23, h5: g24, h6: g25, m1: melee, m2: melee, m3: melee, m4: melee, m5: melee, r01: g11, r02: g12, r03: g13, r04: g14, r05: g15, r06: g16, r07: g21, r08: g26, r09: g32, r10: g33, r11: g34, r12: g35 }
 rules:
   # Gas Spore: everyone at range runs to the melee group, so all three spores explode on the whole raid.
+  # `&ranged` names this list of the players at range (healers h3-h6 and r01-r12); `*ranged` below reuses it.
   - id: stack-for-spores
-    who: [h3, h4, h5, h6, r01, r02, r03, r04, r05, r06, r07, r08, r09, r10, r11, r12]
+    who: &ranged [h3, h4, h5, h6, r01, r02, r03, r04, r05, r06, r07, r08, r09, r10, r11, r12]
     when: { on: cast_start, spell: gas_spore, caster: boss }
     do: { do: move_to, spot: melee }
     priority: 60
   # The spores exploded (12 s after the cast): back out before Vile Gas, which Gas Spore delays to 20 s after the cast.
   - id: spread-after-spores
-    who: [h3, h4, h5, h6, r01, r02, r03, r04, r05, r06, r07, r08, r09, r10, r11, r12]
+    who: *ranged
     when: { on: aura_applied, aura: blighted_spores, target: self }
     do: { do: return_to_assignment }
     priority: 50

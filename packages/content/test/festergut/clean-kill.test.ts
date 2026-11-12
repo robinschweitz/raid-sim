@@ -1,4 +1,5 @@
-import { canonicalStringify } from '@raid/engine';
+import { readFileSync } from 'node:fs';
+import { canonicalStringify, parsePlan } from '@raid/engine';
 import { describe, expect, it } from 'vitest';
 import { CONTENT_TEXT_EN } from '../../src/index';
 import { runFestergutScenario, scenarioTextKeys } from './scenario';
@@ -19,6 +20,27 @@ describe('scenario: Festergut clean kill (spec §10.3)', () => {
       'event_absent:cast_start',
     ]);
     for (const key of scenarioTextKeys('clean-kill')) expect(CONTENT_TEXT_EN[key], key).toBeTruthy();
+  });
+
+  it('an event held by a boss cast executes after its window (A-034): Gastric Bloat waits for Inhale Blight', () => {
+    const window = r.trace.events.filter((e) => e.kind === 'timer_window' && e.data.ability === 'gastric_bloat' && e.t < 97510).at(-1)!;
+    expect([window.data.earliestMs, window.data.latestMs]).toEqual([94540, 97040]);
+    const bloat = r.trace.events.find((e) => e.kind === 'ai_event' && e.data.event === 'gastric_bloat' && e.t > window.t)!;
+    expect(bloat.t).toBe(97510);
+    const inhale = r.trace.events.filter((e) => e.kind === 'cast_success' && e.data.spell === 'inhale_blight' && e.t <= bloat.t).at(-1)!;
+    expect(inhale.t).toBe(97510);
+  });
+
+  it('the plan names the ranged group once (a YAML anchor) and both spore rules get the same 16 players', () => {
+    const text = readFileSync('scenarios/festergut/plan-25n.yaml', 'utf8');
+    const plan = parsePlan('plan-25n.yaml', text);
+    if (!plan.ok) throw new Error(JSON.stringify(plan.problems));
+    const ranged = ['h3', 'h4', 'h5', 'h6', 'r01', 'r02', 'r03', 'r04', 'r05', 'r06', 'r07', 'r08', 'r09', 'r10', 'r11', 'r12'];
+    const who = (id: string) => plan.value.rules.find((x) => x.id === id)!.who;
+    expect(who('stack-for-spores')).toEqual(ranged);
+    expect(who('spread-after-spores')).toEqual(ranged);
+    expect(text).toContain('&ranged');
+    expect(text).toContain('*ranged');
   });
 
   it('the raid stacks for the spores and spreads again before Vile Gas', () => {
