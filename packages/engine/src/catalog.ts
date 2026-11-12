@@ -80,9 +80,9 @@ export interface DamageModifier {
   readonly schools?: SchoolSet;
 }
 
-/** Aura effects on unit stats (stats.ts): MOD_ATTACKSPEED / MOD_MELEE_HASTE (A-031). */
+/** Aura effects on unit stats (stats.ts): MOD_ATTACKSPEED / MOD_MELEE_HASTE (A-031), MOD_SCALE (A-032). */
 export interface StatModifier {
-  readonly kind: 'attack_speed_pct';
+  readonly kind: 'attack_speed_pct' | 'scale_pct';
   readonly pct: number;
   readonly perStack: boolean;
 }

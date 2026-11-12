@@ -16,7 +16,14 @@ function statAmounts(sim: Simulation, unit: Unit, kind: StatModifier['kind']): n
 
 /** Whether the aura changes unit stats, so applying, stacking or removing it needs refreshStats. */
 export function hasStatModifiers(def: AuraDef): boolean {
-  return (def.modifiers ?? []).some((m) => m.kind === 'attack_speed_pct');
+  return (def.modifiers ?? []).some((m) => m.kind === 'attack_speed_pct' || m.kind === 'scale_pct');
+}
+
+/** MOD_SCALE amounts are summed and added to the native scale 1 (Unit.cpp 12829–12835); never below 0. */
+export function scaleOf(sim: Simulation, unit: Unit): number {
+  let scale = 1;
+  for (const pct of statAmounts(sim, unit, 'scale_pct')) scale += pct / 100;
+  return Math.max(0, scale);
 }
 
 /**
@@ -41,6 +48,8 @@ export function swingIntervalMs(unit: Unit): number {
  */
 export function refreshStats(sim: Simulation, unitId: string): void {
   const u = sim.unit(unitId);
+  // Combat reach = model reach × scale (Creature.cpp 3591–3607).
+  u.combatReach = u.baseCombatReach * scaleOf(sim, u);
   const f = swingTimeFactor(sim, u);
   if (f === u.swingFactor) return;
   const remaining = u.nextSwingMs - sim.now;

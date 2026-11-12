@@ -74,7 +74,10 @@ export interface Unit {
   pos: Vec2;
   move: Move | null;
   readonly speedYdPerSec: number;
-  readonly combatReach: number;
+  /** Combat reach at scale 1 (creature_model_info, or the player default). */
+  readonly baseCombatReach: number;
+  /** baseCombatReach × scale (stats.ts, A-032). */
+  combatReach: number;
   readonly boundingRadius: number;
   readonly level: number;
   readonly armor: number;
@@ -155,6 +158,7 @@ export function createUnit(init: UnitInit): Unit {
     pos: { x: init.pos.x, y: init.pos.y },
     move: null,
     speedYdPerSec: init.speedYdPerSec,
+    baseCombatReach: init.combatReach,
     combatReach: init.combatReach,
     boundingRadius: init.boundingRadius,
     level,
