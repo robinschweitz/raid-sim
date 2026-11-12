@@ -48,6 +48,10 @@ export interface CastOptions {
    * A triggered cast still has projectile travel time, can still fail with `target_dead` while in flight, and is traced
    * with `castTimeMs: 0` and `triggered: true`. */
   readonly triggered?: boolean;
+  /** SPELLVALUE_MAX_TARGETS for the spell's areas (A-027). */
+  readonly maxTargets?: number;
+  /** Random stream for the max-target subset; default `unit:<caster>.<spell>.targets`. */
+  readonly targetStream?: string;
 }
 
 export function startCast(
@@ -58,6 +62,9 @@ export function startCast(
   causes: readonly string[],
   options: CastOptions = {},
 ): CastResult {
+  if (options.maxTargets !== undefined && (!Number.isInteger(options.maxTargets) || options.maxTargets < 1)) {
+    throw new Error(`invalid maxTargets ${options.maxTargets}`);
+  }
   // No events once the outcome is decided; `event` is empty because nothing was written.
   if (sim.over) return { ok: false, reason: 'fight_over', event: '' };
   const failed = (reason: CastFailure): CastResult => {
@@ -127,7 +134,7 @@ function complete(sim: Simulation, caster: Unit, spell: SpellDef, targetId: stri
   }
   if (!triggered && spell.cooldownMs > 0) caster.cooldowns.set(spell.id, sim.now + spell.cooldownMs);
   const success = sim.emit('cast_success', { caster: caster.id, spell: spell.id, target: targetId }, [startEvent]);
-  launchSpell(sim, caster.id, spell, targetId, success);
+  launchSpell(sim, caster.id, spell, targetId, success, { maxTargets: options.maxTargets, targetStream: options.targetStream });
 }
 
 export function interruptCast(

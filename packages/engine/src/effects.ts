@@ -1,4 +1,4 @@
-import { areaCenter, areaTargets } from './area';
+import { areaCenter, areaTargets, limitTargets } from './area';
 import { applyAura, removeAuras } from './auras';
 import type { DamageEffect, Effect, LeafEffect } from './catalog';
 import { modifiedSpellDamage, type DamageRoute } from './modifiers';
@@ -22,7 +22,8 @@ export function applyEffects(sim: Simulation, effects: readonly Effect[], ctx: E
 function applyEffect(sim: Simulation, e: Effect, ctx: EffectContext): void {
   switch (e.type) {
     case 'area': {
-      const hit = areaTargets(sim, sim.unit(ctx.casterId), e, areaCenter(sim, e, ctx.casterId, ctx.targetId));
+      const found = areaTargets(sim, sim.unit(ctx.casterId), e, areaCenter(sim, e, ctx.casterId, ctx.targetId));
+      const hit = limitTargets(sim, found, e.maxTargets, `unit:${ctx.casterId}.${ctx.ability}.targets`);
       for (const u of hit) applyEffects(sim, e.effects, { ...ctx, targetId: u.id, viaArea: true });
       return;
     }

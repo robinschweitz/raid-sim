@@ -1,10 +1,18 @@
-import { areaCenter, areaTargets } from './area';
+import { areaCenter, areaTargets, limitTargets } from './area';
 import { applyAura } from './auras';
-import type { LeafEffect, SpellDef } from './catalog';
+import type { AreaEffect, LeafEffect, SpellDef } from './catalog';
 import { applyLeafEffect, rollDamage } from './effects';
 import { positionAt, travelTimeMs } from './movement';
 import { EventClass } from './queue';
 import type { Simulation } from './sim';
+import type { Unit } from './units';
+
+export interface LaunchOptions {
+  /** SPELLVALUE_MAX_TARGETS: overrides the maxTargets of every area effect of the spell. */
+  readonly maxTargets?: number;
+  /** Stream for the random subset; default `unit:<caster>.<spell>.targets` (A-027). */
+  readonly targetStream?: string;
+}
 
 /** One effect of a spell on one unit. */
 interface Item {
@@ -21,8 +29,28 @@ interface Item {
  * effect now (DoAllEffectOnLaunchTarget, Spell.cpp 8650–8745); then every unit is hit, when the spell reaches its
  * explicit target.
  */
-export function launchSpell(sim: Simulation, casterId: string, spell: SpellDef, targetId: string, cause: string): void {
+export function launchSpell(
+  sim: Simulation,
+  casterId: string,
+  spell: SpellDef,
+  targetId: string,
+  cause: string,
+  options: LaunchOptions = {},
+): void {
   const caster = sim.unit(casterId);
+  const lists = new Map<string, readonly Unit[]>();
+  /** Effects with the same targeting share one unit list (Spell.cpp 1002–1011). */
+  const areaUnits = (e: AreaEffect): readonly Unit[] => {
+    const limit = options.maxTargets ?? e.maxTargets;
+    const key = JSON.stringify([e.radius, e.center, e.relation, e.playersOnly === true, e.excludeCaster === true, limit ?? null]);
+    let units = lists.get(key);
+    if (!units) {
+      const found = areaTargets(sim, caster, e, areaCenter(sim, e, casterId, targetId));
+      units = limitTargets(sim, found, limit, options.targetStream ?? `unit:${casterId}.${spell.id}.targets`);
+      lists.set(key, units);
+    }
+    return units;
+  };
   const deliveries = new Map<string, Item[]>();
   const add = (unitId: string, index: number, effect: LeafEffect, viaArea: boolean): void => {
     let items = deliveries.get(unitId);
@@ -31,7 +59,7 @@ export function launchSpell(sim: Simulation, casterId: string, spell: SpellDef, 
   };
   spell.effects.forEach((e, index) => {
     if (e.type === 'area') {
-      for (const u of areaTargets(sim, caster, e, areaCenter(sim, e, casterId, targetId))) {
+      for (const u of areaUnits(e)) {
         for (const leaf of e.effects) add(u.id, index, leaf, true);
       }
     } else if (e.type === 'on_caster') {

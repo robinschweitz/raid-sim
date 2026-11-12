@@ -39,6 +39,8 @@ export interface AreaEffect {
   readonly playersOnly?: boolean;
   /** SPELL_ATTR1_EXCLUDE_CASTER: the caster is never hit (ally and any areas include it otherwise). */
   readonly excludeCaster?: boolean;
+  /** MaxAffectedTargets: a random subset of this size when more units qualify (RandomResize, Spell.cpp 1414–1419). */
+  readonly maxTargets?: number;
   readonly effects: readonly LeafEffect[];
 }
 
@@ -149,6 +151,9 @@ function checkEffects(owner: string, effects: readonly Effect[]): void {
     if (e.type === 'damage') checkSchools(owner, e.school);
     if (e.type === 'area') {
       if (!Number.isFinite(e.radius) || e.radius < 0) throw new Error(`${owner}: invalid area radius ${e.radius}`);
+      if (e.maxTargets !== undefined && (!Number.isInteger(e.maxTargets) || e.maxTargets < 1)) {
+        throw new Error(`${owner}: invalid maxTargets ${e.maxTargets}`);
+      }
       checkEffects(owner, e.effects);
     }
     if (e.type === 'on_caster') checkEffects(owner, e.effects);

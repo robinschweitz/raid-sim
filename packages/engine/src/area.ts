@@ -1,7 +1,7 @@
 import type { AreaEffect } from './catalog';
 import { centerDistance, positionAt } from './movement';
 import type { Simulation } from './sim';
-import type { Unit, Vec2 } from './units';
+import { byId, type Unit, type Vec2 } from './units';
 
 /** Whether `u` has the given relation to the caster: players and creatures are opposite sides. */
 export function relationMatches(relation: AreaEffect['relation'], caster: Unit, u: Unit): boolean {
@@ -28,4 +28,10 @@ export function areaTargets(sim: Simulation, caster: Unit, area: AreaEffect, cen
     const reach = caster.kind === 'player' && u.kind === 'creature' ? u.combatReach : 0;
     return centerDistance(center, positionAt(u, sim.now)) <= area.radius + reach;
   });
+}
+
+/** RandomResize: when more units qualify than `limit`, keeps a random subset drawn from `stream`; no draw otherwise (A-027). */
+export function limitTargets(sim: Simulation, units: readonly Unit[], limit: number | undefined, stream: string): Unit[] {
+  if (limit === undefined || units.length <= limit) return [...units];
+  return sim.rng.stream(stream).pick(units, limit).sort(byId);
 }
