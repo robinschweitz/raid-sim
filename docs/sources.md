@@ -33,8 +33,10 @@ Files referenced so far:
 | `src/server/game/Entities/Unit/Unit.cpp` lines 774–788, 5424–5443, 6026–6050, 6116–6124, 8896–8897, 12829–12835, 13135–13152, 16030–16036 | Combat range, death removal, damage-done percentages, school-mask overlap, no creature crits, scale, attack time, area damage reduction |
 | `src/server/game/Entities/Creature/Creature.cpp` lines 2893–2937, 3591–3607 | Engagement start, combat reach from scale |
 | `src/server/game/AI/CoreAI/UnitAI.h` lines 53–100, 238–262, 282–343 | SelectTarget distance rules and target lists (`boss.ts`) |
-| `src/server/game/AI/CreatureAI.cpp` lines 117–162, 286–295 | DoZoneInCombat and engagement (`boss.ts`, `engage.ts`) |
-| `src/server/game/Combat/ThreatManager.cpp` lines 410–524, 650–713 | The first threat reference becomes the victim (`engage.ts`) |
+| `src/server/game/AI/ScriptedCreature.cpp` lines 681–685 | BossAI::_JustEngagedWith calls DoZoneInCombat first (`engage.ts`) |
+| `src/server/game/AI/CreatureAI.h` line 131 | JustStartedThreateningMe starts the engagement |
+| `src/server/game/AI/CreatureAI.cpp` lines 117–165, 286–296 | DoZoneInCombat and EngagementStart (`engage.ts`) |
+| `src/server/game/Combat/ThreatManager.cpp` lines 484–524, 650–729 | The first threat reference becomes the victim and starts the engage chain (`engage.ts`) |
 | `src/server/shared/SharedDefines.h` lines 288–290, 374–635, 767–906, 1414–1495; `src/server/game/Spells/Auras/SpellAuraDefines.h` lines 66–347 | School masks, attributes, effect, target and aura ids |
 
 ## Spell data

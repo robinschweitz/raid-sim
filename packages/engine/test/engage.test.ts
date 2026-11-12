@@ -18,11 +18,11 @@ class Probe extends EventScriptedAI {
   protected executeEvent(): void {}
 }
 
-function newSim(withThreat = true) {
+function newSim(withThreat = true, melee = false) {
   const sim = new Simulation({ seed: 5, maxDurationMs: 3000, sampleIntervalMs: 1000 });
   installCoreRules(sim);
-  sim.addUnit({ ...body, id: 'boss', name: 'Boss', kind: 'creature', role: 'boss', maxHealth: 1e7, combatReach: 8, pos: { x: 0, y: 0 } });
-  for (const id of ['a_first', 'p_pull', 'z_last']) sim.addUnit({ ...body, id, name: id, kind: 'player', role: 'ranged', pos: { x: 10, y: 0 } });
+  sim.addUnit({ ...body, id: 'boss', name: 'Boss', kind: 'creature', role: 'boss', maxHealth: 1e7, combatReach: 8, pos: { x: 0, y: 0 }, ...(melee ? { melee: { minDamage: 10, maxDamage: 10, attackTimeMs: 2000 } } : {}) });
+  for (const id of ['a_first', 'p_pull', 'z_last']) sim.addUnit({ ...body, id, name: id, kind: 'player', role: 'ranged', pos: { x: melee ? 3 : 10, y: 0 } });
   if (withThreat) new ThreatManager(sim, 1000).install();
   return sim;
 }
@@ -62,5 +62,53 @@ describe('engage with a puller (A-033)', () => {
 
   it('needs a threat manager', () => {
     expect(() => engageEncounter(newSim(false), new Probe(), 'boss', 10, 'p_pull')).toThrow(/threat manager/);
+  });
+});
+
+describe('engage order and first swing (A-033)', () => {
+  it('zone-in adds players in unit id order, after the engage event and before the script engage code', () => {
+    const sim = newSim();
+    const order: string[] = [];
+    const threat = threatFor(sim)!;
+    const add = threat.add.bind(threat);
+    threat.add = (c, u, amount, causes) => {
+      order.push(`add:${u}`);
+      add(c, u, amount, causes);
+    };
+    class Order extends Probe {
+      protected override engage(): void {
+        order.push('script');
+      }
+    }
+    engageEncounter(sim, new Order(), 'boss', 10, 'p_pull');
+    expect(order).toEqual(['add:p_pull', 'add:a_first', 'add:p_pull', 'add:z_last', 'script']);
+    expect(sim.players().map((p) => p.id)).toEqual(['a_first', 'p_pull', 'z_last']);
+  });
+
+  it('the first melee swing on the puller path happens at the first AI update', () => {
+    const sim = newSim(true, true);
+    class Swing extends Probe {
+      override updateAI(ctx: BossContext): void {
+        ctx.meleeIfReady();
+      }
+    }
+    engageEncounter(sim, new Swing(), 'boss', 10, 'p_pull');
+    sim.run();
+    const swings = sim.trace.list().filter((e) => e.data.ability === 'melee' || e.kind === 'melee_avoided');
+    expect(swings[0]?.t).toBe(10);
+    expect(swings[1]?.t).toBe(2010);
+  });
+
+  it('a later threat gain by another player below 110 % does not displace the puller; above it does', () => {
+    const victims = (other: number): unknown[] => {
+      const sim = newSim();
+      engageEncounter(sim, new Probe(), 'boss', 10, 'p_pull');
+      threatFor(sim)!.add('boss', 'p_pull', 1000);
+      threatFor(sim)!.add('boss', 'a_first', other);
+      sim.run();
+      return sim.trace.list().filter((e) => e.kind === 'threat_target').map((e) => e.data.target);
+    };
+    expect(victims(1099)).toEqual(['p_pull']);
+    expect(victims(1101)).toEqual(['p_pull', 'a_first']);
   });
 });

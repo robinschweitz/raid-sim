@@ -153,10 +153,17 @@ const attached = new WeakMap<Simulation, Set<string>>();
 
 /**
  * Emits engage, calls onEngage, and runs updateAI every intervalMs (A-002). With `whoId` (A-033) the engage event names
- * the pulling unit and every living player joins the threat list with 0 threat before the script's engage code
- * (BossAI::_JustEngagedWith → DoZoneInCombat, CreatureAI.cpp 117–162). Returns the engage event id.
+ * the pulling unit; `afterEngage` runs between the engage event and the script's engage code (the engine's zone-in-combat,
+ * see `engageEncounter`), so this function stays threat-agnostic. Returns the engage event id.
  */
-export function attachBoss(sim: Simulation, script: BossScript, bossUnitId: string, intervalMs: number, whoId?: string): string {
+export function attachBoss(
+  sim: Simulation,
+  script: BossScript,
+  bossUnitId: string,
+  intervalMs: number,
+  whoId?: string,
+  afterEngage?: (engageEventId: string) => void,
+): string {
   if (!Number.isInteger(intervalMs) || intervalMs <= 0) throw new Error('AI update interval must be a positive integer');
   let ids = attached.get(sim);
   if (!ids) attached.set(sim, (ids = new Set()));
@@ -165,9 +172,7 @@ export function attachBoss(sim: Simulation, script: BossScript, bossUnitId: stri
   const ctx = makeBossContext(sim, bossUnitId);
   ids.add(bossUnitId);
   const engage = sim.emit('engage', who ? { boss: bossUnitId, who: who.id } : { boss: bossUnitId });
-  if (who) {
-    for (const p of sim.players()) if (p.alive) threatFor(sim)?.add(bossUnitId, p.id, 0, [engage]);
-  }
+  afterEngage?.(engage);
   script.onEngage(ctx, who);
   const tick = (): void => {
     if (!ctx.self.alive || sim.outcome) return;
