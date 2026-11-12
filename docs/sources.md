@@ -24,6 +24,18 @@ Files referenced so far:
 | `src/server/game/Entities/Unit/StatSystem.cpp` line 1117 | Creature melee damage (`melee.ts`) |
 | `src/server/game/Entities/Creature/Creature.cpp` line 1554, `CreatureData.h` lines 313–335 | Creature base damage, health, armor |
 | `data/sql/base/db_world/creature_template.sql`, `creature_classlevelstats.sql`, `creature_model_info.sql`, `creature_template_model.sql`, `creature.sql` | Festergut stats, size and spawn (Plan 2b) |
+| `src/server/game/Spells/Spell.cpp` lines 1002–1011, 1414–1419, 2161, 2885–2957, 3253, 3336–3354, 4031–4177, 5866–5871, 8619–8745, 9504–9521 | Area targets, shared target lists, max targets, launch and hit order, area damage reduction, player area cap (`area.ts`, `launch.ts`) |
+| `src/server/game/Spells/SpellEffects.cpp` lines 279–292, 330–333, 808–812, 1043–1098 | Instakill, school damage at launch, trigger spell, force cast (`launch.ts`, `effects.ts`) |
+| `src/server/game/Spells/Auras/SpellAuraEffects.cpp` lines 557–580, 755–804, 926–950, 4830–4858, 6252, 6398–6405 | Aura amounts × stacks, remove hooks for every mode, periodic tick before expiry, attack speed, periodic trigger, periodic area reduction (`auras.ts`, `stats.ts`) |
+| `src/server/game/Spells/Auras/SpellAuras.cpp` lines 2131–2151, 2193–2210 | Area auras of different casters replace each other (`auras.ts`) |
+| `src/server/game/Spells/SpellInfo.cpp` lines 409–447, 554–557, 1262, 1655–1674 | Effect value from basePoints and dieSides, radius 0, death-persistent auras, ignoring caster modifiers (`spelldata/entries.ts`, `catalog.ts`) |
+| `src/server/game/Spells/SpellMgr.cpp` lines 538–578 | Difficulty variants with the heroic fallback (`spelldata/variants.ts`) |
+| `src/server/game/Entities/Unit/Unit.cpp` lines 774–788, 5424–5443, 6026–6050, 6116–6124, 8896–8897, 12829–12835, 13135–13152, 16030–16036 | Combat range, death removal, damage-done percentages, school-mask overlap, no creature crits, scale, attack time, area damage reduction |
+| `src/server/game/Entities/Creature/Creature.cpp` lines 2893–2937, 3591–3607 | Engagement start, combat reach from scale |
+| `src/server/game/AI/CoreAI/UnitAI.h` lines 53–100, 238–262, 282–343 | SelectTarget distance rules and target lists (`boss.ts`) |
+| `src/server/game/AI/CreatureAI.cpp` lines 117–162, 286–295 | DoZoneInCombat and engagement (`boss.ts`, `engage.ts`) |
+| `src/server/game/Combat/ThreatManager.cpp` lines 410–524, 650–713 | The first threat reference becomes the victim (`engage.ts`) |
+| `src/server/shared/SharedDefines.h` lines 288–290, 374–635, 767–906, 1414–1495; `src/server/game/Spells/Auras/SpellAuraDefines.h` lines 66–347 | School masks, attributes, effect, target and aura ids |
 
 ## Spell data
 
