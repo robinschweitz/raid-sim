@@ -102,7 +102,7 @@ function hitUnit(sim: Simulation, casterId: string, spell: SpellDef, unitId: str
   const script = sim.catalog.spellScript(spell.id);
   // The spell's auras first.
   for (const it of items) {
-    if (it.effect.type === 'apply_aura') applyAura(sim, it.effect.aura, casterId, unitId, causes, { viaArea: it.viaArea, allowDeadTarget: deadOk });
+    if (it.effect.type === 'apply_aura') applyAura(sim, it.effect.aura, casterId, unitId, causes, { viaArea: it.viaArea, allowDeadTarget: deadOk, ignoreCasterMods: spell.ignoreCasterDamageMods === true });
   }
   // Then per effect: the OnEffectHitTarget hook, then the effect's default handler.
   for (const index of [...new Set(items.map((it) => it.index))]) {
@@ -112,7 +112,7 @@ function hitUnit(sim: Simulation, casterId: string, spell: SpellDef, unitId: str
     if (!unit.alive && !deadOk) return;
     for (const it of items) {
       if (it.index !== index || it.effect.type === 'apply_aura' || it.effect.type === 'damage') continue;
-      applyLeafEffect(sim, it.effect, { casterId, targetId: unitId, ability: spell.id, causes, viaArea: it.viaArea });
+      applyLeafEffect(sim, it.effect, { casterId, targetId: unitId, ability: spell.id, causes, viaArea: it.viaArea, ignoreCasterMods: spell.ignoreCasterDamageMods === true });
     }
   }
   // The damage fixed at launch is dealt last.

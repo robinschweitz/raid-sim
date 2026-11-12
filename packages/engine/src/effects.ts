@@ -12,6 +12,8 @@ export interface EffectContext {
   readonly causes: readonly string[];
   /** The effect reaches the target through an area: area modifiers apply (A-026). */
   readonly viaArea?: boolean;
+  /** The spell (or aura) skips the caster's damage-done factors, also for the auras it applies (A-028). */
+  readonly ignoreCasterMods?: boolean;
 }
 
 /** Effects outside a spell launch: aura ticks and on-expire effects (spells resolve through launchSpell). */
@@ -48,7 +50,7 @@ export function applyLeafEffect(sim: Simulation, e: LeafEffect, ctx: EffectConte
   switch (e.type) {
     case 'damage': {
       if (!target.alive) return;
-      const amount = rollDamage(sim, ctx.casterId, target.id, e, { viaArea: ctx.viaArea === true });
+      const amount = rollDamage(sim, ctx.casterId, target.id, e, { viaArea: ctx.viaArea === true, ignoreCasterMods: ctx.ignoreCasterMods === true });
       sim.damage(target.id, amount, { sourceId: ctx.casterId, ability: ctx.ability, school: e.school }, ctx.causes);
       return;
     }
@@ -59,7 +61,7 @@ export function applyLeafEffect(sim: Simulation, e: LeafEffect, ctx: EffectConte
       return;
     }
     case 'apply_aura':
-      applyAura(sim, e.aura, ctx.casterId, target.id, ctx.causes, { viaArea: ctx.viaArea === true });
+      applyAura(sim, e.aura, ctx.casterId, target.id, ctx.causes, { viaArea: ctx.viaArea === true, ignoreCasterMods: ctx.ignoreCasterMods === true });
       return;
     case 'remove_aura':
       removeAuras(sim, target.id, e.aura, 'removed', ctx.causes);

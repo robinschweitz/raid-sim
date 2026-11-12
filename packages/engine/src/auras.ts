@@ -10,9 +10,14 @@ export interface ApplyAuraOptions {
   readonly viaArea?: boolean;
   /** The spell allows dead targets: a death-persistent aura may land on a dead unit (A-012). */
   readonly allowDeadTarget?: boolean;
+  /** The applying spell has ignoreCasterDamageMods: periodic damage skips the caster's done factors (A-028, A-029). */
+  readonly ignoreCasterMods?: boolean;
 }
 
-/** Applies, stacks or replaces an aura; returns the event id, or null if the target is dead or the fight is over. */
+/**
+ * Applies, stacks or replaces an aura; returns the event id. Returns null if the target is dead or the fight is over, and
+ * also when the removal hook of a replaced instance killed the holder, decided the fight or re-applied the aura itself.
+ */
 export function applyAura(
   sim: Simulation,
   auraId: string,
@@ -45,6 +50,7 @@ export function applyAura(
     existing.expiresMs = expiresMs;
     existing.expiry = schedule(existing);
     existing.refreshedMs = sim.now;
+    existing.ignoreCasterMods ||= options.ignoreCasterMods === true || def.ignoreCasterDamageMods === true;
     fixPeriodicAmounts(sim, existing);
     const id = sim.emit(
       'aura_stack',
@@ -70,6 +76,7 @@ export function applyAura(
     nextTickMs: sim.now + (def.periodic?.intervalMs ?? 0),
     appliedEvent: '',
     viaArea: options.viaArea === true,
+    ignoreCasterMods: options.ignoreCasterMods === true || def.ignoreCasterDamageMods === true,
     periodicAmounts: [],
   };
   inst.expiry = schedule(inst);
@@ -135,14 +142,14 @@ function fixPeriodicAmounts(sim: Simulation, inst: AuraInstance): void {
     if (e.type !== 'damage' && e.type !== 'heal') return null;
     const rolled = sim.rng.stream(`unit:${inst.casterId}.amount`).int(e.min, e.max);
     if (e.type === 'heal') return rolled * inst.stacks;
-    return fixedPeriodicDamage(sim, inst.casterId, e.school, rolled, inst.stacks, def.ignoreCasterDamageMods === true);
+    return fixedPeriodicDamage(sim, inst.casterId, e.school, rolled, inst.stacks, inst.ignoreCasterMods);
   });
 }
 
 /** One tick: fixed amounts take the victim's factors now (and the area factor for an area-applied aura); other effects run as usual. */
 function tickEffects(sim: Simulation, inst: AuraInstance, targetId: string, tickId: string): void {
   const effects = sim.catalog.aura(inst.auraId).periodic?.effects ?? [];
-  const ctx = { casterId: inst.casterId, targetId, ability: inst.auraId, causes: [tickId], viaArea: inst.viaArea };
+  const ctx = { casterId: inst.casterId, targetId, ability: inst.auraId, causes: [tickId], viaArea: inst.viaArea, ignoreCasterMods: inst.ignoreCasterMods };
   effects.forEach((e, i) => {
     const fixed = inst.periodicAmounts[i] ?? null;
     if (fixed === null) {

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { applyAura } from '../src/auras';
-import type { AuraDef } from '../src/catalog';
+import type { AuraDef, SpellDef } from '../src/catalog';
+import { installCoreRules, startCast } from '../src/casting';
 import { applyEffects } from '../src/effects';
 import { EventClass } from '../src/queue';
 import { Simulation } from '../src/sim';
@@ -102,5 +103,75 @@ describe('periodic amounts (A-029)', () => {
     });
     sim.run();
     expect(ticks(sim)).toEqual([[1000, 100], [2000, 100], [3000, 100]]);
+  });
+  describe('ignoreCasterDamageMods of the applying spell (A-028, A-029)', () => {
+    const applier = (effect: SpellDef['effects'][number]): SpellDef => ({
+      id: 'plague',
+      castTimeMs: 0,
+      gcdMs: 0,
+      cooldownMs: 0,
+      rangeYd: 100,
+      usableWhileMoving: true,
+      target: 'unit',
+      ignoreCasterDamageMods: true,
+      effects: [effect],
+    });
+    const cast = (sim: Simulation) => {
+      installCoreRules(sim);
+      sim.at(0, EventClass.SpellHit, () => {
+        applyAura(sim, 'fury', 'boss', 'boss', []);
+        startCast(sim, 'boss', 'plague', 'p1', []);
+      });
+    };
+
+    it('a flagged spell applies a DoT whose ticks skip the caster done factor', () => {
+      const sim = newSim();
+      sim.catalog.addAura(dot('rot', 100, 100));
+      sim.catalog.addSpell(applier({ type: 'apply_aura', aura: 'rot' }));
+      cast(sim);
+      sim.run();
+      expect(ticks(sim)).toEqual([[1000, 100], [2000, 100], [3000, 100]]);
+    });
+
+    it('also through an area effect leaf', () => {
+      const sim = newSim();
+      sim.catalog.addAura(dot('rot', 100, 100));
+      sim.catalog.addSpell(applier({ type: 'area', radius: 30, center: 'caster', relation: 'enemy', effects: [{ type: 'apply_aura', aura: 'rot' }] }));
+      cast(sim);
+      sim.run();
+      expect(ticks(sim)).toEqual([[1000, 100], [2000, 100], [3000, 100]]);
+    });
+
+    it('through an area effect run outside a spell launch (effect context)', () => {
+      const sim = newSim();
+      sim.catalog.addAura(dot('rot', 100, 100));
+      sim.at(0, EventClass.SpellHit, () => {
+        applyAura(sim, 'fury', 'boss', 'boss', []);
+        applyEffects(sim, [{ type: 'area', radius: 30, center: 'caster', relation: 'enemy', effects: [{ type: 'apply_aura', aura: 'rot' }] }], {
+          casterId: 'boss', targetId: 'boss', ability: 'cloud', causes: [], ignoreCasterMods: true,
+        });
+      });
+      sim.run();
+      expect(ticks(sim)[0]).toEqual([1000, 100]);
+    });
+
+    it('a re-stack by an unflagged source keeps the flag; an unflagged spell still takes the factor', () => {
+      const sim = newSim();
+      sim.catalog.addAura(dot('rot', 100, 100));
+      sim.catalog.addSpell(applier({ type: 'apply_aura', aura: 'rot' }));
+      cast(sim);
+      sim.at(500, EventClass.SpellHit, () => void applyAura(sim, 'rot', 'boss', 'p1', []));
+      sim.run();
+      // Two stacks, both without the done factor.
+      expect(ticks(sim)).toEqual([[1000, 200], [2000, 200], [3000, 200]]);
+      const plain = newSim();
+      plain.catalog.addAura(dot('rot', 100, 100));
+      plain.at(0, EventClass.SpellHit, () => {
+        applyAura(plain, 'fury', 'boss', 'boss', []);
+        applyAura(plain, 'rot', 'boss', 'p1', []);
+      });
+      plain.run();
+      expect(ticks(plain)[0]).toEqual([1000, 200]);
+    });
   });
 });
