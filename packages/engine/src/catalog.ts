@@ -134,6 +134,8 @@ export interface SpellDef {
   readonly usableWhileMoving: boolean;
   readonly target: 'self' | 'unit';
   readonly travelSpeedYdPerSec?: number;
+  /** SPELL_ATTR6_IGNORE_CASTER_DAMAGE_MODIFIERS: the caster's damage-done modifiers do not apply (SpellInfo.cpp 1655–1674). */
+  readonly ignoreCasterDamageMods?: boolean;
   readonly effects: readonly Effect[];
 }
 

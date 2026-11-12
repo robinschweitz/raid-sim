@@ -35,6 +35,8 @@ export function damageTakenFactor(sim: Simulation, targetId: string, school: Sch
 export interface DamageRoute {
   /** Through an area effect, directly or as a tick of an aura an area applied (A-026). */
   readonly viaArea?: boolean;
+  /** Skip the source's damage-done factors (SPELL_ATTR6_IGNORE_CASTER_DAMAGE_MODIFIERS). */
+  readonly ignoreCasterMods?: boolean;
 }
 
 /** Unit::CalculateAOEDamageReduction (Unit.cpp 16030–16036): AoE avoidance, and creature AoE avoidance for a creature caster. */
@@ -51,7 +53,7 @@ export function aoeDamageFactor(sim: Simulation, sourceId: string, targetId: str
  * damage done, damage taken, then the area reduction (A-017, A-026).
  */
 export function modifiedSpellDamage(sim: Simulation, sourceId: string, targetId: string, school: SchoolSet, rolled: number, route: DamageRoute = {}): number {
-  let amount = Math.trunc(rolled * damageDoneFactor(sim, sourceId, school));
+  let amount = route.ignoreCasterMods ? Math.trunc(rolled) : Math.trunc(rolled * damageDoneFactor(sim, sourceId, school));
   amount = Math.trunc(amount * damageTakenFactor(sim, targetId, school));
   if (route.viaArea) amount = Math.trunc(amount * aoeDamageFactor(sim, sourceId, targetId, school));
   return Math.max(0, amount);

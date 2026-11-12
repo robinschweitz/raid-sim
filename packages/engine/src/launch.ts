@@ -14,6 +14,9 @@ export interface LaunchOptions {
   readonly targetStream?: string;
 }
 
+/** Spell.cpp 8730–8735: a player's area damage on more units than this is scaled by cap / units (A-028). */
+export const PLAYER_AOE_TARGET_CAP = 10;
+
 /** One effect of a spell on one unit. */
 interface Item {
   readonly index: number;
@@ -68,9 +71,14 @@ export function launchSpell(
       add(targetId, index, e, false);
     }
   });
+  // The cap counts every unit the spell hits (m_UniqueTargetInfo) and comes after the modifier steps, truncated like them.
+  const capped = caster.kind === 'player' && deliveries.size > PLAYER_AOE_TARGET_CAP;
+  const ignoreCasterMods = spell.ignoreCasterDamageMods === true;
   for (const [unitId, items] of deliveries) {
     for (const it of items) {
-      if (it.effect.type === 'damage') it.amount = rollDamage(sim, casterId, unitId, it.effect, { viaArea: it.viaArea });
+      if (it.effect.type !== 'damage') continue;
+      const amount = rollDamage(sim, casterId, unitId, it.effect, { ignoreCasterMods, viaArea: it.viaArea });
+      it.amount = capped && it.viaArea ? Math.trunc((amount * PLAYER_AOE_TARGET_CAP) / deliveries.size) : amount;
     }
   }
   const deliver = (): void => {
