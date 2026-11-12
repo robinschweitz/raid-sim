@@ -40,8 +40,10 @@ export function chooseHealTarget(view: ActorView, healAmount: number, minDeficit
 }
 
 /**
- * A generic healer: one cast-time heal on the player who needs it most (see chooseHealTarget), with a smaller heal on a
- * few players near that target, which stands in for the area and periodic heals of real healers. An ability-using
+ * A generic healer: one cast-time heal on the player who needs it most (see chooseHealTarget), with a smaller heal on
+ * up to 5 players within 10 yd of the target, the target included, which stands in for the area and periodic heals of
+ * real healers. The target can be drawn for the smaller heal too and then uses one of the five slots: that is intended
+ * stand-in behaviour, and the numbers were chosen with it. An ability-using
  * stand-in (A-035): its numbers are assumptions, it has no mana, haste, crits or cooldowns, and it cannot heal while moving.
  */
 export const genericHealer: PolicyFactory = {
@@ -75,7 +77,8 @@ export const genericHealer: PolicyFactory = {
         target: 'unit',
         effects: [
           { type: 'heal', min: n('heal_min'), max: n('heal_max') },
-          // Stands in for the area and periodic heals of real healers: a smaller heal on a few players near the target.
+          // Stands in for the area and periodic heals of real healers: a smaller heal on up to 5 players within 10 yd of
+          // the target, the target included (it may be healed again and then uses one of the slots).
           {
             type: 'area',
             radius: n('splash_radius_yd'),

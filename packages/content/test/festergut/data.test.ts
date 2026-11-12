@@ -1,5 +1,5 @@
 import { DataRegistry, PINS } from '@raid/data';
-import { CORE_DATA } from '@raid/engine';
+import { CORE_DATA, creatureMeleeDamage } from '@raid/engine';
 import { describe, expect, it } from 'vitest';
 import { FESTERGUT_DATA_25N, festergutData } from '../../src/festergut/data';
 import { FestergutSpells } from '../../src/festergut/spell-ids';
@@ -60,6 +60,46 @@ describe('Festergut data, 25-player normal', () => {
     expect(data.num(spells.key('pungent_blight', 'e0.min'))).toBe(48750);
     expect(data.num(spells.key('pungent_blight', 'e0.max'))).toBe(51250);
     expect(source(spells.key('pungent_blight', 'e0.base_points'))).toMatchObject({ kind: 'spelldata', spellId: 71219, field: 'EffectBasePoints[0]' });
+  });
+
+  it('derived values follow from the registry entries named as their inputs', () => {
+    const n = (key: string): number => data.num(`festergut.${key}`);
+    expect(n('health')).toBe(Math.ceil(n('base_hp') * n('health_modifier')));
+    expect(n('armor')).toBe(Math.ceil(n('base_armor') * n('armor_modifier')));
+    expect(n('attack_time_ms')).toBe(n('base_attack_time_db') === 0 ? n('default_attack_time_ms') : n('base_attack_time_db'));
+    const melee = creatureMeleeDamage({
+      baseDamage: n('base_damage'),
+      attackPower: n('attack_power'),
+      variance: n('base_variance'),
+      damageModifier: n('damage_modifier'),
+      attackTimeMs: n('attack_time_ms'),
+    });
+    expect([n('melee_min'), n('melee_max')]).toEqual([melee.min, melee.max]);
+    // The base run speed is the core entry, not a second literal.
+    expect(n('speed_yd_s')).toBe(n('speed_run') * data.num('core.player_run_speed_yd_s'));
+    const p = (key: string): number => data.num(`putricide.${key}`);
+    const distance = Math.hypot(p('spawn_x') - p('festergut_watch_x'), p('spawn_y') - p('festergut_watch_y'), p('spawn_z') - p('festergut_watch_z'));
+    expect(n('first_gas_delay_ms')).toBe(Math.trunc((distance / p('charge_speed_yd_s')) * 1000));
+    // Every input of a derived value is an entry of the registry.
+    for (const e of FESTERGUT_DATA_25N) {
+      if (e.source.kind !== 'derived') continue;
+      for (const input of e.source.inputs) expect(() => data.baselineOf(input), `${e.key} ← ${input}`).not.toThrow();
+    }
+  });
+
+  it('the spawn position is the database row, with its height', () => {
+    expect([data.num('festergut.spawn_x'), data.num('festergut.spawn_y'), data.num('festergut.spawn_z')]).toEqual([4267.92, 3137.26, 360.593]);
+    expect(source('festergut.spawn_z')).toEqual({
+      kind: 'db',
+      table: 'creature',
+      key: 'guid 201255 (id1 36626), column position_z (data/sql/base/db_world/creature.sql line 138459)',
+      commit: PINS.azerothcoreCommit,
+    });
+  });
+
+  it('the floor Gas Spore puts under Vile Gas is named as a floor (DelayEventsToMax, boss_festergut.cpp 222)', () => {
+    expect(data.num('festergut.vile_gas_floor_after_spore_ms')).toBe(20000);
+    expect(() => data.num('festergut.vile_gas_delay_after_spore_ms')).toThrow();
   });
 
   it('no value is an assumption, and only 25n exists', () => {

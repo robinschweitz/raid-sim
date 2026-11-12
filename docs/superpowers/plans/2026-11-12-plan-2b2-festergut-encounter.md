@@ -1271,7 +1271,7 @@ const SCRIPT: readonly DataEntry[] = [
   fg('gas_spore_targets', 3, 220),
   fg('gas_spore_repeat_min_ms', 40000, 221),
   fg('gas_spore_repeat_max_ms', 45000, 221),
-  fg('vile_gas_delay_after_spore_ms', 20000, 222),
+  fg('vile_gas_floor_after_spore_ms', 20000, 222),
   fg('vile_gas_min_far_targets', 8, 227),
   fg('vile_gas_far_distance_yd', 5, 228),
   fg('vile_gas_repeat_min_ms', 28000, 235),
@@ -2200,7 +2200,7 @@ export interface FestergutTimers {
   readonly gasSporeTargets: number;
   readonly vileGasFirst: readonly [number, number];
   readonly vileGasRepeat: readonly [number, number];
-  readonly vileGasDelayAfterSporeMs: number;
+  readonly vileGasFloorAfterSporeMs: number;
   readonly vileGasMinFarTargets: number;
   readonly vileGasFarDistanceYd: number;
   readonly gastricBloatFirst: readonly [number, number];
@@ -2223,7 +2223,7 @@ export function festergutTimers(data: DataRegistry): FestergutTimers {
     gasSporeTargets: n('gas_spore_targets'),
     vileGasFirst: pair('vile_gas_first'),
     vileGasRepeat: pair('vile_gas_repeat'),
-    vileGasDelayAfterSporeMs: n('vile_gas_delay_after_spore_ms'),
+    vileGasFloorAfterSporeMs: n('vile_gas_floor_after_spore_ms'),
     vileGasMinFarTargets: n('vile_gas_min_far_targets'),
     vileGasFarDistanceYd: n('vile_gas_far_distance_yd'),
     gastricBloatFirst: pair('gastric_bloat_first'),
@@ -2330,8 +2330,8 @@ export class FestergutAI extends EventScriptedAI {
         ctx.cast('gas_spore', self, [ev], { maxTargets: t.gasSporeTargets, targetStream: `boss:${FESTERGUT_ID}.gas_spore.targets` });
         this.events.scheduleRange(EVENT_GAS_SPORE, ...t.gasSporeRepeat);
         this.publishWindow(ctx, 'gas_spore', EVENT_GAS_SPORE, ...t.gasSporeRepeat, [ev]);
-        this.events.delayEventsToMax(t.vileGasDelayAfterSporeMs, GROUP_VILE_GAS);
-        this.raiseWindow(ctx, EVENT_VILE_GAS, t.vileGasDelayAfterSporeMs, [ev]);
+        this.events.delayEventsToMax(t.vileGasFloorAfterSporeMs, GROUP_VILE_GAS);
+        this.raiseWindow(ctx, EVENT_VILE_GAS, t.vileGasFloorAfterSporeMs, [ev]);
         return;
       }
       case EVENT_VILE_GAS: {
@@ -4175,6 +4175,7 @@ Expected: PASS; `festergut-cli.test.ts` has 3 tests, `golden.test.ts` still 2.
 - `db` sources have no line field; Plan 2b-2 writes row, column, SQL file and line into `key`.
 - Areas cannot filter by creature entry (the gas visuals on NPC 36659), and there is no LINKED aura, no spell hit/resist roll, no missile travel for area-at-target spells with an aura (Vile Gas): all listed as omissions of the Festergut mechanics.
 - Rule triggers cannot express "the first spore carrier goes to the melee group": the plan sends everyone in. Carrier-specific assignments need a new trigger or a boss-package action (spec §10.2).
+- All Festergut timers share one RNG stream (`boss:festergut.timers`). Heroic adds draws to it (Malleable Goo, `boss_festergut.cpp` 129), which will shift the 25n timers of a seed; decide on per-event streams before Gate 4.
 ```
 
 - [ ] **Step 6: Final verification**

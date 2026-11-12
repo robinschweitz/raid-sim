@@ -80,10 +80,15 @@ export abstract class EventScriptedAI implements BossScript {
   protected events!: EventMap;
   /** Published timer windows by event id, in EventMap time (A-034). */
   private readonly windows = new Map<number, { ability: string; earliest: number; latest: number }>();
+  /** The first `ai_event` the script emitted for the EventMap event that last executed: the cause of automatic window clears. */
+  private lastExecuted: readonly string[] = [];
+  /** The context handed to `executeEvent`, which records that `ai_event`; one per context. */
+  private readonly recording = new WeakMap<BossContext, BossContext>();
 
   onEngage(ctx: BossContext, who: Unit | null = null): void {
     this.events = new EventMap(ctx.sim.rng.stream(`boss:${this.bossId}.timers`));
     this.windows.clear();
+    this.lastExecuted = [];
     this.engage(ctx, who);
   }
 
@@ -110,11 +115,12 @@ export abstract class EventScriptedAI implements BossScript {
   }
 
   /**
-   * After the script delayed events with DelayEventsToMax: the event is now due no earlier than floorMs from now, so both
-   * bounds of its window move up to that floor, which is all a boss mod could know. This models that floor only: after a
-   * fixed-amount DelayEvents the event's time is not a floor, and the republished window does not contain it, so
-   * `publishWindow` throws the mismatch. A window whose event is no longer scheduled is cleared; an unchanged window is
-   * not published again.
+   * After the script delayed events with DelayEventsToMax (EventMap.cpp 144–158): the event is now due no earlier than
+   * floorMs from now, so both bounds of its window move up to that floor, which is all a boss mod could know. This models
+   * that floor only. A fixed-amount DelayEvents (EventMap.cpp 122–142) adds the amount to the event's time; it is not a
+   * floor: when the delayed event leaves its window, the check after the update (`checkWindows`) throws, and a delay that
+   * keeps it inside passes. A window whose event is no longer scheduled is cleared; an unchanged window is not published
+   * again.
    */
   protected raiseWindow(ctx: BossContext, eventId: number, floorMs: number, causes: readonly string[]): void {
     if (ctx.sim.over) return;
@@ -142,13 +148,35 @@ export abstract class EventScriptedAI implements BossScript {
     this.events.update(diffMs);
     if (ctx.self.cast) return;
     const id = this.events.execute();
-    if (id !== 0) this.executeEvent(id, ctx);
+    if (id !== 0) {
+      this.lastExecuted = [];
+      this.executeEvent(id, this.recordingContext(ctx));
+    }
     if (!ctx.self.cast) this.afterEvents(ctx);
+  }
+
+  /** `ctx` with an `ai` that remembers the first event emitted since `lastExecuted` was reset. */
+  private recordingContext(ctx: BossContext): BossContext {
+    let rec = this.recording.get(ctx);
+    if (!rec) {
+      rec = {
+        ...ctx,
+        ai: (name, data, causes) => {
+          const id = ctx.ai(name, data, causes);
+          if (this.lastExecuted.length === 0) this.lastExecuted = [id];
+          return id;
+        },
+      };
+      this.recording.set(ctx, rec);
+    }
+    return rec;
   }
 
   /**
    * After every update: a published window whose event is no longer scheduled (a one-shot that fired, or a cancelled
-   * event) is cleared; an event outside its window means the script changed a timer without publishing it, which throws.
+   * event) is cleared, with the `ai_event` of the EventMap event that last executed as its cause; a window the script
+   * already cleared itself is only forgotten (`clearTimer` records nothing for it). An event outside its window means the
+   * script changed a timer without publishing it, which throws.
    */
   private checkWindows(ctx: BossContext): void {
     if (ctx.sim.over) return;
@@ -156,7 +184,7 @@ export abstract class EventScriptedAI implements BossScript {
       const until = this.events.timeUntilEvent(eventId);
       if (until === null) {
         this.windows.delete(eventId);
-        ctx.clearTimer(w.ability, []);
+        ctx.clearTimer(w.ability, this.lastExecuted);
         continue;
       }
       const due = this.events.now + until;

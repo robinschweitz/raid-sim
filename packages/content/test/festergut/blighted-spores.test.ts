@@ -1,6 +1,8 @@
 import { applyAura } from '@raid/engine';
 import { describe, expect, it } from 'vitest';
 import { DATA_INOCULATED_STACK } from '../../src/festergut/ai';
+import { blightedSporesScript } from '../../src/festergut/scripts/blighted-spores';
+import { FestergutSpells } from '../../src/festergut/spell-ids';
 import { newFight, ring, type TestPlayer } from './fight';
 
 const between = (v: number, min: number, max: number): boolean => v >= min && v <= max;
@@ -113,5 +115,28 @@ describe('Blighted Spores: deaths and the two time rules (boss_festergut.cpp 324
       [17500, 'expired'],
     ]);
     expect(f.ai.getData(DATA_INOCULATED_STACK)).toBe(2);
+  });
+
+  it('Inoculated is found by its id whoever applied it (GetAura(inoculatedId), 331)', () => {
+    const f = newFight({ maxDurationMs: 19000, players: ring(4, 30) });
+    // r02 has one Inoculated stack from another caster, gained at 1 s.
+    f.sim.at(1000, 0, () => void applyAura(f.sim, 'inoculated', 'r03', 'r02', []));
+    f.sim.at(2000, 0, () => void applyAura(f.sim, 'blighted_spores', 'r03', 'r02', [])); // ends at 8 s, 7 s after that stack: nothing
+    f.sim.at(9000, 0, () => void applyAura(f.sim, 'blighted_spores', 'r03', 'r02', [])); // ends at 15 s, 14 s after it: the player reaches 2
+    f.sim.run();
+    expect(f.events('cast_start', { spell: 'inoculated', caster: 'r02' }).map((e) => e.t)).toEqual([15000]);
+    expect(f.ai.getData(DATA_INOCULATED_STACK)).toBe(2);
+  });
+
+  it('the stack is reported to Festergut whatever the result of the Inoculated cast (337–340)', () => {
+    const f = newFight({ maxDurationMs: 5000, players: ring(4, 30) });
+    f.sim.run();
+    // The fight is over: the cast fails, as nothing is cast after the outcome.
+    expect(f.sim.over).toBe(true);
+    const script = blightedSporesScript(f.data, new FestergutSpells('25n'), f.ai);
+    const now = f.sim.now;
+    script.afterRemove!({ sim: f.sim, unitId: 'r02', casterId: 'r03', auraId: 'blighted_spores', stacks: 1, previousStacks: 1, appliedMs: now - 6000, refreshedMs: now - 6000, expiresMs: now, causes: [], reason: 'expired' });
+    expect(f.events('cast_start', { spell: 'inoculated' })).toEqual([]);
+    expect(f.ai.getData(DATA_INOCULATED_STACK)).toBe(1);
   });
 });

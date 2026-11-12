@@ -208,9 +208,41 @@ describe('Festergut script: Gastric Bloat, Gas Spore, Vile Gas, Berserk', () => 
 describe('Festergut mechanic statuses (spec §6.1, notes for Plan 2b-2)', () => {
   it('lists every omission', () => {
     const omissions = FESTERGUT_MECHANICS.flatMap((m) => m.omissions).join('\n');
-    for (const needle of ['hit and resist', 'could crit', 'missile travel time', '1 s root', 'LINKED slow', 'keeps the tick schedule', 'gas visuals', 'PERIODIC_DUMMY', 'DUMMY aura of Gas Spore']) {
+    for (const needle of [
+      'hit and resist',
+      'could crit',
+      'missile travel time',
+      '1 s root',
+      'LINKED slow',
+      'keeps the tick schedule',
+      'gas visuals',
+      'PERIODIC_DUMMY',
+      'DUMMY aura of Gas Spore',
+      'RemoveBlight only acts when the gas dummy exists',
+      'emotes and yells are not emitted',
+      'distance test is 2D here',
+      'dead-player Inoculated',
+      'CheckRequiredBosses',
+    ]) {
       expect(omissions, needle).toContain(needle);
     }
     expect(FESTERGUT_MECHANICS.every((m) => m.validation === 'azerothcore_source' && (m.status === 'implemented') === (m.omissions.length === 0))).toBe(true);
+  });
+
+  it('pins the list of mechanics and their statuses', () => {
+    expect(FESTERGUT_MECHANICS.map((m) => [m.key, m.status])).toEqual([
+      ['festergut.gaseous_blight', 'partial'],
+      ['festergut.inhale_blight', 'implemented'],
+      ['festergut.pungent_blight', 'implemented'],
+      ['festergut.gas_spore', 'partial'],
+      ['festergut.inoculated', 'partial'],
+      ['festergut.vile_gas', 'partial'],
+      ['festergut.gastric_bloat', 'implemented'],
+      ['festergut.gastric_explosion', 'partial'],
+      ['festergut.melee', 'partial'],
+      ['festergut.berserk', 'implemented'],
+      ['festergut.emotes', 'not_implemented'],
+      ['festergut.evade', 'not_implemented'],
+    ]);
   });
 });

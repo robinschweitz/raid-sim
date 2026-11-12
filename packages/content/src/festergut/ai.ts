@@ -31,6 +31,7 @@ export const FESTERGUT_MECHANICS: readonly MechanicStatus[] = [
       'the gas visuals (FORCE_CAST 69126/69152/69154 on the gas dummy, NPC 36659) are left out: areas cannot filter by creature entry',
       'Professor Putricide is not a unit: the first gas is applied after a fixed delay (festergut.first_gas_delay_ms), without the map-update latency of his arrival',
       'the quest script of the damage spell (Residue Rendezvous) is left out',
+      'RemoveBlight only acts when the gas dummy exists (boss_festergut.cpp 172); here every inhale removes the gas, as there is no gas dummy',
     ],
     validation: SOURCE,
   },
@@ -39,13 +40,20 @@ export const FESTERGUT_MECHANICS: readonly MechanicStatus[] = [
   {
     key: 'festergut.gas_spore',
     status: 'partial',
-    omissions: ['the DUMMY aura of Gas Spore (effect 1, radius 0, no target) is left out', `Blighted Spores: ${HIT}`],
+    omissions: [
+      'the DUMMY aura of Gas Spore (effect 1, radius 0, no target) is left out',
+      `Blighted Spores: ${HIT}`,
+    ],
     validation: SOURCE,
   },
   {
     key: 'festergut.inoculated',
     status: 'partial',
-    omissions: ['the PERIODIC_DUMMY effect of Inoculated (effect 1, value 0) is left out', 'the achievement Flu Shot Shortage is not evaluated; the highest stack is recorded'],
+    omissions: [
+      'the PERIODIC_DUMMY effect of Inoculated (effect 1, value 0) is left out',
+      'the achievement Flu Shot Shortage is not evaluated; the highest stack is recorded',
+      'dead-player Inoculated: aura application on a dead target not traced past CheckCast (research §8)',
+    ],
     validation: SOURCE,
   },
   {
@@ -57,6 +65,7 @@ export const FESTERGUT_MECHANICS: readonly MechanicStatus[] = [
       'the 1 s root of the splash (71288 effect 1) is left out',
       'the LINKED slow and confuse aura 69248 is left out',
       're-applying Vile Gas to a player who has it keeps the tick schedule; AzerothCore restarts it (A-009)',
+      'the Vile Gas distance test is 2D here, 3D in the source (Unit.cpp 779–782)',
     ],
     validation: SOURCE,
   },
@@ -74,6 +83,20 @@ export const FESTERGUT_MECHANICS: readonly MechanicStatus[] = [
     validation: SOURCE,
   },
   { key: 'festergut.berserk', status: 'implemented', omissions: [], validation: SOURCE },
+  {
+    key: 'festergut.emotes',
+    status: 'not_implemented',
+    omissions: ['boss emotes and yells are not emitted (EMOTE_WARN_GAS_SPORE, boss_festergut.cpp 218; EMOTE_WARN_PUNGENT_BLIGHT, 200; SAY_BERSERK, 194)'],
+    validation: SOURCE,
+  },
+  {
+    key: 'festergut.evade',
+    status: 'not_implemented',
+    omissions: [
+      'Festergut never evades: CheckRequiredBosses with EnterEvadeMode at the engage (boss_festergut.cpp 116–120) and the evade Professor Putricide calls when Festergut is not in combat on his arrival (bCallEvade, boss_professor_putricide.cpp 434–437) are left out',
+    ],
+    validation: SOURCE,
+  },
 ];
 
 export interface FestergutTimers {
@@ -87,7 +110,7 @@ export interface FestergutTimers {
   readonly gasSporeTargets: number;
   readonly vileGasFirst: readonly [number, number];
   readonly vileGasRepeat: readonly [number, number];
-  readonly vileGasDelayAfterSporeMs: number;
+  readonly vileGasFloorAfterSporeMs: number;
   readonly vileGasMinFarTargets: number;
   readonly vileGasFarDistanceYd: number;
   readonly gastricBloatFirst: readonly [number, number];
@@ -110,7 +133,7 @@ export function festergutTimers(data: DataRegistry): FestergutTimers {
     gasSporeTargets: n('gas_spore_targets'),
     vileGasFirst: pair('vile_gas_first'),
     vileGasRepeat: pair('vile_gas_repeat'),
-    vileGasDelayAfterSporeMs: n('vile_gas_delay_after_spore_ms'),
+    vileGasFloorAfterSporeMs: n('vile_gas_floor_after_spore_ms'),
     vileGasMinFarTargets: n('vile_gas_min_far_targets'),
     vileGasFarDistanceYd: n('vile_gas_far_distance_yd'),
     gastricBloatFirst: pair('gastric_bloat_first'),
@@ -217,8 +240,8 @@ export class FestergutAI extends EventScriptedAI {
         ctx.cast('gas_spore', self, [ev], { maxTargets: t.gasSporeTargets, targetStream: `boss:${FESTERGUT_ID}.gas_spore.targets` });
         this.events.scheduleRange(EVENT_GAS_SPORE, ...t.gasSporeRepeat);
         this.publishWindow(ctx, 'gas_spore', EVENT_GAS_SPORE, ...t.gasSporeRepeat, [ev]);
-        this.events.delayEventsToMax(t.vileGasDelayAfterSporeMs, GROUP_VILE_GAS);
-        this.raiseWindow(ctx, EVENT_VILE_GAS, t.vileGasDelayAfterSporeMs, [ev]);
+        this.events.delayEventsToMax(t.vileGasFloorAfterSporeMs, GROUP_VILE_GAS);
+        this.raiseWindow(ctx, EVENT_VILE_GAS, t.vileGasFloorAfterSporeMs, [ev]);
         return;
       }
       case EVENT_VILE_GAS: {

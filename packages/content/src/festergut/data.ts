@@ -1,5 +1,5 @@
-import { PINS, type DataEntry, type Difficulty } from '@raid/data';
-import { creatureMeleeDamage } from '@raid/engine';
+import { DataRegistry, PINS, type DataEntry, type Difficulty } from '@raid/data';
+import { CORE_DATA, creatureMeleeDamage } from '@raid/engine';
 import { spellDataEntries } from '../spelldata/entries';
 import { FESTERGUT_SPELL_FILE, FestergutSpells } from './spell-ids';
 
@@ -37,7 +37,8 @@ const BASE_VARIANCE = 1;
 const DAMAGE_MODIFIER = 122.6;
 const DEFAULT_ATTACK_TIME_MS = 2000;
 const SPEED_RUN = 1.5873;
-const PLAYER_RUN_SPEED = 7;
+/** The base run speed is the core entry `core.player_run_speed_yd_s` (Unit.cpp 84), not a second literal. */
+const PLAYER_RUN_SPEED = new DataRegistry([...CORE_DATA]).num('core.player_run_speed_yd_s');
 const PUTRICIDE_SPAWN = { x: 4356.19, y: 3262.9, z: 389.482 };
 const PUTRICIDE_WATCH = { x: 4324.82, y: 3166.03, z: 389.3831 };
 const PUTRICIDE_CHARGE_SPEED = 15;
@@ -76,6 +77,8 @@ const CREATURE: readonly DataEntry[] = [
   db('festergut.bounding_radius_yd', 0.31, 'creature_model_info', 'DisplayID 31006', 'BoundingRadius', 23955),
   db('festergut.spawn_x', 4267.92, 'creature', 'guid 201255 (id1 36626)', 'position_x', 138459),
   db('festergut.spawn_y', 3137.26, 'creature', 'guid 201255 (id1 36626)', 'position_y', 138459),
+  // The simulation is 2D; the height is recorded with the row it comes from.
+  db('festergut.spawn_z', 360.593, 'creature', 'guid 201255 (id1 36626)', 'position_z', 138459),
   // The database stores BaseAttackTime 0 for Festergut; the core replaces 0 by BASE_ATTACK_TIME when it loads the
   // template (ObjectMgr.cpp 1133–1134), and BASE_ATTACK_TIME is 2000 (Unit.h 43).
   code('festergut.default_attack_time_ms', DEFAULT_ATTACK_TIME_MS, 'src/server/game/Entities/Unit/Unit.h', 43),
@@ -149,7 +152,8 @@ const SCRIPT: readonly DataEntry[] = [
   fg('gas_spore_targets', 3, 220),
   fg('gas_spore_repeat_min_ms', 40000, 221),
   fg('gas_spore_repeat_max_ms', 45000, 221),
-  fg('vile_gas_delay_after_spore_ms', 20000, 222),
+  // The floor of DelayEventsToMax (EventMap.cpp 144–158): Vile Gas comes no earlier than this after a Gas Spore.
+  fg('vile_gas_floor_after_spore_ms', 20000, 222),
   fg('vile_gas_min_far_targets', 8, 227),
   fg('vile_gas_far_distance_yd', 5, 228),
   fg('vile_gas_repeat_min_ms', 28000, 235),

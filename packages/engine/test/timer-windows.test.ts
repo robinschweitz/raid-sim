@@ -118,7 +118,7 @@ describe('published timer windows follow the EventMap (A-034)', () => {
 class AutoAI extends EventScriptedAI {
   readonly bossId = 'boss';
   readonly mechanics: readonly MechanicStatus[] = [];
-  constructor(private readonly mode: 'reschedule_unpublished' | 'one_shot' | 'same_name' | 'partial_raise' | 'unchanged_raise' | 'fixed_delay') {
+  constructor(private readonly mode: 'reschedule_unpublished' | 'one_shot' | 'same_name' | 'partial_raise' | 'unchanged_raise' | 'fixed_delay' | 'fixed_delay_inside' | 'script_cleared') {
     super();
   }
   protected engage(ctx: BossContext): void {
@@ -128,8 +128,13 @@ class AutoAI extends EventScriptedAI {
       this.events.schedule(EVENT_B, 6000);
       this.publishWindow(ctx, 'a', EVENT_B, 6000, 6000, []);
     }
-    if (this.mode === 'partial_raise' || this.mode === 'unchanged_raise' || this.mode === 'fixed_delay') {
+    if (this.mode === 'partial_raise' || this.mode === 'unchanged_raise') {
       this.events.scheduleRange(EVENT_B, 8000, 15000, GROUP_B);
+      this.publishWindow(ctx, 'b', EVENT_B, 8000, 15000, []);
+    }
+    if (this.mode === 'fixed_delay' || this.mode === 'fixed_delay_inside') {
+      // A fixed time inside a published window of 8 to 15 s.
+      this.events.schedule(EVENT_B, this.mode === 'fixed_delay' ? 14000 : 9000, GROUP_B);
       this.publishWindow(ctx, 'b', EVENT_B, 8000, 15000, []);
     }
   }
@@ -150,8 +155,14 @@ class AutoAI extends EventScriptedAI {
         this.raiseWindow(ctx, EVENT_B, 1000, [ev]);
         return;
       case 'fixed_delay':
+      case 'fixed_delay_inside':
+        // DelayEvents adds the amount to the event's time (EventMap.cpp 122–142); it is not a floor.
         this.events.delayEvents(2000, GROUP_B);
         this.raiseWindow(ctx, EVENT_B, 2000, [ev]);
+        return;
+      case 'script_cleared':
+        // The script clears the window of its one-shot itself, with its own cause.
+        ctx.clearTimer('a', [ev]);
         return;
       default:
         return;
@@ -203,7 +214,32 @@ describe('the check after every boss update (fixups)', () => {
     expect(windows(sim).filter((w) => w[1] === 'b')).toEqual([[0, 'b', 8000, 15000]]);
   });
 
-  it('a fixed-amount delay followed by raiseWindow is a mismatch and throws', () => {
-    expect(() => runAuto('fixed_delay', 6000)).toThrow(/timer window b \[\d+, \d+\] does not contain event 2/);
+  it('a fixed-amount delay that moves the event out of its window throws in the check after the update', () => {
+    // B at 14 s, window 8 to 15 s; at 5 s DelayEvents adds 2 s: due at 16 s. The floor of 7 s does not move the window.
+    expect(() => runAuto('fixed_delay', 6000)).toThrow(/timer window b \[8000, 15000\] does not contain event 2 \(due at 16000\)/);
+  });
+
+  it('a fixed-amount delay that keeps the event inside its window passes', () => {
+    // B at 9 s, delayed to 11 s: still inside 8 to 15 s, and the window is not published again.
+    const sim = runAuto('fixed_delay_inside', 12000);
+    expect(windows(sim).filter((w) => w[1] === 'b')).toEqual([
+      [0, 'b', 8000, 15000],
+      [11000, 'b', null, null],
+    ]);
+  });
+
+  it('a window cleared by the check names the AI event that last executed as its cause', () => {
+    const sim = runAuto('one_shot');
+    const a = sim.trace.list().find((e) => e.kind === 'ai_event' && e.data.event === 'a');
+    const cleared = sim.trace.list().filter((e) => e.kind === 'timer_window' && e.data.cleared === true);
+    expect(a).toBeDefined();
+    expect(cleared.map((e) => [e.t, e.data.ability, e.causes])).toEqual([[5000, 'a', [a!.id]]]);
+  });
+
+  it('a window the script cleared itself is not cleared a second time', () => {
+    const sim = runAuto('script_cleared');
+    const a = sim.trace.list().find((e) => e.kind === 'ai_event' && e.data.event === 'a');
+    const cleared = sim.trace.list().filter((e) => e.kind === 'timer_window' && e.data.cleared === true);
+    expect(cleared.map((e) => [e.t, e.data.ability, e.causes])).toEqual([[5000, 'a', [a!.id]]]);
   });
 });
