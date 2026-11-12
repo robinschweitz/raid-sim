@@ -1,0 +1,21 @@
+id: festergut-clean-kill
+plan: plan-25n.yaml
+difficulty: 25n
+seed: 1
+maxDurationMs: 330000
+observation:
+  text: scenario.festergut_clean_kill.observation
+  checks:
+    - { check: outcome_is, outcome: kill }
+    # Before the berserk at 5 minutes.
+    - { check: event_absent, kind: cast_start, where: { spell: berserk } }
+    - { check: custom, name: raid.no_player_deaths }
+    # Every player has three Inoculated stacks whenever Pungent Blight hits.
+    - { check: custom, name: festergut.inoculated_at_pungent, params: { minStacks: 3 } }
+    # The tanks swap, and nobody reaches the tenth Gastric Bloat stack.
+    - { check: event_occurs, kind: taunt, where: { actor: t2 } }
+    - { check: event_absent, kind: cast_start, where: { spell: gastric_explosion } }
+annotations:
+  - { text: scenario.festergut.note.first_spores, at: { event: cast_start, where: { spell: gas_spore } } }
+  - { text: scenario.festergut.note.pungent_blight, at: { event: cast_start, where: { spell: pungent_blight } } }
+  - { text: scenario.festergut.note.tank_swap, at: { event: taunt, where: { actor: t2 } } }
