@@ -53,6 +53,8 @@ export interface CastOptions {
   readonly maxTargets?: number;
   /** Random stream for the max-target subset; default `unit:<caster>.<spell>.targets`. */
   readonly targetStream?: string;
+  /** The unit that made this unit cast (a boss script, an aura holder's caster); traced as `originalCaster` (A-020). */
+  readonly originalCasterId?: string;
 }
 
 export function startCast(
@@ -67,6 +69,8 @@ export function startCast(
     throw new Error(`invalid maxTargets ${options.maxTargets}`);
   }
   if (options.targetStream !== undefined) assertStreamName(options.targetStream);
+  if (options.originalCasterId !== undefined) sim.unit(options.originalCasterId);
+  const origin: Record<string, string> = options.originalCasterId === undefined ? {} : { originalCaster: options.originalCasterId };
   // No events once the outcome is decided; `event` is empty because nothing was written.
   if (sim.over) return { ok: false, reason: 'fight_over', event: '' };
   const failed = (reason: CastFailure): CastResult => {
@@ -83,7 +87,7 @@ export function startCast(
     if (!target || (!target.alive && !spell.allowDeadTarget)) return failed('target_dead');
     const event = sim.emit(
       'cast_start',
-      { caster: casterId, spell: spellId, target: tId, castTimeMs: 0, endMs: sim.now, triggered: true },
+      { caster: casterId, spell: spellId, target: tId, castTimeMs: 0, endMs: sim.now, triggered: true, ...origin },
       causes,
     );
     complete(sim, caster, spell, tId, event, options);
@@ -96,7 +100,7 @@ export function startCast(
   const tId = resolveTarget(spell, casterId, targetId);
   if (spell.gcdMs > 0) caster.gcdUntilMs = sim.now + spell.gcdMs;
   if (spell.castTimeMs === 0) {
-    const event = sim.emit('cast_start', { caster: casterId, spell: spellId, target: tId, castTimeMs: 0, endMs: sim.now }, causes);
+    const event = sim.emit('cast_start', { caster: casterId, spell: spellId, target: tId, castTimeMs: 0, endMs: sim.now, ...origin }, causes);
     complete(sim, caster, spell, tId, event, options);
     return { ok: true, event };
   }
@@ -116,7 +120,7 @@ export function startCast(
   caster.cast = cast;
   cast.startEvent = sim.emit(
     'cast_start',
-    { caster: casterId, spell: spellId, target: tId, castTimeMs: spell.castTimeMs, endMs },
+    { caster: casterId, spell: spellId, target: tId, castTimeMs: spell.castTimeMs, endMs, ...origin },
     causes,
   );
   return { ok: true, event: cast.startEvent };
