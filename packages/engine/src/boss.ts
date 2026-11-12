@@ -61,7 +61,8 @@ export interface BossScript {
   readonly mechanics: readonly MechanicStatus[];
   /** Known differences from Rising-Gods that are not modelled (§6.4). */
   readonly knownServerDifferences: readonly string[];
-  onEngage(ctx: BossContext): void;
+  /** JustEngagedWith(who): `who` is the pulling unit when the encounter starts with a puller (A-033), else null. */
+  onEngage(ctx: BossContext, who: Unit | null): void;
   updateAI(ctx: BossContext, diffMs: number): void;
 }
 
@@ -78,9 +79,9 @@ export abstract class EventScriptedAI implements BossScript {
   readonly knownServerDifferences: readonly string[] = [];
   protected events!: EventMap;
 
-  onEngage(ctx: BossContext): void {
+  onEngage(ctx: BossContext, who: Unit | null = null): void {
     this.events = new EventMap(ctx.sim.rng.stream(`boss:${this.bossId}.timers`));
-    this.engage(ctx);
+    this.engage(ctx, who);
   }
 
   updateAI(ctx: BossContext, diffMs: number): void {
@@ -97,7 +98,7 @@ export abstract class EventScriptedAI implements BossScript {
     ctx.meleeIfReady();
   }
 
-  protected abstract engage(ctx: BossContext): void;
+  protected abstract engage(ctx: BossContext, who: Unit | null): void;
   protected abstract executeEvent(eventId: number, ctx: BossContext): void;
 }
 
@@ -150,16 +151,24 @@ export function makeBossContext(sim: Simulation, bossId: string): BossContext {
 
 const attached = new WeakMap<Simulation, Set<string>>();
 
-/** Emits engage, calls onEngage, and runs updateAI every intervalMs (A-002). Returns the engage event id. */
-export function attachBoss(sim: Simulation, script: BossScript, bossUnitId: string, intervalMs: number): string {
+/**
+ * Emits engage, calls onEngage, and runs updateAI every intervalMs (A-002). With `whoId` (A-033) the engage event names
+ * the pulling unit and every living player joins the threat list with 0 threat before the script's engage code
+ * (BossAI::_JustEngagedWith → DoZoneInCombat, CreatureAI.cpp 117–162). Returns the engage event id.
+ */
+export function attachBoss(sim: Simulation, script: BossScript, bossUnitId: string, intervalMs: number, whoId?: string): string {
   if (!Number.isInteger(intervalMs) || intervalMs <= 0) throw new Error('AI update interval must be a positive integer');
   let ids = attached.get(sim);
   if (!ids) attached.set(sim, (ids = new Set()));
   if (ids.has(bossUnitId)) throw new Error(`boss ${bossUnitId} is already attached`);
+  const who = whoId === undefined ? null : sim.unit(whoId);
   const ctx = makeBossContext(sim, bossUnitId);
   ids.add(bossUnitId);
-  const engage = sim.emit('engage', { boss: bossUnitId });
-  script.onEngage(ctx);
+  const engage = sim.emit('engage', who ? { boss: bossUnitId, who: who.id } : { boss: bossUnitId });
+  if (who) {
+    for (const p of sim.players()) if (p.alive) threatFor(sim)?.add(bossUnitId, p.id, 0, [engage]);
+  }
+  script.onEngage(ctx, who);
   const tick = (): void => {
     if (!ctx.self.alive || sim.outcome) return;
     script.updateAI(ctx, intervalMs);

@@ -6,6 +6,7 @@ export * from './catalog';
 export * from './controller';
 export * from './core-data';
 export * from './effects';
+export * from './engage';
 export * from './eventmap';
 export * from './launch';
 export * from './limitations';

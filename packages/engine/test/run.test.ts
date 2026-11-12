@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
 import { parsePlan, parseScenario, prepareRun, type PreparedRun } from '../src/plan/prepare';
 import type { Mistake } from '../src/plan/schema';
-import { runScenario, type ContentRegistry } from '../src/run';
+import { runScenario, type BossSetup, type ContentRegistry } from '../src/run';
 import { canonicalStringify, type TraceValue } from '../src/trace';
 import { dummyBoss } from './fixtures/dummy-boss';
 import { PLAN_YAML, SCENARIO_YAML } from './fixtures/dummy-plan';
@@ -238,6 +238,31 @@ describe('runScenario', () => {
     it('rejects an explicitly empty kill set', () => {
       const r = runScenario(prepared(), withKill([]));
       expect(r).toEqual({ outcome: 'invalid', problems: [{ file: 'boss:dummy', path: '(setup)', message: 'mustKill must not be empty' }] });
+    });
+  });
+
+  describe('engage with a puller (A-033)', () => {
+    const withSetup = (change: (s: BossSetup) => BossSetup): ContentRegistry => ({
+      ...registry,
+      bosses: new Map([['dummy', { ...dummyBoss, setup: (a) => change(dummyBoss.setup(a)) }]]),
+    });
+
+    it('names who in the engage event and makes the puller the first victim', () => {
+      const r = runScenario(prepared(), withSetup(({ pull: _pull, ...rest }) => ({ ...rest, puller: () => 'p3' })));
+      if (r.outcome === 'invalid') throw new Error(JSON.stringify(r.problems));
+      expect(r.trace.events.find((e) => e.kind === 'engage')?.data).toEqual({ boss: 'dummy', who: 'p3' });
+      expect(r.trace.events[0]).toMatchObject({ kind: 'threat_target', data: { boss: 'dummy', target: 'p3', previous: null } });
+    });
+
+    it('rejects a setup with both pull and puller, or with neither', () => {
+      const problem = { outcome: 'invalid', problems: [{ file: 'boss:dummy', path: '(setup)', message: 'a boss setup needs exactly one of pull and puller' }] };
+      expect(runScenario(prepared(), withSetup((s) => ({ ...s, puller: () => 't1' })))).toEqual(problem);
+      expect(runScenario(prepared(), withSetup(({ pull: _pull, ...rest }) => rest))).toEqual(problem);
+    });
+
+    it('reports a puller that is not a living player as invalid setup', () => {
+      const r = runScenario(prepared(), withSetup(({ pull: _pull, ...rest }) => ({ ...rest, puller: () => 'ghost' })));
+      expect(r).toMatchObject({ outcome: 'invalid', problems: [{ file: 'boss:dummy', path: '(setup)' }] });
     });
   });
 });
