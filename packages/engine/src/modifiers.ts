@@ -3,7 +3,14 @@ import { overlaps } from './schools';
 import type { Simulation } from './sim';
 import { compareStrings, type Unit } from './units';
 
-const DAMAGE_KINDS: ReadonlySet<string> = new Set(['damage_done_pct', 'damage_taken_pct', 'aoe_damage_taken_pct', 'creature_aoe_damage_taken_pct']);
+// Exhaustive over DamageModifier['kind']: a new kind fails to compile until it is listed here.
+const DAMAGE_KIND_FLAGS: Record<DamageModifier['kind'], true> = {
+  damage_done_pct: true,
+  damage_taken_pct: true,
+  aoe_damage_taken_pct: true,
+  creature_aoe_damage_taken_pct: true,
+};
+const DAMAGE_KINDS: ReadonlySet<string> = new Set(Object.keys(DAMAGE_KIND_FLAGS));
 
 export function isDamageModifier(m: AuraModifier): m is DamageModifier {
   return DAMAGE_KINDS.has(m.kind);

@@ -240,6 +240,7 @@ export function removeAurasOnDeath(sim: Simulation, unitId: string, deathId: str
       sim.cancel(inst.expiry);
       sim.cancel(inst.tick);
       unit.auras.delete(key);
+      if (hasStatModifiers(sim.catalog.aura(inst.auraId))) refreshStats(sim, unitId);
       continue;
     }
     removeInstance(sim, unitId, key, inst, 'death', [deathId]);

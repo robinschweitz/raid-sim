@@ -46,6 +46,15 @@ describe('periodic_trigger and instakill (A-030)', () => {
     ]);
   });
 
+  it('twenty ticks in a row stay below the chain guard (the guard counts nesting, not ticks)', () => {
+    const sim = newSim();
+    sim.catalog.addSpell({ ...self, id: 'pulse', effects: [{ type: 'on_caster', effects: [{ type: 'apply_aura', aura: 'blight' }] }] });
+    sim.catalog.addAura({ id: 'pulsing', durationMs: 12000, maxStacks: 1, periodic: { intervalMs: 600, effects: [{ type: 'periodic_trigger', spell: 'pulse' }] } });
+    sim.at(0, EventClass.SpellHit, () => void applyAura(sim, 'pulsing', 'boss', 'p1', []));
+    expect(() => sim.run()).not.toThrow();
+    expect(sim.trace.list().filter((e) => e.kind === 'periodic_tick' && e.data.aura === 'pulsing')).toHaveLength(20);
+  });
+
   it('instakill deals the remaining health as damage, without modifiers', () => {
     const sim = newSim();
     sim.catalog.addAura({ id: 'ward', durationMs: null, maxStacks: 1, modifiers: [{ kind: 'damage_taken_pct', pct: -50, perStack: false }] });

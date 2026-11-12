@@ -78,6 +78,7 @@ export interface Unit {
   readonly baseCombatReach: number;
   /** baseCombatReach × scale (stats.ts, A-032). */
   combatReach: number;
+  /** Not scaled by MOD_SCALE (AzerothCore scales it, Creature.cpp 3598): the engine does not read it. */
   readonly boundingRadius: number;
   readonly level: number;
   readonly armor: number;

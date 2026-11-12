@@ -19,11 +19,11 @@ export function hasStatModifiers(def: AuraDef): boolean {
   return (def.modifiers ?? []).some((m) => m.kind === 'attack_speed_pct' || m.kind === 'scale_pct');
 }
 
-/** MOD_SCALE amounts are summed and added to the native scale 1 (Unit.cpp 12829–12835); never below 0. */
+/** MOD_SCALE amounts are summed and added to the native scale 1 (Unit.cpp 12829–12835); clamped to 0.01 for creatures and 0.1 for players (Unit.cpp 12833). */
 export function scaleOf(sim: Simulation, unit: Unit): number {
   let scale = 1;
   for (const pct of statAmounts(sim, unit, 'scale_pct')) scale += pct / 100;
-  return Math.max(0, scale);
+  return Math.max(unit.kind === 'player' ? 0.1 : 0.01, scale);
 }
 
 /**
@@ -55,7 +55,8 @@ export function refreshStats(sim: Simulation, unitId: string): void {
   const remaining = u.nextSwingMs - sim.now;
   if (u.melee && remaining > 0) {
     const fraction = remaining / (u.melee.attackTimeMs * u.swingFactor);
-    u.nextSwingMs = sim.now + Math.trunc(u.melee.attackTimeMs * f * fraction);
+    // The epsilon keeps exact products such as 26.999999999999996 from losing a millisecond (A-031).
+    u.nextSwingMs = sim.now + Math.trunc(u.melee.attackTimeMs * f * fraction + 1e-9);
   }
   u.swingFactor = f;
 }
