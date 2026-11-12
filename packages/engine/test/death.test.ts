@@ -98,4 +98,59 @@ describe('auras and death (A-012)', () => {
     expect(calls).toEqual(['a']);
     expect(sim.unit('p1').auras.size).toBe(0);
   });
+
+  it('afterApply and afterStack run on a dead holder when a death-persistent aura lands there', () => {
+    const sim = newSim();
+    const calls: string[] = [];
+    sim.catalog.addAuraScript('inoculated', {
+      afterApply: (c) => void calls.push(`apply:${c.sim.unit(c.unitId).alive}`),
+      afterStack: (c) => void calls.push(`stack:${c.stacks}`),
+    });
+    sim.at(0, EventClass.SpellHit, () => {
+      kill(sim, 'p1');
+      applyAura(sim, 'inoculated', 'p1', 'p1', [], { allowDeadTarget: true });
+      applyAura(sim, 'inoculated', 'p1', 'p1', [], { allowDeadTarget: true });
+    });
+    sim.run();
+    expect(calls).toEqual(['apply:false', 'stack:2']);
+  });
+
+  it('a dead caster with allowDeadCaster starts and finishes a timed, non-triggered cast', () => {
+    const sim = newSim();
+    sim.catalog.addSpell({ ...instant, id: 'last_word', castTimeMs: 500, target: 'self', allowDeadCaster: true, allowDeadTarget: true, effects: [{ type: 'apply_aura', aura: 'inoculated' }] });
+    sim.at(0, EventClass.SpellHit, () => {
+      kill(sim, 'p1');
+      expect(startCast(sim, 'p1', 'last_word', 'p1', [])).toMatchObject({ ok: true });
+    });
+    sim.run();
+    const done = sim.trace.list().find((e) => e.kind === 'cast_success');
+    expect(done?.t).toBe(500);
+    expect(sim.unit('p1').auras.get('inoculated|*')?.stacks).toBe(1);
+  });
+
+  it('kills from death hooks nest in event order', () => {
+    const sim = newSim();
+    sim.addUnit({ ...body, id: 'p3', name: 'P3', kind: 'player', role: 'ranged', pos: { x: 7, y: 0 } });
+    sim.catalog.addAura({ id: 'a', durationMs: 6000, maxStacks: 1 });
+    sim.catalog.addAuraScript('a', { afterRemove: (c) => void (c.unitId === 'p1' && kill(c.sim, 'p2')) });
+    sim.at(0, EventClass.SpellHit, () => {
+      applyAura(sim, 'a', 'boss', 'p1', []);
+      applyAura(sim, 'mark', 'boss', 'p2', []);
+    });
+    sim.at(100, EventClass.SpellHit, () => void kill(sim, 'p1'));
+    sim.run();
+    const at100 = sim.trace.list().filter((e) => e.t === 100).map((e) => `${e.kind}:${e.data.target ?? e.data.unit}`);
+    expect(at100).toEqual(['damage:p1', 'death:p1', 'aura_removed:p1', 'damage:p2', 'death:p2', 'aura_removed:p2']);
+  });
+
+  it('a death-persistent periodic aura keeps ticking on a corpse without effect', () => {
+    const sim = newSim();
+    sim.catalog.addAura({ id: 'rot', durationMs: 3000, maxStacks: 1, deathPersistent: true, periodic: { intervalMs: 1000, effects: [{ type: 'damage', school: 'shadow', min: 10, max: 10 }] } });
+    sim.at(0, EventClass.SpellHit, () => void applyAura(sim, 'rot', 'boss', 'p1', []));
+    sim.at(500, EventClass.SpellHit, () => void kill(sim, 'p1'));
+    sim.run();
+    const list = sim.trace.list();
+    expect(list.filter((e) => e.kind === 'periodic_tick').map((e) => e.t)).toEqual([1000, 2000, 3000]);
+    expect(list.filter((e) => e.kind === 'damage')).toHaveLength(1);
+  });
 });

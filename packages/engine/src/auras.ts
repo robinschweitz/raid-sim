@@ -61,7 +61,7 @@ export function applyAura(
       // Resume at the kept tick anchor (A-009). It is always after now: a chain only stops when the anchor passes the expiry.
       scheduleTick(sim, targetId, key, existing);
     }
-    if (target.alive) sim.catalog.auraScript(auraId)?.afterStack?.(hookContext(sim, existing, targetId, [id], previousStacks));
+    if (target.alive || deadOk) sim.catalog.auraScript(auraId)?.afterStack?.(hookContext(sim, existing, targetId, [id], previousStacks));
     return id;
   }
   const inst: AuraInstance = {
@@ -84,7 +84,7 @@ export function applyAura(
   target.auras.set(key, inst);
   inst.appliedEvent = sim.emit('aura_applied', { unit: targetId, aura: auraId, caster: casterId, stacks: 1, expiresMs: traceExpiry }, causes);
   if (def.periodic && target.auras.get(key) === inst) scheduleTick(sim, targetId, key, inst);
-  if (target.alive) sim.catalog.auraScript(auraId)?.afterApply?.(hookContext(sim, inst, targetId, [inst.appliedEvent], 0));
+  if (target.alive || deadOk) sim.catalog.auraScript(auraId)?.afterApply?.(hookContext(sim, inst, targetId, [inst.appliedEvent], 0));
   return inst.appliedEvent;
 }
 
