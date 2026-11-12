@@ -188,3 +188,21 @@ describe('the original caster owns damage, bonuses and auras (A-020)', () => {
     expect(damages(sim).at(-1)).toMatchObject({ target: 'p1', source: 'p2', amount: 150 });
   });
 });
+
+describe('heals are fixed at launch (A-024)', () => {
+  it('a travelling heal rolls its amount when cast and delivers it on arrival', () => {
+    const sim = newSim();
+    sim.catalog.addSpell({ id: 'lob', castTimeMs: 0, gcdMs: 0, cooldownMs: 0, rangeYd: 100, usableWhileMoving: true, travelSpeedYdPerSec: 5, target: 'unit', effects: [{ type: 'heal', min: 1, max: 1000 }] });
+    sim.at(0, EventClass.SpellHit, () => void sim.damage('p2', 50, { sourceId: 'boss', ability: 'x', school: 'physical' }, []));
+    sim.at(1, EventClass.AiUpdate, () => void startCast(sim, 'p1', 'lob', 'p2', [], { triggered: true }));
+    sim.at(2, EventClass.AiUpdate, () => {
+      expect(sim.rng.usage()['unit:p1.amount']).toBe(1);
+      expect(sim.trace.list().some((e) => e.kind === 'heal')).toBe(false);
+    });
+    sim.run();
+    const heals = sim.trace.list().filter((e) => e.kind === 'heal');
+    expect(heals).toHaveLength(1);
+    expect(heals[0].t).toBeGreaterThan(2);
+    expect(heals[0].data).toMatchObject({ target: 'p2', source: 'p1' });
+  });
+});

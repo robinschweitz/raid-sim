@@ -88,6 +88,11 @@ export function launchSpell(
         startCast(sim, casterId, it.effect.spell, unitId, [cause], sourceId === casterId ? { triggered: true } : { triggered: true, originalCasterId: sourceId });
         continue;
       }
+      if (it.effect.type === 'heal') {
+        // AzerothCore fixes m_healing at launch like damage (DoAllEffectOnLaunchTarget); no modifiers apply to heals here.
+        it.amount = sim.rng.stream(`unit:${sourceId}.amount`).int(it.effect.min, it.effect.max);
+        continue;
+      }
       if (it.effect.type !== 'damage') continue;
       const amount = rollDamage(sim, sourceId, unitId, it.effect, { ignoreCasterMods, viaArea: it.viaArea });
       it.amount = capped && it.viaArea ? Math.trunc((amount * PLAYER_AOE_TARGET_CAP) / deliveries.size) : amount;
@@ -124,6 +129,11 @@ function hitUnit(sim: Simulation, casterId: string, sourceId: string, spell: Spe
     if (!unit.alive && !deadOk) return;
     for (const it of items) {
       if (it.index !== index || it.effect.type === 'apply_aura' || it.effect.type === 'damage' || it.effect.type === 'trigger_spell') continue;
+      if (it.effect.type === 'heal') {
+        // The amount fixed at launch is delivered here, in effect order after the hook.
+        if (unit.alive) sim.heal(unitId, it.amount, { sourceId, ability: spell.id, school: 'holy' }, causes);
+        continue;
+      }
       applyLeafEffect(sim, it.effect, { casterId, originalCasterId: sourceId, targetId: unitId, ability: spell.id, causes, viaArea: it.viaArea, ignoreCasterMods: spell.ignoreCasterDamageMods === true });
     }
   }

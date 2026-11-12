@@ -117,7 +117,10 @@ function afterRemove(sim: Simulation, inst: AuraInstance, unitId: string, remove
   sim.catalog.auraScript(inst.auraId)?.afterRemove?.({ ...hookContext(sim, inst, unitId, [removedId], inst.stacks), reason });
 }
 
-/** Ends one instance without its on-expire effects: cancels its timers, writes aura_removed, runs afterRemove. */
+/**
+ * Ends one instance: cancels its timers, writes aura_removed, runs `beforeAfterRemove` (the on-expire effects, for an
+ * expiry), then afterRemove. Every removal path goes through here.
+ */
 function removeInstance(
   sim: Simulation,
   targetId: string,
@@ -125,12 +128,14 @@ function removeInstance(
   inst: AuraInstance,
   reason: AuraRemoveReason,
   causes: readonly string[],
+  beforeAfterRemove?: (removedId: string) => void,
 ): string {
   sim.cancel(inst.expiry);
   sim.cancel(inst.tick);
   sim.unit(targetId).auras.delete(key);
   if (hasStatModifiers(sim.catalog.aura(inst.auraId))) refreshStats(sim, targetId);
   const removed = sim.emit('aura_removed', { unit: targetId, aura: inst.auraId, caster: inst.casterId, reason }, causes);
+  beforeAfterRemove?.(removed);
   afterRemove(sim, inst, targetId, removed, reason);
   return removed;
 }
@@ -192,19 +197,11 @@ function scheduleTick(sim: Simulation, targetId: string, key: string, inst: Aura
 }
 
 function expire(sim: Simulation, targetId: string, key: string, inst: AuraInstance): void {
-  const target = sim.unit(targetId);
-  if (target.auras.get(key) !== inst) return;
-  sim.cancel(inst.tick);
-  target.auras.delete(key);
-  if (hasStatModifiers(sim.catalog.aura(inst.auraId))) refreshStats(sim, targetId);
-  const removed = sim.emit(
-    'aura_removed',
-    { unit: targetId, aura: inst.auraId, caster: inst.casterId, reason: 'expired' },
-    [inst.appliedEvent],
-  );
-  const onExpire = sim.catalog.aura(inst.auraId).onExpire;
-  if (onExpire) applyEffects(sim, onExpire, { casterId: inst.casterId, targetId, ability: inst.auraId, causes: [removed], ignoreCasterMods: inst.ignoreCasterMods, fromAura: true });
-  afterRemove(sim, inst, targetId, removed, 'expired');
+  if (sim.unit(targetId).auras.get(key) !== inst) return;
+  removeInstance(sim, targetId, key, inst, 'expired', [inst.appliedEvent], (removed) => {
+    const onExpire = sim.catalog.aura(inst.auraId).onExpire;
+    if (onExpire) applyEffects(sim, onExpire, { casterId: inst.casterId, targetId, ability: inst.auraId, causes: [removed], ignoreCasterMods: inst.ignoreCasterMods, fromAura: true });
+  });
 }
 
 /** Removes every instance of an aura from a unit without its on-expire effect. Returns the event ids. */
