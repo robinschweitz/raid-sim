@@ -1,6 +1,7 @@
 import { areaCenter, areaTargets, limitTargets } from './area';
 import { applyAura } from './auras';
-import type { AreaEffect, LeafEffect, SpellDef } from './catalog';
+import type { AreaEffect, LeafEffect, SpellDef, TriggerSpellEffect } from './catalog';
+import { startCast } from './casting';
 import { applyLeafEffect, rollDamage } from './effects';
 import { positionAt, travelTimeMs } from './movement';
 import { EventClass } from './queue';
@@ -22,7 +23,7 @@ export const PLAYER_AOE_TARGET_CAP = 10;
 /** One effect of a spell on one unit. */
 interface Item {
   readonly index: number;
-  readonly effect: LeafEffect;
+  readonly effect: LeafEffect | TriggerSpellEffect;
   readonly viaArea: boolean;
   /** Damage fixed at launch (damage effects only). */
   amount: number;
@@ -59,7 +60,7 @@ export function launchSpell(
     return units;
   };
   const deliveries = new Map<string, Item[]>();
-  const add = (unitId: string, index: number, effect: LeafEffect, viaArea: boolean): void => {
+  const add = (unitId: string, index: number, effect: LeafEffect | TriggerSpellEffect, viaArea: boolean): void => {
     let items = deliveries.get(unitId);
     if (!items) deliveries.set(unitId, (items = []));
     items.push({ index, effect, viaArea, amount: 0 });
@@ -71,6 +72,8 @@ export function launchSpell(
       }
     } else if (e.type === 'on_caster') {
       for (const leaf of e.effects) add(casterId, index, leaf, false);
+    } else if (e.type === 'trigger_spell') {
+      add(e.on === 'caster' ? casterId : targetId, index, e, false);
     } else {
       add(targetId, index, e, false);
     }
@@ -80,6 +83,11 @@ export function launchSpell(
   const ignoreCasterMods = spell.ignoreCasterDamageMods === true;
   for (const [unitId, items] of deliveries) {
     for (const it of items) {
+      if (it.effect.type === 'trigger_spell') {
+        // EffectTriggerSpell in LAUNCH_TARGET mode (SpellEffects.cpp 808–812): cast now, before any unit is hit.
+        startCast(sim, casterId, it.effect.spell, unitId, [cause], { triggered: true, originalCasterId: sourceId });
+        continue;
+      }
       if (it.effect.type !== 'damage') continue;
       const amount = rollDamage(sim, sourceId, unitId, it.effect, { ignoreCasterMods, viaArea: it.viaArea });
       it.amount = capped && it.viaArea ? Math.trunc((amount * PLAYER_AOE_TARGET_CAP) / deliveries.size) : amount;
@@ -115,7 +123,7 @@ function hitUnit(sim: Simulation, casterId: string, sourceId: string, spell: Spe
     // The hook may have killed the unit: no default handler runs on it.
     if (!unit.alive && !deadOk) return;
     for (const it of items) {
-      if (it.index !== index || it.effect.type === 'apply_aura' || it.effect.type === 'damage') continue;
+      if (it.index !== index || it.effect.type === 'apply_aura' || it.effect.type === 'damage' || it.effect.type === 'trigger_spell') continue;
       applyLeafEffect(sim, it.effect, { casterId, originalCasterId: sourceId, targetId: unitId, ability: spell.id, causes, viaArea: it.viaArea, ignoreCasterMods: spell.ignoreCasterDamageMods === true });
     }
   }

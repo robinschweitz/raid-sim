@@ -1,5 +1,6 @@
 import { areaCenter, areaTargets, limitTargets } from './area';
 import { applyAura, removeAuras } from './auras';
+import { startCast } from './casting';
 import type { DamageEffect, Effect, LeafEffect } from './catalog';
 import { modifiedSpellDamage, type DamageRoute } from './modifiers';
 import type { Simulation } from './sim';
@@ -45,6 +46,8 @@ function applyEffect(sim: Simulation, e: Effect, ctx: EffectContext): void {
       // Lands on the caster directly, not through an area, even when the surrounding effect came through one.
       applyEffects(sim, e.effects, { ...ctx, targetId: ctx.casterId, viaArea: false });
       return;
+    case 'trigger_spell':
+      throw new Error(`${ctx.ability}: trigger_spell only runs at a spell's launch`);
     default:
       applyLeafEffect(sim, e, ctx);
   }
@@ -83,5 +86,17 @@ export function applyLeafEffect(sim: Simulation, e: LeafEffect, ctx: EffectConte
       return;
     case 'script':
       return;
+    case 'force_cast':
+      castOnSelf(sim, e.spell, ctx);
+      return;
   }
+}
+
+/**
+ * The unit casts the spell on itself, triggered (A-030). `owner` becomes the original caster of that cast: force_cast
+ * passes none, so the forced unit owns its own spell (SpellEffects.cpp 1081–1096 casts without an original caster);
+ * periodic_trigger passes the aura's caster (Unit.cpp 1387–1389 takes the triggering aura's caster).
+ */
+function castOnSelf(sim: Simulation, spellId: string, ctx: EffectContext, owner?: string): void {
+  startCast(sim, ctx.targetId, spellId, ctx.targetId, ctx.causes, owner === undefined ? { triggered: true } : { triggered: true, originalCasterId: owner });
 }

@@ -22,7 +22,9 @@ export type LeafEffect =
   | { readonly type: 'remove_aura'; readonly aura: string }
   | { readonly type: 'taunt'; readonly durationMs: number }
   /** SCRIPT_EFFECT / DUMMY: no default handler; a spell script's onEffectHitTarget gives it meaning. */
-  | { readonly type: 'script' };
+  | { readonly type: 'script' }
+  /** FORCE_CAST: the unit hit casts the spell on itself, triggered (SpellEffects.cpp 1043–1098, A-030). */
+  | { readonly type: 'force_cast'; readonly spell: string };
 
 /**
  * Effects on every unit in an area (implicit targets UNIT_SRC_AREA_* around the caster, UNIT_DEST_AREA_* around the
@@ -50,7 +52,14 @@ export interface OnCasterEffect {
   readonly effects: readonly LeafEffect[];
 }
 
-export type Effect = LeafEffect | AreaEffect | OnCasterEffect;
+/** TRIGGER_SPELL: at launch the caster casts the spell, triggered, at itself or the explicit target (A-030). Spells only. */
+export interface TriggerSpellEffect {
+  readonly type: 'trigger_spell';
+  readonly spell: string;
+  readonly on: 'caster' | 'target';
+}
+
+export type Effect = LeafEffect | AreaEffect | OnCasterEffect | TriggerSpellEffect;
 
 export interface DamageModifier {
   /**
@@ -164,8 +173,8 @@ function checkSchools(owner: string, schools: SchoolSet): void {
   }
 }
 
-/** Validates effect definitions; later tasks add rules per effect type. */
-function checkEffects(owner: string, effects: readonly Effect[]): void {
+/** Validates effect definitions; `where` is a spell's effects, or an aura's periodic and on-expire effects. */
+function checkEffects(owner: string, effects: readonly Effect[], where: 'spell' | 'aura'): void {
   for (const e of effects) {
     if (e.type === 'damage') checkSchools(owner, e.school);
     if (e.type === 'area') {
@@ -173,9 +182,14 @@ function checkEffects(owner: string, effects: readonly Effect[]): void {
       if (e.maxTargets !== undefined && (!Number.isInteger(e.maxTargets) || e.maxTargets < 1)) {
         throw new Error(`${owner}: invalid maxTargets ${e.maxTargets}`);
       }
-      checkEffects(owner, e.effects);
     }
-    if (e.type === 'on_caster') checkEffects(owner, e.effects);
+    if (e.type === 'area' || e.type === 'on_caster') checkEffects(owner, e.effects, where);
+    if ((e.type === 'trigger_spell' || e.type === 'force_cast') && !ID_PATTERN.test(e.spell)) {
+      throw new Error(`${owner}: invalid spell id ${e.spell}`);
+    }
+    if (e.type === 'trigger_spell' && where !== 'spell') {
+      throw new Error(`${owner}: trigger_spell is a spell effect; auras use periodic_trigger`);
+    }
   }
 }
 
@@ -191,7 +205,7 @@ export class Catalog {
     if (def.castTimeMs < 0 || def.gcdMs < 0 || def.cooldownMs < 0 || def.rangeYd < 0) {
       throw new Error(`negative timing or range in spell ${def.id}`);
     }
-    checkEffects(def.id, def.effects);
+    checkEffects(def.id, def.effects, 'spell');
     this.spells.set(def.id, def);
   }
 
@@ -206,7 +220,7 @@ export class Catalog {
       if (!Number.isFinite(m.pct)) throw new Error(`aura ${def.id} has a non-finite modifier percentage`);
       if (m.schools !== undefined) checkSchools(def.id, m.schools);
     }
-    checkEffects(def.id, [...(def.periodic?.effects ?? []), ...(def.onExpire ?? [])]);
+    checkEffects(def.id, [...(def.periodic?.effects ?? []), ...(def.onExpire ?? [])], 'aura');
     this.auras.set(def.id, def);
   }
 
