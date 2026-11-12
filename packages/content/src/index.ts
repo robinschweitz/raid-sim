@@ -2,6 +2,7 @@ import type { ContentRegistry } from '@raid/engine';
 import { genericCaster } from './generic/caster';
 import { genericHealer } from './generic/healer';
 import { festergut } from './festergut/boss';
+import { FESTERGUT_CHECKS } from './festergut/checks';
 import { FESTERGUT_TEXT_EN } from './festergut/text';
 import { trainingDummy } from './training-dummy/boss';
 import { trainingCaster } from './training-dummy/caster';
@@ -20,7 +21,7 @@ export const CONTENT: ContentRegistry = {
     [trainingCaster.spec, trainingCaster],
   ]),
   actions: new Map(),
-  checks: new Map(),
+  checks: new Map(FESTERGUT_CHECKS),
 };
 
 /** English names of content abilities and scenario texts, for the formatter. */

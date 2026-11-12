@@ -37,6 +37,7 @@ discovered mid-implementation.
     against the catalog. Today a typo means a rule silently never fires.  (done in Plan 2a)
 11. **"Cause chain links it to the rule threshold"** (§10.3): a rule that never fired is not in
     any chain. Use a custom observation check or a threshold annotation.
+  (done in Plan 2b-2: custom check `festergut.late_swap`; the late-swap scenario sets the threshold to 10, so the rule fires on the stack that explodes and is in the trace)
 12. **Point-targeted areas** (Goo on a location; area effects are always centred on a unit).
     Gate 4, but shape the effect type now.
 13. Also from Plan 1 reviews: EventMap `AddPhase`/`RemovePhase`/`IsInPhase`; an
