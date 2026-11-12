@@ -42,6 +42,11 @@ const aiEvents = (sim: Simulation) =>
     .map((e) => [e.t, e.data.event]);
 
 describe('boss AI (§5.1)', () => {
+  it('attachBoss needs whoId and afterEngage together', () => {
+    expect(() => attachBoss(newSim(), new TestAI(), 'boss', 10, 'p1')).toThrow(/together/);
+    expect(() => attachBoss(newSim(), new TestAI(), 'boss', 10, undefined, () => {})).toThrow(/together/);
+  });
+
   it('timers advance while casting, nothing executes while casting, one event per update', () => {
     const sim = newSim();
     attachBoss(sim, new TestAI(), 'boss', 10);

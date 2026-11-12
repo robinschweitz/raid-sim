@@ -69,10 +69,12 @@ describe('engage order and first swing (A-033)', () => {
   it('zone-in adds players in unit id order, after the engage event and before the script engage code', () => {
     const sim = newSim();
     const order: string[] = [];
+    const zoneInCauses: (readonly string[] | undefined)[] = [];
     const threat = threatFor(sim)!;
     const add = threat.add.bind(threat);
     threat.add = (c, u, amount, causes) => {
       order.push(`add:${u}`);
+      zoneInCauses.push(causes);
       add(c, u, amount, causes);
     };
     class Order extends Probe {
@@ -80,7 +82,11 @@ describe('engage order and first swing (A-033)', () => {
         order.push('script');
       }
     }
-    engageEncounter(sim, new Order(), 'boss', 10, 'p_pull');
+    const engage = engageEncounter(sim, new Order(), 'boss', 10, 'p_pull');
+    // The first add is the puller's own reference; every zone-in add is caused by the engage event.
+    expect(zoneInCauses[0] ?? []).toEqual([]);
+    expect(zoneInCauses.slice(1)).toHaveLength(3);
+    for (const causes of zoneInCauses.slice(1)) expect(causes).toContain(engage);
     expect(order).toEqual(['add:p_pull', 'add:a_first', 'add:p_pull', 'add:z_last', 'script']);
     expect(sim.players().map((p) => p.id)).toEqual(['a_first', 'p_pull', 'z_last']);
   });

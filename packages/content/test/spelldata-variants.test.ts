@@ -5,7 +5,11 @@ import { SpellVariants } from '../src/spelldata/variants';
 
 const FILE = parseSpellDataFile(JSON.parse(readFileSync(new URL('../data/spelldata/festergut.json', import.meta.url), 'utf8')));
 const variants = new SpellVariants(FILE);
-const synthetic = (spells: unknown[]) => parseSpellDataFile({ client: 'test', files: [], spells, missing: [] });
+const BASE_SPELL = {
+  attributes: 0, attributesEx: 0, attributesEx2: 0, attributesEx3: 0, attributesEx4: 0, attributesEx5: 0, attributesEx6: 0, attributesEx7: 0,
+  schoolMask: 1, castTimeMs: null, durationMs: null, rangeYd: null, speed: 0, stackAmount: 0, maxAffectedTargets: 0,
+};
+const synthetic = (spells: object[]) => parseSpellDataFile({ client: 'test', files: [], spells: spells.map((s) => ({ ...BASE_SPELL, ...s })), missing: [] });
 
 describe('difficulty variants (GetSpellIdForDifficulty)', () => {
   it('Inhaled Blight: 25n has its own id, heroic slots are empty and fall back two modes', () => {
@@ -61,7 +65,7 @@ describe('difficulty variants (GetSpellIdForDifficulty)', () => {
     }
   });
 
-  it('ids of zero or below are not part of a row', () => {
+  it('ids of zero or below are returned unchanged', () => {
     const v = new SpellVariants(synthetic([{ id: 1, effects: [], difficultyVariants: [1, 2, 0, 0] }, { id: 3, effects: [], difficultyVariants: [3, 4, 0, 0] }]));
     expect(v.variantFor(0, '25n')).toBe(0);
     expect(v.variantFor(-1, '25n')).toBe(-1);
@@ -69,8 +73,9 @@ describe('difficulty variants (GetSpellIdForDifficulty)', () => {
 
   it('parse validation', () => {
     const ok = { client: 'c', files: [], spells: [], missing: [] };
+    const spellOf = (extra: object) => ({ ...BASE_SPELL, id: 1, effects: [], ...extra });
     const file = (f: unknown) => ({ ...ok, files: [f] });
-    const good = { name: 'Spell.dbc', sha256: 'x', dataVersion: 'client-12340:Spell.dbc:a17bfd2d4b0a' };
+    const good = { name: 'Spell.dbc', sha256: 'a17bfd2d4b0ac0dbf8263371c771651e783f123329995d0ae609a08bc05a8bf7', dataVersion: 'client-12340:Spell.dbc:a17bfd2d4b0a' };
     expect(() => parseSpellDataFile({ ...ok, missing: undefined })).toThrow(/missing/);
     expect(() => parseSpellDataFile(file({ ...good, name: 1 }))).toThrow(/name, sha256 and dataVersion/);
     expect(() => parseSpellDataFile(file({ ...good, dataVersion: 'client-12340:Spell.dbc:XYZ' }))).toThrow(/dataVersion/);
@@ -80,7 +85,7 @@ describe('difficulty variants (GetSpellIdForDifficulty)', () => {
     for (const row of [[1, 2, 3], [1, 2, 3, -1], [1, 2, 3, 1.5], [1, 2, 3, '4'], 'abc']) {
       expect(() => parseSpellDataFile({ ...ok, spells: [{ id: 1, effects: [], difficultyVariants: row }] }), JSON.stringify(row)).toThrow(/difficultyVariants/);
     }
-    expect(() => parseSpellDataFile({ ...ok, spells: [{ id: 1, effects: [], difficultyVariants: null }] })).not.toThrow();
+    expect(() => parseSpellDataFile({ ...ok, spells: [spellOf({ difficultyVariants: null })] })).not.toThrow();
   });
 
   it('exposes the pinned data versions by file name and refuses a file with missing spells for sourcing', () => {
@@ -91,7 +96,8 @@ describe('difficulty variants (GetSpellIdForDifficulty)', () => {
 
   it('rejects files that are not spell data', () => {
     expect(() => parseSpellDataFile(null)).toThrow(/not a spell data file/);
-    expect(() => parseSpellDataFile({ files: [], missing: [], spells: [{ id: 'x', effects: [] }] })).toThrow(/integer id/);
-    expect(() => parseSpellDataFile({ files: [], missing: [], spells: [{ id: 1, effects: [] }, { id: 1, effects: [] }] })).toThrow(/duplicate spell 1/);
+    expect(() => parseSpellDataFile({ files: [], missing: [], spells: [] })).toThrow(/client/);
+    expect(() => parseSpellDataFile({ client: 'c', files: [], missing: [], spells: [{ id: 'x', effects: [] }] })).toThrow(/integer id/);
+    expect(() => parseSpellDataFile({ client: 'c', files: [], missing: [], spells: [{ id: 1, effects: [] }, { id: 1, effects: [] }] })).toThrow(/duplicate spell 1/);
   });
 });

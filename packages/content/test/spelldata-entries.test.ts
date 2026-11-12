@@ -45,6 +45,17 @@ describe('spell data entries', () => {
     expect(of('spell.71219.e0.radius_yd')).toMatchObject({ kind: 'spelldata', dataVersion: version('SpellRadius.dbc') });
     expect(of('spell.71219.e0.min')).toMatchObject({ kind: 'derived', inputs: ['spell.71219.e0.base_points', 'spell.71219.e0.die_sides'] });
     expect(entries.some((e) => e.key === 'spell.71219.duration_ms')).toBe(false);
+    // Duration and range come from their own DBC files, and the values are the file's.
+    const withDuration = spellDataEntries(FILE, [69157]);
+    const dur = withDuration.find((e) => e.key === 'spell.69157.duration_ms')!;
+    expect(dur.source).toMatchObject({ kind: 'spelldata', spellId: 69157, dataVersion: version('SpellDuration.dbc') });
+    expect(dur.source.kind === 'spelldata' && dur.source.field).toMatch(/Duration/);
+    expect(dur.value).toBe(spell(69157).durationMs!.base);
+    const withRange = FILE.spells.find((s) => s.rangeYd !== null)!;
+    const range = spellDataEntries(FILE, [withRange.id]).find((e) => e.key === `spell.${withRange.id}.range_yd`)!;
+    expect(range.source).toMatchObject({ kind: 'spelldata', spellId: withRange.id, dataVersion: version('SpellRange.dbc') });
+    expect(range.source.kind === 'spelldata' && range.source.field).toMatch(/Range/);
+    expect(range.value).toBe(withRange.rangeYd!.maxHostile);
     for (const e of entries) {
       if (e.source.kind === 'spelldata') expect(PINS.spellDataVersions).toContain(e.source.dataVersion);
     }

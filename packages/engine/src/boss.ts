@@ -154,7 +154,7 @@ const attached = new WeakMap<Simulation, Set<string>>();
 /**
  * Emits engage, calls onEngage, and runs updateAI every intervalMs (A-002). With `whoId` (A-033) the engage event names
  * the pulling unit; `afterEngage` runs between the engage event and the script's engage code (the engine's zone-in-combat,
- * see `engageEncounter`), so this function stays threat-agnostic. Returns the engage event id.
+ * see `engageEncounter`), so this function stays threat-agnostic; giving only one of the two is an error. Returns the engage event id.
  */
 export function attachBoss(
   sim: Simulation,
@@ -167,6 +167,7 @@ export function attachBoss(
   if (!Number.isInteger(intervalMs) || intervalMs <= 0) throw new Error('AI update interval must be a positive integer');
   let ids = attached.get(sim);
   if (!ids) attached.set(sim, (ids = new Set()));
+  if ((whoId === undefined) !== (afterEngage === undefined)) throw new Error('attachBoss needs whoId and afterEngage together, or neither');
   if (ids.has(bossUnitId)) throw new Error(`boss ${bossUnitId} is already attached`);
   const who = whoId === undefined ? null : sim.unit(whoId);
   const ctx = makeBossContext(sim, bossUnitId);

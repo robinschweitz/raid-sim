@@ -51,6 +51,12 @@ function entriesOf(s: SpellDataSpell, version: (name: DbcFile) => string): DataE
   put('speed', s.speed, 'Spell.dbc', 'Speed');
   for (const [field, prop, column] of ATTRIBUTES) put(field, s[prop], 'Spell.dbc', column);
   if (s.castTimeMs !== null) put('cast_time_ms', s.castTimeMs, 'SpellCastTimes.dbc', 'CastTime (via CastingTimeIndex)');
+  if (s.durationMs !== null) {
+    // The entry holds the base duration only; scaling or a differing maximum would make it wrong for some caster levels.
+    if (s.durationMs.perLevel !== 0 || s.durationMs.base !== s.durationMs.max) {
+      throw new Error(`spell ${s.id}: duration scales with level (base ${s.durationMs.base}, per level ${s.durationMs.perLevel}, max ${s.durationMs.max}); not modelled`);
+    }
+  }
   if (s.durationMs !== null) put('duration_ms', s.durationMs.base, 'SpellDuration.dbc', 'Duration (via DurationIndex; -1 = permanent)');
   if (s.rangeYd !== null) put('range_yd', s.rangeYd.maxHostile, 'SpellRange.dbc', 'RangeMax hostile (via RangeIndex)');
   for (const e of s.effects) {
@@ -65,6 +71,9 @@ function entriesOf(s: SpellDataSpell, version: (name: DbcFile) => string): DataE
     put(`${p}.trigger_spell`, e.triggerSpell, 'Spell.dbc', `EffectTriggerSpell[${i}]`);
     put(`${p}.target_a`, e.implicitTargetA, 'Spell.dbc', `EffectImplicitTargetA[${i}]`);
     put(`${p}.target_b`, e.implicitTargetB, 'Spell.dbc', `EffectImplicitTargetB[${i}]`);
+    if (e.radiusYd !== null && e.radiusYd.max !== e.radiusYd.radius) {
+      throw new Error(`spell ${s.id} effect ${i}: radius ${e.radiusYd.radius} differs from its maximum ${e.radiusYd.max} (scaling radius is not modelled)`);
+    }
     if (e.radiusYd !== null) put(`${p}.radius_yd`, e.radiusYd.radius, 'SpellRadius.dbc', `Radius (via EffectRadiusIndex[${i}])`);
     const inputs = [spellKey(s.id, `${p}.base_points`), spellKey(s.id, `${p}.die_sides`)];
     out.push({

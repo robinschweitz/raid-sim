@@ -64,3 +64,5 @@ Pinned files (version string, full SHA-256, source archive relative to the clien
 | SpellDuration.dbc | `client-12340:SpellDuration.dbc:caa2cbec7fa7` | `caa2cbec7fa711bba180af10c253ab0d111609ec2bda1c354fef09e54bc279e4` | `Data/deDE/patch-deDE-3.MPQ` |
 | SpellRadius.dbc | `client-12340:SpellRadius.dbc:409b1612d19b` | `409b1612d19bb7860de2a2ea0f18669be1cf40477f85f5c6e12c4758277f3475` | `Data/deDE/patch-deDE.MPQ` |
 | SpellRange.dbc | `client-12340:SpellRange.dbc:dec6105c88d1` | `dec6105c88d166377a96f8b1c0af7864849c6727c60ba5b481f0f03be15d4e6c` | `Data/deDE/patch-deDE-3.MPQ` |
+
+SpellDifficulty.dbc is pinned and read, but its rows are not registry entries: the loader consumes them through `SpellVariants` (`packages/content/src/spelldata/variants.ts`), which resolves a spell id to its 10n / 25n / 10h / 25h variant with the heroic fallback, so no `spell.<id>.*` key carries a SpellDifficulty provenance.
