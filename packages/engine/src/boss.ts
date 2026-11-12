@@ -22,9 +22,9 @@ export interface MechanicStatus {
 
 /** Filters of SelectTarget / SelectTargetList (DefaultTargetSelector, UnitAI.h 53–100; A-021). */
 export interface TargetFilter {
-  /** Keep units with edge distance >= this (inclusive): rejected when within combat range of it. */
+  /** Keep units whose centre distance is >= this bound + both combat reaches (inclusive): rejected when IsWithinCombatRange of it. 0 means unset (AzerothCore's `dist == 0`). */
   readonly minDistanceYd?: number;
-  /** Keep units with edge distance < this (strict): IsWithinCombatRange. */
+  /** Keep units whose centre distance is < this bound + both combat reaches (strict): IsWithinCombatRange. 0 means unset. */
   readonly maxDistanceYd?: number;
   readonly excludeVictim?: boolean;
   /** Players only (the `playerOnly` argument). */
@@ -111,8 +111,8 @@ export function makeBossContext(sim: Simulation, bossId: string): BossContext {
     }
     const victim = options.excludeVictim ? victimOf(sim, bossId) : null;
     return (threatFor(sim)?.listed(bossId) ?? []).filter((u) => {
-      if (options.minDistanceYd !== undefined && withinCombatRange(self, u, options.minDistanceYd, sim.now)) return false;
-      if (options.maxDistanceYd !== undefined && !withinCombatRange(self, u, options.maxDistanceYd, sim.now)) return false;
+      if (options.minDistanceYd && withinCombatRange(self, u, options.minDistanceYd, sim.now)) return false;
+      if (options.maxDistanceYd && !withinCombatRange(self, u, options.maxDistanceYd, sim.now)) return false;
       if (options.excludeVictim && victim && u.id === victim.id) return false;
       if (options.playersOnly && u.kind !== 'player') return false;
       return true;

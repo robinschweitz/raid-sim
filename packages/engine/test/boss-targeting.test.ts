@@ -156,6 +156,15 @@ describe('boss target selection', () => {
     expect(sel(sim, 'd', { minDistanceYd: 0.5, maxDistanceYd: 0.501 })?.id).toBe('t1');
   });
 
+  it('a distance bound of 0 is ignored like AzerothCore (dist == 0)', () => {
+    const sim = newSim();
+    const ctx = makeBossContext(sim, 'boss');
+    expect(ctx.countTargets({ minDistanceYd: 0 })).toBe(5);
+    expect(ctx.countTargets({ maxDistanceYd: 0 })).toBe(5);
+    expect(ctx.countTargets({ minDistanceYd: 0, maxDistanceYd: 0 })).toBe(5);
+    expect(ctx.countTargets({ minDistanceYd: 0, maxDistanceYd: 0.501 })).toBe(1);
+  });
+
   it('countTargets counts like selectTarget and draws no random numbers', () => {
     const sim = newSim();
     const ctx = makeBossContext(sim, 'boss');
