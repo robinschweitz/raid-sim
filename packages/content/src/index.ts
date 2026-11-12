@@ -1,6 +1,7 @@
 import type { ContentRegistry } from '@raid/engine';
 import { genericCaster } from './generic/caster';
 import { genericHealer } from './generic/healer';
+import { festergut } from './festergut/boss';
 import { trainingDummy } from './training-dummy/boss';
 import { trainingCaster } from './training-dummy/caster';
 export * from './spelldata/file';
@@ -8,7 +9,10 @@ export * from './spelldata/variants';
 export * from './spelldata/entries';
 
 export const CONTENT: ContentRegistry = {
-  bosses: new Map([[trainingDummy.id, trainingDummy]]),
+  bosses: new Map([
+    [festergut.id, festergut],
+    [trainingDummy.id, trainingDummy],
+  ]),
   policies: new Map([
     [genericCaster.spec, genericCaster],
     [genericHealer.spec, genericHealer],
