@@ -36,6 +36,19 @@ describe('school masks', () => {
     expect(schoolLabel('fire')).toBe('fire');
     expect(schoolLabel(['shadow', 'nature'])).toBe('nature+shadow');
   });
+
+  it('throws on an unknown school string', () => {
+    expect(() => schoolMask('void' as never)).toThrow();
+    expect(() => schoolMask(['shadow', 'void'] as never)).toThrow();
+  });
+
+  it('labels all seven schools the same whatever the input order', () => {
+    const all = ['physical', 'holy', 'fire', 'nature', 'frost', 'shadow', 'arcane'] as const;
+    const label = 'physical+holy+fire+nature+frost+shadow+arcane';
+    expect(schoolLabel(all)).toBe(label);
+    expect(schoolLabel([...all].reverse())).toBe(label);
+    expect(schoolLabel([all[3], all[6], all[0], all[5], all[1], all[4], all[2]])).toBe(label);
+  });
 });
 
 describe('damage with several schools', () => {

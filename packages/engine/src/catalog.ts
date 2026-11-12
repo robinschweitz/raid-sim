@@ -43,13 +43,18 @@ export interface AreaEffect {
 export type Effect = LeafEffect | AreaEffect;
 
 export interface DamageModifier {
-  readonly kind: 'damage_done_pct' | 'damage_taken_pct';
+  /**
+   * damage_done_pct / damage_taken_pct: every hit. aoe_damage_taken_pct (MOD_AOE_DAMAGE_AVOIDANCE): only damage that reaches
+   * the target through an area; creature_aoe_damage_taken_pct (MOD_CREATURE_AOE_DAMAGE_AVOIDANCE): the same, only from a
+   * creature caster (A-026).
+   */
+  readonly kind: 'damage_done_pct' | 'damage_taken_pct' | 'aoe_damage_taken_pct' | 'creature_aoe_damage_taken_pct';
   /** Percent change, e.g. -25 for 25 % less. */
   readonly pct: number;
   /** Multiply the percentage by the aura's stacks. */
   readonly perStack: boolean;
   /** Applies when these schools overlap the damage's schools (misc-value mask match); all schools when absent. */
-  readonly schools?: readonly School[];
+  readonly schools?: SchoolSet;
 }
 
 export type AuraRemoveReason = 'expired' | 'removed' | 'dispelled';

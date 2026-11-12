@@ -1,7 +1,7 @@
 import { areaCenter, areaTargets } from './area';
 import { applyAura, removeAuras } from './auras';
 import type { Effect, LeafEffect } from './catalog';
-import { damageMultiplier } from './modifiers';
+import { modifiedSpellDamage } from './modifiers';
 import type { Simulation } from './sim';
 import { threatFor } from './threat';
 
@@ -10,6 +10,8 @@ export interface EffectContext {
   readonly targetId: string;
   readonly ability: string;
   readonly causes: readonly string[];
+  /** The effect reaches the target through an area: area modifiers apply (A-026). */
+  readonly viaArea?: boolean;
 }
 
 export function applyEffects(sim: Simulation, effects: readonly Effect[], ctx: EffectContext): void {
@@ -20,7 +22,7 @@ function applyEffect(sim: Simulation, e: Effect, ctx: EffectContext): void {
   switch (e.type) {
     case 'area': {
       const hit = areaTargets(sim, sim.unit(ctx.casterId), e, areaCenter(sim, e, ctx.casterId, ctx.targetId));
-      for (const u of hit) applyEffects(sim, e.effects, { ...ctx, targetId: u.id });
+      for (const u of hit) applyEffects(sim, e.effects, { ...ctx, targetId: u.id, viaArea: true });
       return;
     }
     default:
@@ -35,7 +37,7 @@ export function applyLeafEffect(sim: Simulation, e: LeafEffect, ctx: EffectConte
     case 'damage': {
       if (!target.alive) return;
       const rolled = sim.rng.stream(`unit:${ctx.casterId}.amount`).int(e.min, e.max);
-      const amount = rolled * damageMultiplier(sim, ctx.casterId, target.id, e.school);
+      const amount = modifiedSpellDamage(sim, ctx.casterId, target.id, e.school, rolled, { viaArea: ctx.viaArea === true });
       sim.damage(target.id, amount, { sourceId: ctx.casterId, ability: ctx.ability, school: e.school }, ctx.causes);
       return;
     }
@@ -46,7 +48,7 @@ export function applyLeafEffect(sim: Simulation, e: LeafEffect, ctx: EffectConte
       return;
     }
     case 'apply_aura':
-      applyAura(sim, e.aura, ctx.casterId, target.id, ctx.causes);
+      applyAura(sim, e.aura, ctx.casterId, target.id, ctx.causes, { viaArea: ctx.viaArea === true });
       return;
     case 'remove_aura':
       removeAuras(sim, target.id, e.aura, 'removed', ctx.causes);

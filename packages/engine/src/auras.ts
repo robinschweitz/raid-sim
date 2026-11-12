@@ -4,6 +4,11 @@ import type { Simulation } from './sim';
 import type { AuraHookContext, AuraRemoveReason } from './catalog';
 import { auraKey, compareStrings, type AuraInstance } from './units';
 
+export interface ApplyAuraOptions {
+  /** The aura comes from an area effect: its periodic damage is area damage (A-026). */
+  readonly viaArea?: boolean;
+}
+
 /** Applies or stacks an aura; returns the event id, or null if the target is dead or the fight is over. */
 export function applyAura(
   sim: Simulation,
@@ -11,6 +16,7 @@ export function applyAura(
   casterId: string,
   targetId: string,
   causes: readonly string[],
+  options: ApplyAuraOptions = {},
 ): string | null {
   const def = sim.catalog.aura(auraId);
   const target = sim.unit(targetId);
@@ -51,6 +57,7 @@ export function applyAura(
     tick: null,
     nextTickMs: sim.now + (def.periodic?.intervalMs ?? 0),
     appliedEvent: '',
+    viaArea: options.viaArea === true,
   };
   inst.expiry = schedule(inst);
   target.auras.set(key, inst);
@@ -103,7 +110,7 @@ function scheduleTick(sim: Simulation, targetId: string, key: string, inst: Aura
       { unit: targetId, aura: inst.auraId, caster: inst.casterId, stacks: inst.stacks },
       [inst.appliedEvent],
     );
-    applyEffects(sim, periodic.effects, { casterId: inst.casterId, targetId, ability: inst.auraId, causes: [tickId] });
+    applyEffects(sim, periodic.effects, { casterId: inst.casterId, targetId, ability: inst.auraId, causes: [tickId], viaArea: inst.viaArea });
     // A tick effect may have re-applied this aura, which already restarted the chain.
     if (target.auras.get(key) === inst && inst.tick === null) scheduleTick(sim, targetId, key, inst);
   });

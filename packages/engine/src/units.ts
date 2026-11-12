@@ -45,6 +45,8 @@ export interface AuraInstance {
   /** Time of the next periodic tick anchor (applied + k * interval); keeps tick phase across refreshes. */
   nextTickMs: number;
   appliedEvent: string;
+  /** Applied by an area effect: its periodic damage counts as area damage (SpellAuraEffects.cpp 6398–6405). */
+  readonly viaArea: boolean;
 }
 
 export interface CastState {

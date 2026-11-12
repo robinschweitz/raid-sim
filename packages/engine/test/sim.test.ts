@@ -122,6 +122,7 @@ describe('Simulation', () => {
         tick: null,
         nextTickMs: 0,
         appliedEvent: '',
+        viaArea: false,
       });
       sim.damage('p1', 1e6, hit('boss'), []);
     });

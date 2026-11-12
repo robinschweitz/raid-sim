@@ -31,7 +31,32 @@ export function damageTakenFactor(sim: Simulation, targetId: string, school: Sch
   return factor(sim, sim.unit(targetId), 'damage_taken_pct', school);
 }
 
+/** How damage reaches its target. */
+export interface DamageRoute {
+  /** Through an area effect, directly or as a tick of an aura an area applied (A-026). */
+  readonly viaArea?: boolean;
+}
+
+/** Unit::CalculateAOEDamageReduction (Unit.cpp 16030–16036): AoE avoidance, and creature AoE avoidance for a creature caster. */
+export function aoeDamageFactor(sim: Simulation, sourceId: string, targetId: string, school: SchoolSet): number {
+  const target = sim.unit(targetId);
+  const creatureSource = sim.units.get(sourceId)?.kind === 'creature';
+  const creature = creatureSource ? factor(sim, target, 'creature_aoe_damage_taken_pct', school) : 1;
+  return factor(sim, target, 'aoe_damage_taken_pct', school) * creature;
+}
+
 /** Product of the source's damage-done and the target's damage-taken modifiers, never negative (spell effects). */
 export function damageMultiplier(sim: Simulation, sourceId: string, targetId: string, school: SchoolSet): number {
   return Math.max(0, damageDoneFactor(sim, sourceId, school) * damageTakenFactor(sim, targetId, school));
+}
+
+/**
+ * Spell damage after the modifiers, truncated to a whole number after each step in AzerothCore's order:
+ * damage done, damage taken, then the area reduction (A-017, A-026).
+ */
+export function modifiedSpellDamage(sim: Simulation, sourceId: string, targetId: string, school: SchoolSet, rolled: number, route: DamageRoute = {}): number {
+  let amount = Math.trunc(rolled * damageDoneFactor(sim, sourceId, school));
+  amount = Math.trunc(amount * damageTakenFactor(sim, targetId, school));
+  if (route.viaArea) amount = Math.trunc(amount * aoeDamageFactor(sim, sourceId, targetId, school));
+  return Math.max(0, amount);
 }
