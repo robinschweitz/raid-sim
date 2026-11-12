@@ -15,8 +15,14 @@ export interface EffectContext {
   readonly causes: readonly string[];
   /** The effect reaches the target through an area: area modifiers apply (A-026). */
   readonly viaArea?: boolean;
-  /** The spell (or aura) skips the caster's damage-done factors, also for the auras it applies (A-028). */
+  /**
+   * The spell (or aura) skips the caster's damage-done factors for the damage it deals (A-028). It also passes to the
+   * auras applied from a spell context, but not from an aura's own tick or on-expire effects (`fromAura`): a child aura is
+   * a separate SpellInfo in AzerothCore and uses its own definition's flag.
+   */
   readonly ignoreCasterMods?: boolean;
+  /** The effect runs from an aura's tick or on-expire effects: `ignoreCasterMods` is not forwarded to auras applied here. */
+  readonly fromAura?: boolean;
 }
 
 /** The unit that owns an effect's damage, healing and auras (AzerothCore's m_originalCaster, A-020). */
@@ -67,7 +73,7 @@ export function applyLeafEffect(sim: Simulation, e: LeafEffect, ctx: EffectConte
       return;
     }
     case 'apply_aura':
-      applyAura(sim, e.aura, sourceOf(ctx), target.id, ctx.causes, { viaArea: ctx.viaArea === true, ignoreCasterMods: ctx.ignoreCasterMods === true });
+      applyAura(sim, e.aura, sourceOf(ctx), target.id, ctx.causes, { viaArea: ctx.viaArea === true, ignoreCasterMods: ctx.ignoreCasterMods === true && ctx.fromAura !== true });
       return;
     case 'remove_aura':
       removeAuras(sim, target.id, e.aura, 'removed', ctx.causes);

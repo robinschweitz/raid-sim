@@ -149,7 +149,7 @@ function fixPeriodicAmounts(sim: Simulation, inst: AuraInstance): void {
 /** One tick: fixed amounts take the victim's factors now (and the area factor for an area-applied aura); other effects run as usual. */
 function tickEffects(sim: Simulation, inst: AuraInstance, targetId: string, tickId: string): void {
   const effects = sim.catalog.aura(inst.auraId).periodic?.effects ?? [];
-  const ctx = { casterId: inst.casterId, targetId, ability: inst.auraId, causes: [tickId], viaArea: inst.viaArea, ignoreCasterMods: inst.ignoreCasterMods };
+  const ctx = { casterId: inst.casterId, targetId, ability: inst.auraId, causes: [tickId], viaArea: inst.viaArea, ignoreCasterMods: inst.ignoreCasterMods, fromAura: true };
   effects.forEach((e, i) => {
     const fixed = inst.periodicAmounts[i] ?? null;
     if (fixed === null) {
@@ -198,7 +198,7 @@ function expire(sim: Simulation, targetId: string, key: string, inst: AuraInstan
     [inst.appliedEvent],
   );
   const onExpire = sim.catalog.aura(inst.auraId).onExpire;
-  if (onExpire) applyEffects(sim, onExpire, { casterId: inst.casterId, targetId, ability: inst.auraId, causes: [removed] });
+  if (onExpire) applyEffects(sim, onExpire, { casterId: inst.casterId, targetId, ability: inst.auraId, causes: [removed], ignoreCasterMods: inst.ignoreCasterMods, fromAura: true });
   afterRemove(sim, inst, targetId, removed, 'expired');
 }
 

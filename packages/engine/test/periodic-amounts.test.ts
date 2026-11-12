@@ -152,7 +152,57 @@ describe('periodic amounts (A-029)', () => {
         });
       });
       sim.run();
-      expect(ticks(sim)[0]).toEqual([1000, 100]);
+      expect(ticks(sim)).toEqual([[1000, 100], [2000, 100], [3000, 100]]);
+    });
+
+    it('a flagged re-stack after an unflagged one recomputes every stack without the factor', () => {
+      const sim = newSim();
+      sim.catalog.addAura(dot('rot', 100, 100));
+      sim.at(0, EventClass.SpellHit, () => {
+        applyAura(sim, 'fury', 'boss', 'boss', []);
+        applyAura(sim, 'rot', 'boss', 'p1', []);
+        applyAura(sim, 'rot', 'boss', 'p1', [], { ignoreCasterMods: true });
+      });
+      sim.run();
+      expect(ticks(sim)).toEqual([[1000, 200], [2000, 200], [3000, 200]]);
+    });
+
+    it('on-expire damage of a flagged aura skips the caster done factor', () => {
+      const sim = newSim(4000);
+      sim.catalog.addAura({
+        id: 'bomb',
+        durationMs: 1000,
+        maxStacks: 1,
+        ignoreCasterDamageMods: true,
+        onExpire: [{ type: 'area', radius: 30, center: 'caster', relation: 'enemy', effects: [{ type: 'damage', school: 'shadow', min: 100, max: 100 }] }],
+      });
+      sim.at(0, EventClass.SpellHit, () => {
+        applyAura(sim, 'fury', 'boss', 'boss', []);
+        applyAura(sim, 'bomb', 'boss', 'boss', []);
+      });
+      sim.run();
+      expect(ticks(sim)).toEqual([[1000, 100]]);
+    });
+
+    it('a child aura applied from a flagged aura tick or expiry uses its own flag', () => {
+      const sim = newSim(5000);
+      sim.catalog.addAura(dot('child', 100, 100, { durationMs: 1000, maxStacks: 1 }));
+      sim.catalog.addAura({
+        id: 'parent',
+        durationMs: 1500,
+        maxStacks: 1,
+        ignoreCasterDamageMods: true,
+        periodic: { intervalMs: 1000, effects: [{ type: 'apply_aura', aura: 'child' }] },
+        onExpire: [{ type: 'apply_aura', aura: 'child' }],
+      });
+      sim.at(0, EventClass.SpellHit, () => {
+        applyAura(sim, 'fury', 'boss', 'boss', []);
+        applyAura(sim, 'parent', 'boss', 'p1', []);
+      });
+      sim.run();
+      // Child applied on the tick (1000) and on expiry (1500): both with the fury factor.
+      expect(ticks(sim).every(([, a]) => a === 200)).toBe(true);
+      expect(ticks(sim).length).toBeGreaterThan(0);
     });
 
     it('a re-stack by an unflagged source keeps the flag; an unflagged spell still takes the factor', () => {

@@ -128,7 +128,11 @@ export interface AuraDef {
   readonly periodic?: { readonly intervalMs: number; readonly effects: readonly Effect[] };
   readonly onExpire?: readonly Effect[];
   readonly modifiers?: readonly DamageModifier[];
-  /** SPELL_ATTR6_IGNORE_CASTER_DAMAGE_MODIFIERS for periodic damage: the caster's done factors are not taken (A-029). */
+  /**
+   * SPELL_ATTR6_IGNORE_CASTER_DAMAGE_MODIFIERS for this aura's periodic and on-expire damage: the caster's done factors are
+   * not taken (A-029). Auras it applies from a tick or on expiry use their own flag. Keep the flag the same for every
+   * application of one aura id: the instance ORs it across re-stacks (a model choice, A-028).
+   */
   readonly ignoreCasterDamageMods?: boolean;
   /** Survives the holder's death (IsDeathPersistent, SpellInfo.cpp 1262; A-012). */
   readonly deathPersistent?: boolean;
