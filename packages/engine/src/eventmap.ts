@@ -84,6 +84,21 @@ export class EventMap {
     this.entries = this.entries.filter((e) => (e.groupMask & m) === 0);
   }
 
+  /**
+   * GetTimeUntilEvent (EventMap.cpp 200–207): milliseconds until the earliest scheduled event with this id, or null when
+   * none is scheduled (AzerothCore returns Milliseconds::max()). An event that is due but not yet executed gives 0 or less.
+   */
+  timeUntilEvent(id: number): number | null {
+    // Entries are kept sorted by time, so the first match is the earliest.
+    const e = this.entries.find((x) => x.id === id);
+    return e ? e.at - this.time : null;
+  }
+
+  /** HasTimeUntilEvent (EventMap.cpp 209–212). */
+  hasTimeUntilEvent(id: number): boolean {
+    return this.timeUntilEvent(id) !== null;
+  }
+
   /** Shifts every event (group 0) or the events of one group by delayMs. */
   delayEvents(delayMs: number, group = 0): void {
     const m = bit(group);

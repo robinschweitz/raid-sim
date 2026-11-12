@@ -31,7 +31,7 @@ discovered mid-implementation.
    resolve to the first). Add an explicit set of units the encounter must kill; Putricide is
    not one of them.  (done in Plan 2a)
 8. **Timer windows go stale** after `delayEventsToMax`/`reschedule`. Add an EventMap query like
-   `GetTimeUntilEvent` and derive published windows from it.  (partly: `clearTimer`)
+   `GetTimeUntilEvent` and derive published windows from it.  (done in Plan 2b-2: `timeUntilEvent`, `publishWindow`, `raiseWindow`, A-034)
 9. **Script state** (AzerothCore `SetData`/`GetData`) for spore and Inoculated bookkeeping.  (done in Plan 2a)
 10. **Plan validation against content:** after setup, check rule trigger aura and spell ids
     against the catalog. Today a typo means a rule silently never fires.  (done in Plan 2a)
@@ -76,7 +76,7 @@ discovered mid-implementation.
 - Attack-speed modifiers (Berserk).  (done in Plan 2b-1: 86645ff, A-031; scale auras set the combat reach, beccabd, A-032)
 - Whether removing a spore by death triggers its effects.  (researched: no explosion; `afterRemove` runs on death and on a dead holder, afd6fcc, A-012)
 - Engage order and the engage "who".  (done in Plan 2b-1: 5809d8c, f430c9b, A-033; the zone-in lives in the encounter start)
-- Stale timer windows (EventMap time-until query).  (still open: Plan 2b-2; the engine has no time-until query yet)
+- Stale timer windows (EventMap time-until query).  (done in Plan 2b-2, A-034)
 - `basePoints` are raw: value = basePoints + 1..dieSides.  (done in Plan 2b-1: ac08c9a, the spell data entries derive the value range; spell data file shape and validation 4e15d81, 78027a3)
 - Research before implementing (done: `docs/research/festergut-mechanics-25n.md`):
   - who applies the first ambient blight (Putricide's `ACTION_FESTERGUT_COMBAT` / the gas dummy);

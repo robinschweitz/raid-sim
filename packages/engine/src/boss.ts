@@ -78,10 +78,52 @@ export abstract class EventScriptedAI implements BossScript {
   abstract readonly mechanics: readonly MechanicStatus[];
   readonly knownServerDifferences: readonly string[] = [];
   protected events!: EventMap;
+  /** Published timer windows by event id, in EventMap time (A-034). */
+  private readonly windows = new Map<number, { ability: string; earliest: number; latest: number }>();
 
   onEngage(ctx: BossContext, who: Unit | null = null): void {
     this.events = new EventMap(ctx.sim.rng.stream(`boss:${this.bossId}.timers`));
+    this.windows.clear();
     this.engage(ctx, who);
+  }
+
+  /**
+   * Publishes the boss-mod window of a scheduled event: it is due between minMs and maxMs from now. The window is checked
+   * against the EventMap (GetTimeUntilEvent), so a window that does not contain its event fails loudly instead of going
+   * stale. A window published earlier for the same event under another ability name is cleared. Nothing happens once the
+   * fight is over.
+   */
+  protected publishWindow(ctx: BossContext, ability: string, eventId: number, minMs: number, maxMs: number, causes: readonly string[]): void {
+    if (ctx.sim.over) return;
+    const until = this.events.timeUntilEvent(eventId);
+    if (until === null || until < minMs || until > maxMs) {
+      throw new Error(`timer window ${ability} [${minMs}, ${maxMs}] does not contain event ${eventId} (${until === null ? 'not scheduled' : `due in ${until} ms`})`);
+    }
+    const old = this.windows.get(eventId);
+    if (old && old.ability !== ability) ctx.clearTimer(old.ability, causes);
+    this.windows.set(eventId, { ability, earliest: this.events.now + minMs, latest: this.events.now + maxMs });
+    ctx.publishTimer(ability, minMs, maxMs, causes);
+  }
+
+  /**
+   * After the script delayed events (DelayEventsToMax): the event is now due no earlier than floorMs from now, so both
+   * bounds of its window move up to that floor, which is all a boss mod could know. A window whose event is no longer
+   * scheduled is cleared; an unchanged window is not published again.
+   */
+  protected raiseWindow(ctx: BossContext, eventId: number, floorMs: number, causes: readonly string[]): void {
+    if (ctx.sim.over) return;
+    const w = this.windows.get(eventId);
+    if (!w) return;
+    if (!this.events.hasTimeUntilEvent(eventId)) {
+      this.windows.delete(eventId);
+      ctx.clearTimer(w.ability, causes);
+      return;
+    }
+    const now = this.events.now;
+    const earliest = Math.max(w.earliest, now + floorMs);
+    const latest = Math.max(w.latest, now + floorMs);
+    if (earliest === w.earliest && latest === w.latest) return;
+    this.publishWindow(ctx, w.ability, eventId, earliest - now, latest - now, causes);
   }
 
   updateAI(ctx: BossContext, diffMs: number): void {
