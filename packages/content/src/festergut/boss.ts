@@ -1,6 +1,7 @@
 import type { BossModule } from '@raid/engine';
 import { FESTERGUT_ID, FestergutAI, festergutTimers } from './ai';
 import { FESTERGUT_DATA_25N } from './data';
+import { blightedSporesScript } from './scripts/blighted-spores';
 import { pungentBlightScript } from './scripts/pungent-blight';
 import { FestergutSpells } from './spell-ids';
 import { addFestergutSpells } from './spells';
@@ -31,6 +32,7 @@ export const festergut: BossModule = {
     addFestergutSpells(sim.catalog, data, spells);
     const ai = new FestergutAI(festergutTimers(data));
     sim.catalog.addSpellScript('pungent_blight', pungentBlightScript(data, spells));
+    sim.catalog.addAuraScript('blighted_spores', blightedSporesScript(data, spells, ai));
     return {
       script: ai,
       bossUnitId: FESTERGUT_ID,
