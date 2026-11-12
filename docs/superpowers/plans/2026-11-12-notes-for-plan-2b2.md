@@ -1,0 +1,11 @@
+# Notes for Plan 2b-2 (from the final review of 2b-1)
+- Gastric Explosion and Inoculated are cast from spell/aura hooks with startCast(sim, unit, spell, unit, causes, {triggered:true}) — no original caster (player is the damage source; creature-AoE avoidance must NOT apply to Gastric Explosion).
+- No entry filter for areas: leave out the gas-visual FORCE_CAST effects (conditions entry 36659); list as limitation.
+- "Flu Shot Shortage" setData: aura hooks only get sim; decide a pattern for scripts to reach the boss context/data.
+- Leave out Inoculated's PERIODIC_DUMMY (value 0) and Gas Spore e1 DUMMY radius 0; say so in mechanic statuses.
+- Script-side variant lookups need SpellVariants reachable from hooks + numeric id -> engine id mapping.
+- P3 limitations: refresh-resets-tick (A-009), spell hit/resist, Gastric Explosion crits, Vile Gas missile delay, root, LINKED slow.
+- First gas at ~6788 ms is a script timer; AI update granularity adds up to one interval.
+- Still open contract item: EventMap time-until query (stale timer windows).
+- Malleable Goo is heroic only (Putricide casts) — not needed for 25n.
+- periodic_trigger always has the holder cast; fine for all Festergut spells.
