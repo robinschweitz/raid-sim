@@ -14,7 +14,7 @@ export class SpellVariants {
       if (!row) continue;
       if (row.length !== 4) throw new Error(`spell ${s.id}: difficultyVariants needs 4 ids, has ${row.length}`);
       for (const id of row) {
-        if (id === 0) continue;
+        if (id <= 0) continue;
         const known = this.rows.get(id);
         if (known && known.join(',') !== row.join(',')) throw new Error(`spell ${id} is in two difficulty rows`);
         this.rows.set(id, row);
