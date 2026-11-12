@@ -262,6 +262,6 @@ export function runScenario(prepared: PreparedRun, registry: ContentRegistry): R
     units: sim.sortedUnits().map((u) => ({ id: u.id, name: u.name, kind: u.kind, role: u.role, approximate: u.approximate })),
   });
   const observations = evaluateObservations(scenario.observation.checks, trace, registry.checks);
-  const summary = buildSummary(trace, collectLimitations(sim, data, [setup.script]), observations);
+  const summary = buildSummary(trace, collectLimitations(sim, data, [setup.script], plan.roster), observations);
   return { outcome: outcome.kind, trace, summary };
 }

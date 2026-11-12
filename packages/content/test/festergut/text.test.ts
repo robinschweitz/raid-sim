@@ -23,6 +23,8 @@ describe('English names (D6: the trace holds ids, the formatter the words)', () 
       expect(CONTENT_TEXT_EN[`scenario.${scenario}.observation`], scenario).toBeTruthy();
     }
     expect(CONTENT_TEXT_EN['ability.melee']).toBe('Melee');
+    // The clean kill depends on its seed (A-039): the observation says so.
+    expect(CONTENT_TEXT_EN['scenario.festergut_clean_kill.observation']).toContain('seed-pinned');
     expect(Object.keys(FESTERGUT_TEXT_EN).every((k) => /^[a-z0-9_.]+$/.test(k))).toBe(true);
   });
 });

@@ -19,7 +19,7 @@ export const FESTERGUT_TEXT_EN: Readonly<Record<string, string>> = {
   'ability.gastric_explosion': 'Gastric Explosion',
   'ability.berserk': 'Berserk',
   'scenario.festergut_clean_kill.observation':
-    'A clean kill before the berserk: the raid stacks for every Gas Spore, so everyone has three Inoculated stacks when Pungent Blight hits, and the tanks swap at nine Gastric Bloat stacks.',
+    'A clean kill before the berserk: the raid stacks for every Gas Spore, so everyone has three Inoculated stacks when Pungent Blight hits, and the tanks swap at nine Gastric Bloat stacks. The run is seed-pinned (seed 1): with these stand-in numbers seed 2 loses a tank in the three-stack phase, seeds 1 and 3 to 10 are clean kills.',
   'scenario.festergut_missed_spore_group.observation':
     'One ranged player stays out when the raid stacks for the Gas Spores: without Inoculated, Pungent Blight hits that player for its full damage.',
   'scenario.festergut_late_tank_swap.observation':

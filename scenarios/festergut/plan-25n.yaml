@@ -4,8 +4,8 @@
 id: festergut-25n
 boss: festergut
 roster:
-  - { id: t1, name: Tormund, kind: standin, role: tank, maxHealth: 95000, ratePerSecond: 3000, armor: 50000, avoidance: { missPct: 8, dodgePct: 27, parryPct: 22 }, threatMultiplier: 8, reaction: { minMs: 300, maxMs: 600 } }
-  - { id: t2, name: Brakka, kind: standin, role: tank, maxHealth: 95000, ratePerSecond: 3000, armor: 50000, avoidance: { missPct: 8, dodgePct: 27, parryPct: 22 }, threatMultiplier: 8, reaction: { minMs: 300, maxMs: 600 } }
+  - { id: t1, name: Tormund, kind: standin, role: tank, maxHealth: 95000, ratePerSecond: 3000, armor: 50000, avoidance: { missPct: 8, dodgePct: 27, parryPct: 22 }, threatMultiplier: 8, reason: "armor at the cap and 57 % avoidance stand in for tank cooldowns and block at three Inhaled Blight stacks (A-039)", reaction: { minMs: 300, maxMs: 600 } }
+  - { id: t2, name: Brakka, kind: standin, role: tank, maxHealth: 95000, ratePerSecond: 3000, armor: 50000, avoidance: { missPct: 8, dodgePct: 27, parryPct: 22 }, threatMultiplier: 8, reason: "armor at the cap and 57 % avoidance stand in for tank cooldowns and block at three Inhaled Blight stacks (A-039)", reaction: { minMs: 300, maxMs: 600 } }
   - { id: h1, name: Lindra, kind: modelled, spec: generic_healer, profile: default, reaction: { minMs: 300, maxMs: 800 } }
   - { id: h2, name: Osric, kind: modelled, spec: generic_healer, profile: default, reaction: { minMs: 300, maxMs: 800 } }
   - { id: h3, name: Maela, kind: modelled, spec: generic_healer, profile: default, reaction: { minMs: 300, maxMs: 800 } }

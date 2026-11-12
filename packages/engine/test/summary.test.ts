@@ -119,6 +119,28 @@ describe('limitations (§6.4)', () => {
     expect(l.unappliedOverrides).toEqual([]);
   });
 
+  it('lists the profile values a plan sets for its stand-ins, with the reason', () => {
+    const { sim } = fight();
+    const l = collectLimitations(sim, new DataRegistry([]), [script], [
+      { id: 't1', name: 'T', kind: 'standin', role: 'tank', maxHealth: 95000, ratePerSecond: 3000, buffs: [], armor: 50000, avoidance: { missPct: 8, dodgePct: 27, parryPct: 22 }, threatMultiplier: 8, reason: 'stands in for cooldowns', reaction: { minMs: 0, maxMs: 0 } },
+      { id: 'm1', name: 'M', kind: 'standin', role: 'melee', maxHealth: 34000, ratePerSecond: 9500, buffs: [], armor: 0, avoidance: { missPct: 0, dodgePct: 0, parryPct: 0 }, threatMultiplier: 1, reaction: { minMs: 0, maxMs: 0 } },
+      { id: 'p9', name: 'P', kind: 'modelled', spec: 'x', profile: 'default', reaction: { minMs: 0, maxMs: 0 } },
+    ]);
+    const plan = 'stand-in profile set by the plan (spec §6.3)';
+    expect(l.profileValues).toEqual([
+      { unit: 'm1', field: 'maxHealth', value: 34000, reason: plan },
+      { unit: 'm1', field: 'ratePerSecond', value: 9500, reason: plan },
+      { unit: 't1', field: 'maxHealth', value: 95000, reason: 'stands in for cooldowns' },
+      { unit: 't1', field: 'ratePerSecond', value: 3000, reason: 'stands in for cooldowns' },
+      { unit: 't1', field: 'armor', value: 50000, reason: 'stands in for cooldowns' },
+      { unit: 't1', field: 'avoidance.missPct', value: 8, reason: 'stands in for cooldowns' },
+      { unit: 't1', field: 'avoidance.dodgePct', value: 27, reason: 'stands in for cooldowns' },
+      { unit: 't1', field: 'avoidance.parryPct', value: 22, reason: 'stands in for cooldowns' },
+      { unit: 't1', field: 'threatMultiplier', value: 8, reason: 'stands in for cooldowns' },
+    ]);
+    expect(collectLimitations(sim, new DataRegistry([]), [script]).profileValues).toEqual([]);
+  });
+
   it('reports failing built-in checks', () => {
     const { trace } = fight();
     const results = evaluateObservations(
