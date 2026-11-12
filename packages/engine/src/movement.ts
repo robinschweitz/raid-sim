@@ -41,3 +41,13 @@ export function meleeRange(a: Unit, b: Unit): number {
 export function withinMeleeRange(a: Unit, b: Unit, t: number): boolean {
   return centerDistance(positionAt(a, t), positionAt(b, t)) <= meleeRange(a, b);
 }
+
+/** Unit::IsWithinCombatRange (Unit.cpp 774–788) in 2D: squared centre distance < (dist + both combat reaches)², strict. */
+export function withinCombatRange(a: Unit, b: Unit, dist: number, t: number): boolean {
+  const p = positionAt(a, t);
+  const q = positionAt(b, t);
+  const dx = p.x - q.x;
+  const dy = p.y - q.y;
+  const max = dist + a.combatReach + b.combatReach;
+  return dx * dx + dy * dy < max * max;
+}

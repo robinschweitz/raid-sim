@@ -1,7 +1,7 @@
 import { startCast, type CastOptions, type CastResult } from './casting';
 import { EventMap } from './eventmap';
 import { meleeIfReady } from './melee';
-import { edgeDistance } from './movement';
+import { withinCombatRange } from './movement';
 import { EventClass } from './queue';
 import type { Simulation } from './sim';
 import { threatFor } from './threat';
@@ -20,6 +20,17 @@ export interface MechanicStatus {
   readonly logRef?: string;
 }
 
+/** Filters of SelectTarget / SelectTargetList (DefaultTargetSelector, UnitAI.h 53–100; A-021). */
+export interface TargetFilter {
+  /** Keep units with edge distance >= this (inclusive): rejected when within combat range of it. */
+  readonly minDistanceYd?: number;
+  /** Keep units with edge distance < this (strict): IsWithinCombatRange. */
+  readonly maxDistanceYd?: number;
+  readonly excludeVictim?: boolean;
+  /** Players only (the `playerOnly` argument). */
+  readonly playersOnly?: boolean;
+}
+
 export interface BossContext {
   readonly sim: Simulation;
   readonly self: Unit;
@@ -30,14 +41,10 @@ export interface BossContext {
   castAs(casterId: string, spellId: string, targetId: string, causes: readonly string[], options?: CastOptions): CastResult;
   /** Living units on this boss's threat list, sorted by id. */
   threatList(): Unit[];
-  /**
-   * SelectTarget(Random, ...) on the threat list from stream `boss:<id>.<mechanic>`. Distances are edge to edge (A-021):
-   * minDistanceYd = must be farther than, maxDistanceYd = must be within.
-   */
-  selectTarget(
-    mechanic: string,
-    options?: { minDistanceYd?: number; maxDistanceYd?: number; excludeVictim?: boolean },
-  ): Unit | null;
+  /** SelectTarget(Random, ...) on the threat list, uniformly from stream `boss:<id>.<mechanic>` (A-021). */
+  selectTarget(mechanic: string, options?: TargetFilter): Unit | null;
+  /** How many units on the threat list pass the filter (SelectTargetList's size check); draws no random numbers. */
+  countTargets(options?: TargetFilter): number;
   /** Picks targets from the stream `boss:<bossId>.<mechanic>` (§8.7). */
   pick(mechanic: string, candidates: readonly Unit[], n: number): Unit[];
   publishTimer(ability: string, minMs: number, maxMs: number, causes: readonly string[]): string;
@@ -97,6 +104,19 @@ export abstract class EventScriptedAI implements BossScript {
 export function makeBossContext(sim: Simulation, bossId: string): BossContext {
   const self = sim.unit(bossId);
   const data = new Map<string, number>();
+  const candidates = (options: TargetFilter): Unit[] => {
+    for (const [name, v] of [['minDistanceYd', options.minDistanceYd], ['maxDistanceYd', options.maxDistanceYd]] as const) {
+      if (v !== undefined && (!Number.isFinite(v) || v < 0)) throw new Error(`invalid distance bound ${name}=${v}`);
+    }
+    const victim = options.excludeVictim ? victimOf(sim, bossId) : null;
+    return (threatFor(sim)?.listed(bossId) ?? []).filter((u) => {
+      if (options.minDistanceYd !== undefined && withinCombatRange(self, u, options.minDistanceYd, sim.now)) return false;
+      if (options.maxDistanceYd !== undefined && !withinCombatRange(self, u, options.maxDistanceYd, sim.now)) return false;
+      if (options.excludeVictim && victim && u.id === victim.id) return false;
+      if (options.playersOnly && u.kind !== 'player') return false;
+      return true;
+    });
+  };
   return {
     sim,
     self,
@@ -106,20 +126,8 @@ export function makeBossContext(sim: Simulation, bossId: string): BossContext {
     castAs: (casterId, spellId, targetId, causes, options = {}) =>
       startCast(sim, casterId, spellId, targetId, causes, { ...options, originalCasterId: options.originalCasterId ?? bossId }),
     threatList: () => threatFor(sim)?.listed(bossId) ?? [],
-    selectTarget: (mechanic, options = {}) => {
-      for (const [name, v] of [['minDistanceYd', options.minDistanceYd], ['maxDistanceYd', options.maxDistanceYd]] as const) {
-        if (v !== undefined && (!Number.isFinite(v) || v < 0)) throw new Error(`invalid distance bound ${name}=${v}`);
-      }
-      const victim = options.excludeVictim ? victimOf(sim, bossId) : null;
-      const candidates = (threatFor(sim)?.listed(bossId) ?? []).filter((u) => {
-        const d = edgeDistance(self, u, sim.now);
-        if (options.minDistanceYd !== undefined && !(d > options.minDistanceYd)) return false;
-        if (options.maxDistanceYd !== undefined && d > options.maxDistanceYd) return false;
-        if (options.excludeVictim && victim && u.id === victim.id) return false;
-        return true;
-      });
-      return sim.rng.stream(`boss:${bossId}.${mechanic}`).pick(candidates, 1)[0] ?? null;
-    },
+    selectTarget: (mechanic, options = {}) => sim.rng.stream(`boss:${bossId}.${mechanic}`).pick(candidates(options), 1)[0] ?? null,
+    countTargets: (options = {}) => candidates(options).length,
     pick: (mechanic, candidates, n) => sim.rng.stream(`boss:${bossId}.${mechanic}`).pick(candidates, n),
     publishTimer: (ability, minMs, maxMs, causes) => {
       const w = { boss: bossId, ability, earliestMs: sim.now + minMs, latestMs: sim.now + maxMs };
