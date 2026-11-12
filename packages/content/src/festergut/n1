@@ -1,0 +1,3 @@
+    // A tick effect may have re-applied this aura, which already restarted the chain.
+    if (target.auras.get(key) === inst && inst.tick === null) scheduleTick(sim, targetId, key, inst);
+  });

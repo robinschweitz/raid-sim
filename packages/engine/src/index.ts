@@ -10,6 +10,8 @@ export * from './engage';
 export * from './eventmap';
 export * from './launch';
 export * from './limitations';
+export * from './melee';
+export * from './modifiers';
 export * from './movement';
 export * from './observations';
 export * from './plan/mistakes';
