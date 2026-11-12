@@ -20,7 +20,9 @@ export type LeafEffect =
   | { readonly type: 'heal'; readonly min: number; readonly max: number }
   | { readonly type: 'apply_aura'; readonly aura: string }
   | { readonly type: 'remove_aura'; readonly aura: string }
-  | { readonly type: 'taunt'; readonly durationMs: number };
+  | { readonly type: 'taunt'; readonly durationMs: number }
+  /** SCRIPT_EFFECT / DUMMY: no default handler; a spell script's onEffectHitTarget gives it meaning. */
+  | { readonly type: 'script' };
 
 /**
  * Effects on every unit in an area (implicit targets UNIT_SRC_AREA_* around the caster, UNIT_DEST_AREA_* around the
@@ -40,7 +42,13 @@ export interface AreaEffect {
   readonly effects: readonly LeafEffect[];
 }
 
-export type Effect = LeafEffect | AreaEffect;
+/** Effects on the caster of the spell (implicit target TARGET_UNIT_CASTER) whatever the explicit target is. */
+export interface OnCasterEffect {
+  readonly type: 'on_caster';
+  readonly effects: readonly LeafEffect[];
+}
+
+export type Effect = LeafEffect | AreaEffect | OnCasterEffect;
 
 export interface DamageModifier {
   /**
@@ -91,8 +99,15 @@ export interface SpellHitContext {
   readonly causes: readonly string[];
 }
 
+export interface EffectHitContext extends SpellHitContext {
+  /** Index of the spell effect (its position in SpellDef.effects) that reached this unit. */
+  readonly effectIndex: number;
+}
+
 export interface SpellScript {
-  /** Runs after all effects of the spell were applied to the target (A-024); skipped if the target died. */
+  /** OnEffectHitTarget: once per unit and effect, before the effect's default handler and before the damage is dealt (A-024). */
+  onEffectHitTarget?(ctx: EffectHitContext): void;
+  /** Runs after everything of the spell reached the unit, for every unit hit (A-024); skipped if the unit died. */
   afterHitTarget?(ctx: SpellHitContext): void;
 }
 
@@ -136,6 +151,7 @@ function checkEffects(owner: string, effects: readonly Effect[]): void {
       if (!Number.isFinite(e.radius) || e.radius < 0) throw new Error(`${owner}: invalid area radius ${e.radius}`);
       checkEffects(owner, e.effects);
     }
+    if (e.type === 'on_caster') checkEffects(owner, e.effects);
   }
 }
 

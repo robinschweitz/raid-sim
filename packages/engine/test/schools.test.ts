@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { applyAura } from '../src/auras';
 import { applyEffects } from '../src/effects';
-import { damageMultiplier } from '../src/modifiers';
+import { modifiedSpellDamage } from '../src/modifiers';
 import { EventClass } from '../src/queue';
 import { overlaps, schoolLabel, schoolMask, schoolsOfMask } from '../src/schools';
 import { Simulation } from '../src/sim';
@@ -59,8 +59,8 @@ describe('damage with several schools', () => {
     sim.at(0, EventClass.SpellHit, () => {
       applyAura(sim, 'shadow_ward', 'p1', 'p1', []);
       applyAura(sim, 'stone_skin', 'p1', 'p1', []);
-      expect(damageMultiplier(sim, 'boss', 'p1', ['nature', 'shadow'])).toBe(0.5);
-      expect(damageMultiplier(sim, 'boss', 'p1', 'nature')).toBe(1);
+      expect(modifiedSpellDamage(sim, 'boss', 'p1', ['nature', 'shadow'], 1000)).toBe(500);
+      expect(modifiedSpellDamage(sim, 'boss', 'p1', 'nature', 1000)).toBe(1000);
       applyEffects(sim, [{ type: 'damage', school: ['nature', 'shadow'], min: 1000, max: 1000 }], { casterId: 'boss', targetId: 'p1', ability: 'vile_gas', causes: [] });
     });
     sim.run();

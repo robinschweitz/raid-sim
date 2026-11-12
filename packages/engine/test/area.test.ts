@@ -42,6 +42,13 @@ describe('area targets (A-003)', () => {
     expect(hits({ radius: 0.5, center: 'target', relation: 'enemy' }, 'boss', 'p_in')).toEqual(['p_in']);
   });
 
+  it('does not add the target combat reach when a creature caster hits a player', () => {
+    // p_out at 8.01 has reach 1.5: inside 8 + 1.5 if reach were added, but a boss hitting a player uses centre distance only.
+    expect(newSim().unit('p_out').combatReach).toBe(1.5);
+    expect(hits({ radius: 8, center: 'caster', relation: 'enemy' }, 'boss')).not.toContain('p_out');
+    expect(hits({ radius: 8.01, center: 'caster', relation: 'enemy' }, 'boss')).toContain('p_out');
+  });
+
   it('adds the target combat reach when a player caster hits a creature', () => {
     // p_at → add: centre 9.434 <= 6.5 + 3; p_at → boss: 8 <= 6.5 + 8.
     expect(hits({ radius: 6.5, center: 'caster', relation: 'enemy' }, 'p_at')).toEqual(['add', 'boss']);

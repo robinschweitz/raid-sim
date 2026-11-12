@@ -45,10 +45,6 @@ export function aoeDamageFactor(sim: Simulation, sourceId: string, targetId: str
   return factor(sim, target, 'aoe_damage_taken_pct', school) * creature;
 }
 
-/** Product of the source's damage-done and the target's damage-taken modifiers, never negative (spell effects). */
-export function damageMultiplier(sim: Simulation, sourceId: string, targetId: string, school: SchoolSet): number {
-  return Math.max(0, damageDoneFactor(sim, sourceId, school) * damageTakenFactor(sim, targetId, school));
-}
 
 /**
  * Spell damage after the modifiers, truncated to a whole number after each step in AzerothCore's order:

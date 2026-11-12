@@ -1,7 +1,7 @@
 import { areaCenter, areaTargets } from './area';
 import { applyAura, removeAuras } from './auras';
-import type { Effect, LeafEffect } from './catalog';
-import { modifiedSpellDamage } from './modifiers';
+import type { DamageEffect, Effect, LeafEffect } from './catalog';
+import { modifiedSpellDamage, type DamageRoute } from './modifiers';
 import type { Simulation } from './sim';
 import { threatFor } from './threat';
 
@@ -14,6 +14,7 @@ export interface EffectContext {
   readonly viaArea?: boolean;
 }
 
+/** Effects outside a spell launch: aura ticks and on-expire effects (spells resolve through launchSpell). */
 export function applyEffects(sim: Simulation, effects: readonly Effect[], ctx: EffectContext): void {
   for (const e of effects) applyEffect(sim, e, ctx);
 }
@@ -25,9 +26,19 @@ function applyEffect(sim: Simulation, e: Effect, ctx: EffectContext): void {
       for (const u of hit) applyEffects(sim, e.effects, { ...ctx, targetId: u.id, viaArea: true });
       return;
     }
+    case 'on_caster':
+      // Lands on the caster directly, not through an area, even when the surrounding effect came through one.
+      applyEffects(sim, e.effects, { ...ctx, targetId: ctx.casterId, viaArea: false });
+      return;
     default:
       applyLeafEffect(sim, e, ctx);
   }
+}
+
+/** Rolls a damage effect and applies the modifiers in effect now, truncated after each step (A-017, A-026). */
+export function rollDamage(sim: Simulation, casterId: string, targetId: string, e: DamageEffect, route: DamageRoute = {}): number {
+  const rolled = sim.rng.stream(`unit:${casterId}.amount`).int(e.min, e.max);
+  return modifiedSpellDamage(sim, casterId, targetId, e.school, rolled, route);
 }
 
 /** One effect on one unit. */
@@ -36,8 +47,7 @@ export function applyLeafEffect(sim: Simulation, e: LeafEffect, ctx: EffectConte
   switch (e.type) {
     case 'damage': {
       if (!target.alive) return;
-      const rolled = sim.rng.stream(`unit:${ctx.casterId}.amount`).int(e.min, e.max);
-      const amount = modifiedSpellDamage(sim, ctx.casterId, target.id, e.school, rolled, { viaArea: ctx.viaArea === true });
+      const amount = rollDamage(sim, ctx.casterId, target.id, e, { viaArea: ctx.viaArea === true });
       sim.damage(target.id, amount, { sourceId: ctx.casterId, ability: ctx.ability, school: e.school }, ctx.causes);
       return;
     }
@@ -55,6 +65,8 @@ export function applyLeafEffect(sim: Simulation, e: LeafEffect, ctx: EffectConte
       return;
     case 'taunt':
       threatFor(sim)?.taunt(target.id, ctx.casterId, e.durationMs, ctx.causes);
+      return;
+    case 'script':
       return;
   }
 }

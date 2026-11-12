@@ -293,6 +293,7 @@ modifiers.ts, movement.ts, melee.ts, threat.ts).
    (`caster` / `target position at launch` for DEST_TARGET areas such as Vile Gas) and
    enemy/ally relation to the caster instead of `players | creatures | all`, players-only, and
    "caster included" for SRC ally areas. Radius 50000 = whole room.
+   (resolved by A-003 in Plan 2b-1 Task 2)
 2. **AoE damage avoidance as its own modifier kind** (`aoe_damage_taken_pct`, per stack), applied
    only to area-targeted damage effects (direct and periodic). Today `damage_taken_pct` would also
    reduce Gastric Bloat and melee.

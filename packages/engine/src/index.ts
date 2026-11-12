@@ -7,6 +7,7 @@ export * from './controller';
 export * from './core-data';
 export * from './effects';
 export * from './eventmap';
+export * from './launch';
 export * from './limitations';
 export * from './movement';
 export * from './observations';

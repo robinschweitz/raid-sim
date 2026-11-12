@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { applyAura, removeAuras } from '../src/auras';
 import { installCoreRules, startCast } from '../src/casting';
-import { damageMultiplier } from '../src/modifiers';
+import { modifiedSpellDamage } from '../src/modifiers';
 import { EventClass } from '../src/queue';
 import { Simulation } from '../src/sim';
 
@@ -87,9 +87,9 @@ describe('aura extensions', () => {
       applyAura(sim, 'inoc', 'p1', 'p1', []);
     });
     sim.at(10, EventClass.SpellHit, () => {
-      expect(damageMultiplier(sim, 'boss', 'p1', 'nature')).toBeCloseTo((1 + 0.6) * (1 - 0.25), 10);
-      expect(damageMultiplier(sim, 'boss', 'p1', 'physical')).toBeCloseTo(1.6, 10);
-      expect(damageMultiplier(sim, 'p2', 'p1', 'nature')).toBeCloseTo(0.75, 10);
+      expect(modifiedSpellDamage(sim, 'boss', 'p1', 'nature', 1000)).toBe(1200); // trunc(1000 × 1.6) × 0.75
+      expect(modifiedSpellDamage(sim, 'boss', 'p1', 'physical', 1000)).toBe(1600);
+      expect(modifiedSpellDamage(sim, 'p2', 'p1', 'nature', 1000)).toBe(750);
     });
     sim.run();
   });
@@ -125,7 +125,7 @@ describe('aura extensions', () => {
       for (let i = 0; i < 4; i++) applyAura(sim, 'ward', 'p1', 'p1', []);
     });
     sim.at(10, EventClass.SpellHit, () => {
-      expect(damageMultiplier(sim, 'boss', 'p1', 'nature')).toBe(0);
+      expect(modifiedSpellDamage(sim, 'boss', 'p1', 'nature', 1000)).toBe(0);
     });
     sim.run();
   });

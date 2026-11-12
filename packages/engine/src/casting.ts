@@ -1,6 +1,6 @@
 import type { SpellDef } from './catalog';
-import { applyEffects } from './effects';
-import { edgeDistance, positionAt, travelTimeMs } from './movement';
+import { launchSpell } from './launch';
+import { edgeDistance } from './movement';
 import { EventClass } from './queue';
 import type { Simulation } from './sim';
 import type { CastState, Unit } from './units';
@@ -77,7 +77,7 @@ export function startCast(
       { caster: casterId, spell: spellId, target: tId, castTimeMs: 0, endMs: sim.now, triggered: true },
       causes,
     );
-    complete(sim, caster, spell, tId, event, true);
+    complete(sim, caster, spell, tId, event, options);
     return { ok: true, event };
   }
   const check = checkCast(sim, casterId, spellId, targetId);
@@ -88,7 +88,7 @@ export function startCast(
   if (spell.gcdMs > 0) caster.gcdUntilMs = sim.now + spell.gcdMs;
   if (spell.castTimeMs === 0) {
     const event = sim.emit('cast_start', { caster: casterId, spell: spellId, target: tId, castTimeMs: 0, endMs: sim.now }, causes);
-    complete(sim, caster, spell, tId, event);
+    complete(sim, caster, spell, tId, event, options);
     return { ok: true, event };
   }
   const endMs = sim.now + spell.castTimeMs;
@@ -100,7 +100,7 @@ export function startCast(
     handle: sim.at(endMs, EventClass.SpellHit, () => {
       if (caster.cast !== cast) return;
       caster.cast = null;
-      complete(sim, caster, spell, tId, cast.startEvent);
+      complete(sim, caster, spell, tId, cast.startEvent, options);
     }),
     startEvent: '',
   };
@@ -113,33 +113,21 @@ export function startCast(
   return { ok: true, event: cast.startEvent };
 }
 
-function complete(sim: Simulation, caster: Unit, spell: SpellDef, targetId: string, startEvent: string, triggered = false): void {
+function complete(sim: Simulation, caster: Unit, spell: SpellDef, targetId: string, startEvent: string, options: CastOptions): void {
   if (!caster.alive) return;
   const target = sim.unit(targetId);
   if (!target.alive) {
     sim.emit('cast_failed', { caster: caster.id, spell: spell.id, target: targetId, reason: 'target_dead' }, [startEvent]);
     return;
   }
+  const triggered = options.triggered === true;
   if (!triggered && target.id !== caster.id && edgeDistance(caster, target, sim.now) > spell.rangeYd) {
     sim.emit('cast_failed', { caster: caster.id, spell: spell.id, target: targetId, reason: 'out_of_range' }, [startEvent]);
     return;
   }
   if (!triggered && spell.cooldownMs > 0) caster.cooldowns.set(spell.id, sim.now + spell.cooldownMs);
   const success = sim.emit('cast_success', { caster: caster.id, spell: spell.id, target: targetId }, [startEvent]);
-  if (spell.travelSpeedYdPerSec && target.id !== caster.id) {
-    const delay = travelTimeMs(positionAt(caster, sim.now), positionAt(target, sim.now), spell.travelSpeedYdPerSec);
-    sim.at(sim.now + delay, EventClass.SpellHit, () => hit(sim, caster.id, spell, targetId, success));
-  } else {
-    hit(sim, caster.id, spell, targetId, success);
-  }
-}
-
-function hit(sim: Simulation, casterId: string, spell: SpellDef, targetId: string, cause: string): void {
-  if (!sim.unit(targetId).alive) return;
-  const hitId = sim.emit('spell_hit', { caster: casterId, spell: spell.id, target: targetId }, [cause]);
-  applyEffects(sim, spell.effects, { casterId, targetId, ability: spell.id, causes: [hitId] });
-  if (!sim.unit(targetId).alive) return;
-  sim.catalog.spellScript(spell.id)?.afterHitTarget?.({ sim, spellId: spell.id, casterId, targetId, causes: [hitId] });
+  launchSpell(sim, caster.id, spell, targetId, success);
 }
 
 export function interruptCast(
