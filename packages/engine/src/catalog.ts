@@ -1,10 +1,14 @@
+import { schoolMask } from './schools';
 import type { Simulation } from './sim';
 import { ID_PATTERN } from './units';
 
 export type School = 'physical' | 'holy' | 'fire' | 'nature' | 'frost' | 'shadow' | 'arcane';
 
+/** One school, or several: a spell school mask such as nature + shadow (40). */
+export type SchoolSet = School | readonly School[];
+
 export type Effect =
-  | { readonly type: 'damage'; readonly school: School; readonly min: number; readonly max: number }
+  | { readonly type: 'damage'; readonly school: SchoolSet; readonly min: number; readonly max: number }
   | { readonly type: 'heal'; readonly min: number; readonly max: number }
   | { readonly type: 'apply_aura'; readonly aura: string }
   | { readonly type: 'remove_aura'; readonly aura: string }
@@ -23,7 +27,7 @@ export interface DamageModifier {
   readonly pct: number;
   /** Multiply the percentage by the aura's stacks. */
   readonly perStack: boolean;
-  /** Limit to these schools; all schools when absent. */
+  /** Applies when these schools overlap the damage's schools (misc-value mask match); all schools when absent. */
   readonly schools?: readonly School[];
 }
 
@@ -90,6 +94,22 @@ export interface SpellDef {
   readonly effects: readonly Effect[];
 }
 
+function checkSchools(owner: string, schools: SchoolSet): void {
+  try {
+    schoolMask(schools);
+  } catch (e) {
+    throw new Error(`${owner}: ${(e as Error).message}`);
+  }
+}
+
+/** Validates effect definitions; later tasks add rules per effect type. */
+function checkEffects(owner: string, effects: readonly Effect[]): void {
+  for (const e of effects) {
+    if (e.type === 'damage') checkSchools(owner, e.school);
+    if (e.type === 'area') checkEffects(owner, e.effects);
+  }
+}
+
 export class Catalog {
   private readonly spells = new Map<string, SpellDef>();
   private readonly auras = new Map<string, AuraDef>();
@@ -102,6 +122,7 @@ export class Catalog {
     if (def.castTimeMs < 0 || def.gcdMs < 0 || def.cooldownMs < 0 || def.rangeYd < 0) {
       throw new Error(`negative timing or range in spell ${def.id}`);
     }
+    checkEffects(def.id, def.effects);
     this.spells.set(def.id, def);
   }
 
@@ -114,7 +135,9 @@ export class Catalog {
     if (def.periodic && def.periodic.intervalMs <= 0) throw new Error(`aura ${def.id} needs a positive tick interval`);
     for (const m of def.modifiers ?? []) {
       if (!Number.isFinite(m.pct)) throw new Error(`aura ${def.id} has a non-finite modifier percentage`);
+      if (m.schools !== undefined) checkSchools(def.id, m.schools);
     }
+    checkEffects(def.id, [...(def.periodic?.effects ?? []), ...(def.onExpire ?? [])]);
     this.auras.set(def.id, def);
   }
 

@@ -17,6 +17,7 @@ export * from './queue';
 export * from './rng';
 export * from './rules';
 export * from './run';
+export * from './schools';
 export * from './sim';
 export * from './standin';
 export * from './summary';

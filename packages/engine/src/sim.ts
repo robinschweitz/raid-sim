@@ -1,4 +1,5 @@
-import { Catalog, type School } from './catalog';
+import { Catalog, type SchoolSet } from './catalog';
+import { schoolLabel } from './schools';
 import { positionAt, travelTimeMs } from './movement';
 import { EventClass, EventQueue, type Scheduled } from './queue';
 import { RngRegistry } from './rng';
@@ -29,7 +30,8 @@ export interface SimOptions {
 export interface HitInfo {
   readonly sourceId: string;
   readonly ability: string;
-  readonly school: School;
+  /** Schools of the damage; traced as a label such as 'nature+shadow'. */
+  readonly school: SchoolSet;
 }
 
 const r3 = (n: number): number => Math.round(n * 1000) / 1000;
@@ -125,7 +127,7 @@ export class Simulation {
     if (lethal) u.alive = false;
     const id = this.emit(
       'damage',
-      { target: u.id, source: info.sourceId, ability: info.ability, school: info.school, amount: dealt, overkill: rounded - dealt },
+      { target: u.id, source: info.sourceId, ability: info.ability, school: schoolLabel(info.school), amount: dealt, overkill: rounded - dealt },
       causes,
     );
     if (lethal) this.kill(u, id);
