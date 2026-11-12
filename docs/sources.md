@@ -38,6 +38,14 @@ Files referenced so far:
 | `src/server/game/AI/CreatureAI.cpp` lines 117–165, 286–296 | DoZoneInCombat and EngagementStart (`engage.ts`) |
 | `src/server/game/Combat/ThreatManager.cpp` lines 484–524, 650–729 | The first threat reference becomes the victim and starts the engage chain (`engage.ts`) |
 | `src/server/shared/SharedDefines.h` lines 288–290, 374–635, 767–906, 1414–1495; `src/server/game/Spells/Auras/SpellAuraDefines.h` lines 66–347 | School masks, attributes, effect, target and aura ids |
+| `src/common/Utilities/EventMap.cpp` lines 200–212 | GetTimeUntilEvent, HasTimeUntilEvent (`eventmap.ts`, timer windows in `boss.ts`) |
+| `src/server/scripts/Northrend/IcecrownCitadel/boss_festergut.cpp` lines 48–66, 114–139, 170–267, 275–372 | Festergut's spells, engage schedule, event switch, SetData, spell and aura scripts (`packages/content/src/festergut/`) |
+| `src/server/scripts/Northrend/IcecrownCitadel/boss_professor_putricide.cpp` lines 150–152, 425–433, 472–474 | Putricide's run to his Festergut watch position and the first Gaseous Blight (`festergut/data.ts`, `ai.ts`) |
+| `src/server/scripts/Northrend/IcecrownCitadel/icecrown_citadel.h` lines 48, 266–267, 276, 552–554 | Berserk 47008, creature entries, Festergut actions |
+| `src/server/game/Globals/ObjectMgr.cpp` lines 1133–1134; `src/server/game/Entities/Unit/Unit.h` line 43 | A BaseAttackTime of 0 becomes BASE_ATTACK_TIME (2000 ms) |
+| `src/server/game/Entities/Creature/Creature.cpp` line 563 | Creature run speed from `speed_run` |
+| `src/server/shared/SharedDefines.h` lines 393, 426, 444, 489, 499, 501, 621 | Attribute bits read from the spell data (`festergut/spells.ts`) |
+| `data/sql/base/db_world/creature_template.sql` lines 28379, 28891; `creature_classlevelstats.sql` line 381; `creature_template_model.sql` line 38525; `creature_model_info.sql` line 23955; `creature.sql` lines 138459, 138470 | Festergut 25n creature values, model size, spawn; Putricide's spawn (`festergut/data.ts`) |
 
 ## Spell data
 
