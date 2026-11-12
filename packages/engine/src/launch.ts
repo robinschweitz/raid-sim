@@ -107,6 +107,8 @@ function hitUnit(sim: Simulation, casterId: string, spell: SpellDef, unitId: str
   for (const index of [...new Set(items.map((it) => it.index))]) {
     if (!unit.alive) return;
     script?.onEffectHitTarget?.({ sim, spellId: spell.id, casterId, targetId: unitId, effectIndex: index, causes });
+    // The hook may have killed the unit: no default handler runs on it.
+    if (!unit.alive) return;
     for (const it of items) {
       if (it.index !== index || it.effect.type === 'apply_aura' || it.effect.type === 'damage') continue;
       applyLeafEffect(sim, it.effect, { casterId, targetId: unitId, ability: spell.id, causes, viaArea: it.viaArea });

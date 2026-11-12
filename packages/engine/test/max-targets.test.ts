@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { applyAura } from '../src/auras';
 import type { SpellDef } from '../src/catalog';
 import { installCoreRules, startCast } from '../src/casting';
 import { EventClass } from '../src/queue';
@@ -89,5 +90,41 @@ describe('max targets at launch (A-027)', () => {
     sim.catalog.addSpell(SPORES);
     expect(() => startCast(sim, 'boss', 'spores', 'boss', [], { triggered: true, maxTargets: 0 })).toThrow(/invalid maxTargets 0/);
     expect(() => sim.catalog.addSpell({ ...SPORES, id: 'bad', effects: [{ ...room, maxTargets: 1.5, effects: [] }] })).toThrow(/bad: invalid maxTargets 1.5/);
+  });
+
+  it('draws from unit:<caster>.<spell>.targets when no stream is named', () => {
+    const sim = newSim();
+    sim.catalog.addSpell(SPORES);
+    sim.at(0, EventClass.SpellHit, () => void startCast(sim, 'boss', 'spores', 'boss', [], { triggered: true, maxTargets: 3 }));
+    sim.run();
+    const expected = new Simulation({ seed: 21, maxDurationMs: 1, sampleIntervalMs: 1 }).rng
+      .stream('unit:boss.spores.targets')
+      .pick(PLAYERS.map((id) => ({ id })), 3)
+      .sort(byId)
+      .map((u) => u.id);
+    expect(holders(sim)).toEqual(expected);
+  });
+
+  it('rejects an invalid targetStream when the cast starts, even if no subset would be drawn', () => {
+    const sim = newSim();
+    sim.catalog.addSpell(SPORES);
+    sim.catalog.addSpell({ ...SPORES, id: 'slow', castTimeMs: 1000 });
+    expect(() => startCast(sim, 'boss', 'spores', 'boss', [], { triggered: true, maxTargets: 10, targetStream: 'Bad Stream' })).toThrow(/invalid stream name: Bad Stream/);
+    expect(() => startCast(sim, 'boss', 'slow', 'boss', [], { maxTargets: 10, targetStream: '' })).toThrow(/invalid stream name/);
+    expect(sim.trace.list().filter((e) => e.kind === 'cast_start')).toEqual([]);
+  });
+
+  it('an area in an aura tick uses its own maxTargets and the stream unit:<caster>.<aura>.targets', () => {
+    const sim = newSim();
+    sim.catalog.addAura({
+      id: 'pulse',
+      durationMs: 1000,
+      maxStacks: 1,
+      periodic: { intervalMs: 1000, effects: [{ ...room, maxTargets: 2, effects: [{ type: 'apply_aura', aura: 'spore' }] }] },
+    });
+    sim.at(0, EventClass.SpellHit, () => void applyAura(sim, 'pulse', 'boss', 'boss', []));
+    sim.run();
+    expect(holders(sim)).toHaveLength(2);
+    expect(sim.rng.usage()['unit:boss.pulse.targets']).toBeGreaterThan(0);
   });
 });

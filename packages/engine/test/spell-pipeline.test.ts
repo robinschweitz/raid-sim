@@ -133,4 +133,63 @@ describe('spell launch and hit (A-024)', () => {
     sim.run();
     expect(sim.trace.list().filter((e) => e.kind === 'damage').map((e) => [e.data.target, e.data.amount])).toEqual([['p1', 1000]]);
   });
+
+  it('a hit hook that kills the unit stops its remaining handlers and afterHitTarget; other units are still hit', () => {
+    const sim = newSim();
+    const after: string[] = [];
+    sim.catalog.addSpell({
+      ...instant,
+      id: 'cull',
+      rangeYd: 0,
+      target: 'self',
+      effects: [{ type: 'area', radius: 10, center: 'caster', relation: 'enemy', effects: [{ type: 'script' }, { type: 'damage', school: 'shadow', min: 10, max: 10 }] }],
+    });
+    sim.catalog.addSpellScript('cull', {
+      onEffectHitTarget: (c) => {
+        if (c.targetId === 'p1') c.sim.damage('p1', 1e9, { sourceId: c.casterId, ability: 'cull', school: 'shadow' }, c.causes);
+      },
+      afterHitTarget: (c) => void after.push(c.targetId),
+    });
+    sim.at(0, EventClass.SpellHit, () => void startCast(sim, 'boss', 'cull', 'boss', []));
+    sim.run();
+    expect(after).toEqual(['p2']);
+    const dmg = sim.trace.list().filter((e) => e.kind === 'damage').map((e) => e.data.target);
+    expect(dmg).toEqual(['p1', 'p2']);
+  });
+
+  it('a hook may cast a triggered spell; its events descend from the hit', () => {
+    const sim = newSim();
+    sim.catalog.addSpell({ ...instant, id: 'echo', rangeYd: 30, target: 'unit', effects: [{ type: 'damage', school: 'shadow', min: 7, max: 7 }] });
+    sim.catalog.addSpell({ ...instant, id: 'probe', rangeYd: 30, target: 'unit', effects: [{ type: 'script' }] });
+    sim.catalog.addSpellScript('probe', {
+      onEffectHitTarget: (c) => void startCast(c.sim, c.casterId, 'echo', c.targetId, c.causes, { triggered: true }),
+    });
+    sim.at(0, EventClass.SpellHit, () => void startCast(sim, 'boss', 'probe', 'p1', []));
+    sim.run();
+    const events = sim.trace.list();
+    const hit = events.find((e) => e.kind === 'spell_hit' && e.data.spell === 'probe')!;
+    const echo = events.find((e) => e.kind === 'cast_start' && e.data.spell === 'echo')!;
+    expect(echo.causes).toEqual([hit.id]);
+    expect(events.filter((e) => e.kind === 'damage').map((e) => [e.data.ability, e.data.amount])).toEqual([['echo', 7]]);
+  });
+
+  it('an explicit target that dies in flight is skipped while the area units are still hit', () => {
+    const sim = newSim();
+    sim.catalog.addSpell({
+      ...instant,
+      id: 'volley',
+      rangeYd: 50,
+      target: 'unit',
+      travelSpeedYdPerSec: 10,
+      effects: [
+        { type: 'damage', school: 'physical', min: 100, max: 100 },
+        { type: 'area', radius: 10, center: 'caster', relation: 'enemy', effects: [{ type: 'damage', school: 'physical', min: 50, max: 50 }] },
+      ],
+    });
+    sim.at(0, EventClass.Decision, () => void startCast(sim, 'boss', 'volley', 'p3', []));
+    sim.at(100, EventClass.SpellHit, () => void sim.damage('p3', 1e9, { sourceId: 'boss', ability: 'x', school: 'physical' }, []));
+    sim.run();
+    const dmg = sim.trace.list().filter((e) => e.kind === 'damage' && e.data.ability === 'volley').map((e) => [e.t, e.data.target, e.data.amount]);
+    expect(dmg).toEqual([[4000, 'p1', 50], [4000, 'p2', 50]]);
+  });
 });

@@ -47,7 +47,6 @@ export function aoeDamageFactor(sim: Simulation, sourceId: string, targetId: str
   return factor(sim, target, 'aoe_damage_taken_pct', school) * creature;
 }
 
-
 /**
  * Spell damage after the modifiers, truncated to a whole number after each step in AzerothCore's order:
  * damage done, damage taken, then the area reduction (A-017, A-026).

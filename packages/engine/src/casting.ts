@@ -2,6 +2,7 @@ import type { SpellDef } from './catalog';
 import { launchSpell } from './launch';
 import { edgeDistance } from './movement';
 import { EventClass } from './queue';
+import { assertStreamName } from './rng';
 import type { Simulation } from './sim';
 import type { CastState, Unit } from './units';
 
@@ -65,6 +66,7 @@ export function startCast(
   if (options.maxTargets !== undefined && (!Number.isInteger(options.maxTargets) || options.maxTargets < 1)) {
     throw new Error(`invalid maxTargets ${options.maxTargets}`);
   }
+  if (options.targetStream !== undefined) assertStreamName(options.targetStream);
   // No events once the outcome is decided; `event` is empty because nothing was written.
   if (sim.over) return { ok: false, reason: 'fight_over', event: '' };
   const failed = (reason: CastFailure): CastResult => {
