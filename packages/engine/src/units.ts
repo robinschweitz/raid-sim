@@ -167,8 +167,8 @@ export function createUnit(init: UnitInit): Unit {
   };
 }
 
-export const auraKey = (auraId: string, casterId: string, scope: 'caster' | 'unit' = 'caster'): string =>
-  scope === 'unit' ? `${auraId}|*` : `${auraId}|${casterId}`;
+export const auraKey = (auraId: string, casterId: string, scope: 'caster' | 'unit' | 'unit_replace' = 'caster'): string =>
+  scope === 'caster' ? `${auraId}|${casterId}` : `${auraId}|*`;
 
 /** Locale-independent string order (UTF-16 code units); the one comparator used wherever order must be deterministic. */
 export const compareStrings = (a: string, b: string): number => (a < b ? -1 : a > b ? 1 : 0);

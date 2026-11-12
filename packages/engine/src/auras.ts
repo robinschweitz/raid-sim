@@ -10,7 +10,7 @@ export interface ApplyAuraOptions {
   readonly viaArea?: boolean;
 }
 
-/** Applies or stacks an aura; returns the event id, or null if the target is dead or the fight is over. */
+/** Applies, stacks or replaces an aura; returns the event id, or null if the target is dead or the fight is over. */
 export function applyAura(
   sim: Simulation,
   auraId: string,
@@ -23,11 +23,18 @@ export function applyAura(
   const target = sim.unit(targetId);
   if (!target.alive || sim.over) return null;
   const key = auraKey(auraId, casterId, def.stackScope ?? 'caster');
+  let existing = target.auras.get(key);
+  if (existing && def.stackScope === 'unit_replace' && existing.casterId !== casterId) {
+    // Area auras of different casters do not stack (SpellAuras.cpp 2131–2151, 2193–2210): the old instance goes first.
+    removeInstance(sim, targetId, key, existing, 'replaced', causes);
+    // A removal hook may have killed the holder, decided the fight or applied this aura itself; that result stands.
+    if (!target.alive || sim.over || target.auras.has(key)) return null;
+    existing = undefined;
+  }
   const expiresMs = def.durationMs === null ? Number.POSITIVE_INFINITY : sim.now + def.durationMs;
   const traceExpiry = Number.isFinite(expiresMs) ? expiresMs : null;
   const schedule = (inst: AuraInstance): Scheduled | null =>
     Number.isFinite(expiresMs) ? sim.at(expiresMs, EventClass.AuraExpiry, () => expire(sim, targetId, key, inst)) : null;
-  const existing = target.auras.get(key);
   if (existing) {
     const previousStacks = existing.stacks;
     existing.stacks = Math.min(def.maxStacks, existing.stacks + 1);
@@ -87,6 +94,7 @@ function hookContext(
     previousStacks,
     appliedMs: inst.appliedMs,
     refreshedMs: inst.refreshedMs,
+    expiresMs: Number.isFinite(inst.expiresMs) ? inst.expiresMs : null,
     causes,
   };
 }
@@ -94,6 +102,23 @@ function hookContext(
 function afterRemove(sim: Simulation, inst: AuraInstance, unitId: string, removedId: string, reason: AuraRemoveReason): void {
   if (!sim.unit(unitId).alive) return;
   sim.catalog.auraScript(inst.auraId)?.afterRemove?.({ ...hookContext(sim, inst, unitId, [removedId], inst.stacks), reason });
+}
+
+/** Ends one instance without its on-expire effects: cancels its timers, writes aura_removed, runs afterRemove. */
+function removeInstance(
+  sim: Simulation,
+  targetId: string,
+  key: string,
+  inst: AuraInstance,
+  reason: AuraRemoveReason,
+  causes: readonly string[],
+): string {
+  sim.cancel(inst.expiry);
+  sim.cancel(inst.tick);
+  sim.unit(targetId).auras.delete(key);
+  const removed = sim.emit('aura_removed', { unit: targetId, aura: inst.auraId, caster: inst.casterId, reason }, causes);
+  afterRemove(sim, inst, targetId, removed, reason);
+  return removed;
 }
 
 /**
@@ -181,12 +206,7 @@ export function removeAuras(
     // A hook of an earlier removal may already have removed this instance.
     const inst = target.auras.get(key);
     if (!inst || inst.auraId !== auraId) continue;
-    sim.cancel(inst.expiry);
-    sim.cancel(inst.tick);
-    target.auras.delete(key);
-    const removed = sim.emit('aura_removed', { unit: targetId, aura: inst.auraId, caster: inst.casterId, reason }, causes);
-    ids.push(removed);
-    afterRemove(sim, inst, targetId, removed, reason);
+    ids.push(removeInstance(sim, targetId, key, inst, reason, causes));
   }
   return ids;
 }

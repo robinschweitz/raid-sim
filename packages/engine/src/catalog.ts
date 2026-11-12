@@ -67,7 +67,7 @@ export interface DamageModifier {
   readonly schools?: SchoolSet;
 }
 
-export type AuraRemoveReason = 'expired' | 'removed' | 'dispelled';
+export type AuraRemoveReason = 'expired' | 'removed' | 'dispelled' | 'replaced';
 
 export interface AuraHookContext {
   readonly sim: Simulation;
@@ -79,6 +79,8 @@ export interface AuraHookContext {
   readonly previousStacks: number;
   readonly appliedMs: number;
   readonly refreshedMs: number;
+  /** Expiry time of the instance, or null for a permanent aura. */
+  readonly expiresMs: number | null;
   readonly causes: readonly string[];
 }
 
@@ -118,8 +120,11 @@ export interface AuraDef {
   /** Milliseconds, or null for a permanent aura. */
   readonly durationMs: number | null;
   readonly maxStacks: number;
-  /** 'caster' (default): one instance per caster; 'unit': one instance per unit, any caster stacks it. */
-  readonly stackScope?: 'caster' | 'unit';
+  /**
+   * 'caster' (default): one instance per caster; 'unit': one instance per unit, any caster stacks it; 'unit_replace': one
+   * instance per unit, its caster stacks it and another caster's application replaces it (A-016).
+   */
+  readonly stackScope?: 'caster' | 'unit' | 'unit_replace';
   readonly periodic?: { readonly intervalMs: number; readonly effects: readonly Effect[] };
   readonly onExpire?: readonly Effect[];
   readonly modifiers?: readonly DamageModifier[];
