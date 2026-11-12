@@ -106,8 +106,8 @@ export function applyLeafEffect(sim: Simulation, e: LeafEffect, ctx: EffectConte
 
 /**
  * The unit casts the spell on itself, triggered (A-030). `owner` becomes the original caster of that cast: force_cast
- * passes none, so the forced unit owns its own spell (SpellEffects.cpp 1081–1096 casts without an original caster);
- * periodic_trigger passes the aura's caster (Unit.cpp 1387–1389 takes the triggering aura's caster).
+ * passes none, so the forced unit owns its own spell (SpellEffects.cpp 1081â€“1096 casts without an original caster);
+ * periodic_trigger passes the aura's caster (Unit.cpp 1387â€“1389 takes the triggering aura's caster).
  */
 function castOnSelf(sim: Simulation, spellId: string, ctx: EffectContext, owner?: string): void {
   startCast(sim, ctx.targetId, spellId, ctx.targetId, ctx.causes, owner === undefined ? { triggered: true } : { triggered: true, originalCasterId: owner });

@@ -62,7 +62,7 @@ describe('trigger_spell and force_cast (A-030)', () => {
     sim.catalog.addSpell({ ...self, id: 'gas_spore', effects: [{ type: 'area', radius: 30, center: 'caster', relation: 'enemy', effects: [{ type: 'force_cast', spell: 'spore_holder' }] }] });
     sim.at(0, EventClass.AiUpdate, () => void startCast(sim, 'boss', 'gas_spore', 'boss', [], { triggered: true }));
     sim.run();
-    // FORCE_CAST passes no original caster (SpellEffects.cpp 1081–1096), so each forced unit owns its own aura.
+    // FORCE_CAST passes no original caster (SpellEffects.cpp 1081â€“1096), so each forced unit owns its own aura.
     for (const id of ['p1', 'p2', 'p3']) expect(sim.unit(id).auras.has(`holder|${id}`), id).toBe(true);
     const forced = sim.trace.list().filter((e) => e.kind === 'cast_start' && e.data.spell === 'spore_holder');
     expect(forced.map((e) => [e.data.caster, e.data.target, e.data.originalCaster])).toEqual([

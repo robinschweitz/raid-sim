@@ -23,7 +23,7 @@ export type LeafEffect =
   | { readonly type: 'taunt'; readonly durationMs: number }
   /** SCRIPT_EFFECT / DUMMY: no default handler; a spell script's onEffectHitTarget gives it meaning. */
   | { readonly type: 'script' }
-  /** FORCE_CAST: the unit hit casts the spell on itself, triggered (SpellEffects.cpp 1043–1098, A-030). */
+  /** FORCE_CAST: the unit hit casts the spell on itself, triggered (SpellEffects.cpp 1043â€“1098, A-030). */
   | { readonly type: 'force_cast'; readonly spell: string }
   /** PERIODIC_TRIGGER_SPELL: at each tick the aura's holder casts the spell on itself (SpellAuraEffects.cpp 6252). Auras only. */
   | { readonly type: 'periodic_trigger'; readonly spell: string }
