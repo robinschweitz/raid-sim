@@ -24,7 +24,11 @@ export type LeafEffect =
   /** SCRIPT_EFFECT / DUMMY: no default handler; a spell script's onEffectHitTarget gives it meaning. */
   | { readonly type: 'script' }
   /** FORCE_CAST: the unit hit casts the spell on itself, triggered (SpellEffects.cpp 1043–1098, A-030). */
-  | { readonly type: 'force_cast'; readonly spell: string };
+  | { readonly type: 'force_cast'; readonly spell: string }
+  /** PERIODIC_TRIGGER_SPELL: at each tick the aura's holder casts the spell on itself (SpellAuraEffects.cpp 6252). Auras only. */
+  | { readonly type: 'periodic_trigger'; readonly spell: string }
+  /** INSTAKILL: damage equal to the target's health, without modifiers (SpellEffects.cpp 279-292). */
+  | { readonly type: 'instakill' };
 
 /**
  * Effects on every unit in an area (implicit targets UNIT_SRC_AREA_* around the caster, UNIT_DEST_AREA_* around the
@@ -184,7 +188,10 @@ function checkEffects(owner: string, effects: readonly Effect[], where: 'spell' 
       }
     }
     if (e.type === 'area' || e.type === 'on_caster') checkEffects(owner, e.effects, where);
-    if ((e.type === 'trigger_spell' || e.type === 'force_cast') && !ID_PATTERN.test(e.spell)) {
+    if (e.type === 'periodic_trigger' && where !== 'aura') {
+      throw new Error(`${owner}: periodic_trigger is an aura effect; spells use trigger_spell or force_cast`);
+    }
+    if ((e.type === 'trigger_spell' || e.type === 'force_cast' || e.type === 'periodic_trigger') && !ID_PATTERN.test(e.spell)) {
       throw new Error(`${owner}: invalid spell id ${e.spell}`);
     }
     if (e.type === 'trigger_spell' && where !== 'spell') {

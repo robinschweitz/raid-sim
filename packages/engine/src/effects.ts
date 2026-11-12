@@ -92,6 +92,15 @@ export function applyLeafEffect(sim: Simulation, e: LeafEffect, ctx: EffectConte
     case 'force_cast':
       castOnSelf(sim, e.spell, ctx);
       return;
+    case 'periodic_trigger':
+      // The triggering aura's caster becomes the original caster (Unit.cpp 1387-1389).
+      castOnSelf(sim, e.spell, ctx, sourceOf(ctx));
+      return;
+    case 'instakill':
+      // No modifiers: the damage is the target's current health (SpellEffects.cpp 279-292); sim.damage handles death.
+      if (!target.alive) return;
+      sim.damage(target.id, target.health, { sourceId: sourceOf(ctx), ability: ctx.ability, school: 'physical' }, ctx.causes);
+      return;
   }
 }
 
