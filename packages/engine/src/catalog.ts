@@ -64,8 +64,8 @@ export type Effect = LeafEffect | AreaEffect | OnCasterEffect | TriggerSpellEffe
 export interface DamageModifier {
   /**
    * damage_done_pct / damage_taken_pct: every hit. aoe_damage_taken_pct (MOD_AOE_DAMAGE_AVOIDANCE): only damage that reaches
-   * the target through an area; creature_aoe_damage_taken_pct (MOD_CREATURE_AOE_DAMAGE_AVOIDANCE): the same, only from a
-   * creature caster (A-026).
+   * the target through an area; creature_aoe_damage_taken_pct (MOD_CREATURE_AOE_DAMAGE_AVOIDANCE): the same, only when the
+   * original caster (the casting unit if none) is a creature (A-026).
    */
   readonly kind: 'damage_done_pct' | 'damage_taken_pct' | 'aoe_damage_taken_pct' | 'creature_aoe_damage_taken_pct';
   /** Percent change, e.g. -25 for 25 % less. */

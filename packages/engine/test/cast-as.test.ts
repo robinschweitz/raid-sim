@@ -134,11 +134,35 @@ describe('the original caster owns damage, bonuses and auras (A-020)', () => {
     expect(damages(sim)).toEqual([expect.objectContaining({ target: 'p1', source: 'boss', amount: 150 }), expect.objectContaining({ amount: 150 })]);
   });
 
+  it('two casting units casting for the same owner share one aura instance (Spell.cpp 3253)', () => {
+    const sim = newSim();
+    sim.catalog.addAura({ id: 'brand', durationMs: 5000, maxStacks: 2 });
+    sim.catalog.addSpell({ id: 'brand_it', castTimeMs: 0, gcdMs: 0, cooldownMs: 0, rangeYd: 100, usableWhileMoving: true, target: 'unit', effects: [{ type: 'apply_aura', aura: 'brand' }] });
+    viaBoss(sim, 'brand_it', 'p2', 'p1');
+    sim.at(0, EventClass.AiUpdate, () => void makeBossContext(sim, 'boss').castAs('boss', 'brand_it', 'p2', [], { triggered: true, originalCasterId: 'boss' }));
+    sim.run();
+    const auras = [...sim.unit('p2').auras.values()];
+    expect(auras).toHaveLength(1);
+    expect(auras[0]).toMatchObject({ auraId: 'brand', casterId: 'boss', stacks: 2 });
+  });
+
+  it('the on-expire effects of an aura owned through an original caster use that owner', () => {
+    const sim = newSim();
+    sim.catalog.addAura(done);
+    sim.catalog.addAura({ id: 'fuse', durationMs: 1000, maxStacks: 1, onExpire: [{ type: 'damage', school: 'shadow', min: 100, max: 100 }] });
+    sim.catalog.addSpell({ id: 'light', castTimeMs: 0, gcdMs: 0, cooldownMs: 0, rangeYd: 0, usableWhileMoving: true, target: 'self', effects: [{ type: 'on_caster', effects: [{ type: 'apply_aura', aura: 'fuse' }] }] });
+    sim.at(0, EventClass.SpellHit, () => void applyAura(sim, 'might', 'boss', 'boss', []));
+    viaBoss(sim, 'light', 'p1');
+    sim.run();
+    expect(damages(sim)).toEqual([expect.objectContaining({ target: 'p1', source: 'boss', amount: 150 })]);
+  });
+
   it('heals come from the original caster', () => {
     const sim = newSim();
     sim.catalog.addSpell({ id: 'mend', castTimeMs: 0, gcdMs: 0, cooldownMs: 0, rangeYd: 0, usableWhileMoving: true, target: 'self', effects: [{ type: 'heal', min: 10, max: 10 }] });
     sim.at(0, EventClass.SpellHit, () => void sim.damage('p1', 50, { sourceId: 'boss', ability: 'x', school: 'physical' }, []));
-    viaBoss(sim, 'mend', 'p1');
+    // The heal runs after the damage (t=1), whatever the order of event classes.
+    sim.at(1, EventClass.AiUpdate, () => void makeBossContext(sim, 'boss').castAs('p1', 'mend', 'p1', [], { triggered: true }));
     sim.run();
     expect(sim.trace.list().find((e) => e.kind === 'heal')?.data).toMatchObject({ target: 'p1', source: 'boss' });
   });

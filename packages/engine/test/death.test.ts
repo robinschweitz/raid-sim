@@ -42,7 +42,7 @@ describe('auras and death (A-012)', () => {
     });
     sim.at(100, EventClass.SpellHit, () => void kill(sim, 'p1'));
     sim.run();
-    expect([...sim.unit('p1').auras.keys()]).toEqual(['inoculated|*']);
+    expect([...sim.unit('p1').auras.values()].map((a) => a.auraId)).toEqual(['inoculated']);
     const last = sim.trace.build({} as never).snapshots.at(-1)!;
     expect(last.units.find((u) => u.id === 'p1')?.auras).toEqual([['inoculated', 1]]);
   });
@@ -149,6 +149,7 @@ describe('auras and death (A-012)', () => {
     sim.at(0, EventClass.SpellHit, () => void applyAura(sim, 'rot', 'boss', 'p1', []));
     sim.at(500, EventClass.SpellHit, () => void kill(sim, 'p1'));
     sim.run();
+    // The tick at 3000 comes before the expiry at 3000 (PeriodicTick class precedes AuraExpiry), so the last tick still runs.
     const list = sim.trace.list();
     expect(list.filter((e) => e.kind === 'periodic_tick').map((e) => e.t)).toEqual([1000, 2000, 3000]);
     expect(list.filter((e) => e.kind === 'damage')).toHaveLength(1);

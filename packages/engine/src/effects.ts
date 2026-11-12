@@ -29,7 +29,10 @@ export interface EffectContext {
 /** The unit that owns an effect's damage, healing and auras (AzerothCore's m_originalCaster, A-020). */
 export const sourceOf = (ctx: EffectContext): string => ctx.originalCasterId ?? ctx.casterId;
 
-/** Effects outside a spell launch: aura ticks and on-expire effects (spells resolve through launchSpell). */
+/**
+ * Effects outside a spell launch: aura ticks and on-expire effects (spells resolve through launchSpell). The aura contexts
+ * pass the aura's owner (its caster) as `casterId`; `originalCasterId` is only set on the launch path.
+ */
 export function applyEffects(sim: Simulation, effects: readonly Effect[], ctx: EffectContext): void {
   for (const e of effects) applyEffect(sim, e, ctx);
 }
