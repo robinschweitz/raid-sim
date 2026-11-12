@@ -68,18 +68,18 @@ discovered mid-implementation.
 
 ## Found in the Plan 2a final review (for Plan 2b)
 
-- Area and cast max targets from a named stream (Gas Spore 2 or 3 targets chosen at launch).
-- Casting as another unit from scripts and hooks (Gastric Explosion, Inoculated).
-- An aura replacement scope for Blighted Spores: a different caster replaces the old instance with reason `replaced`, firing `afterRemove`.
-- Spell-hook order: AzerothCore `OnEffectHitTarget` runs before the effect's default handler; hooks are needed for units hit by area sub-effects. Decide whether Inoculated reduces the same Pungent Blight hit.
-- Periodic amounts that scale with stacks.
-- Attack-speed modifiers (Berserk).
-- Whether removing a spore by death triggers its effects.
-- Engage order and the engage "who".
-- Stale timer windows (EventMap time-until query).
-- `basePoints` are raw: value = basePoints + 1..dieSides.
-- Research before implementing:
+- Area and cast max targets from a named stream (Gas Spore 2 or 3 targets chosen at launch).  (done in Plan 2b-1: 75bb978, A-027)
+- Casting as another unit from scripts and hooks (Gastric Explosion, Inoculated).  (done in Plan 2b-1: 0e18c51, cda9ac1, 74584fc, A-020, A-030; the original caster owns damage, bonuses and auras, `force_cast` has none, `trigger_spell` and `periodic_trigger` pass one, a trigger chain depth guard applies)
+- An aura replacement scope for Blighted Spores: a different caster replaces the old instance with reason `replaced`, firing `afterRemove`.  (done in Plan 2b-1: 53eaea5, A-016, scope `unit_replace`)
+- Spell-hook order: AzerothCore `OnEffectHitTarget` runs before the effect's default handler; hooks are needed for units hit by area sub-effects. Decide whether Inoculated reduces the same Pungent Blight hit.  (done in Plan 2b-1: 1417856, A-024; it does, damage is fixed at launch and `ignoreCasterDamageMods` propagates, b95c8a9, A-028)
+- Periodic amounts that scale with stacks.  (done in Plan 2b-1: b28a0f0, A-029)
+- Attack-speed modifiers (Berserk).  (done in Plan 2b-1: 86645ff, A-031; scale auras set the combat reach, beccabd, A-032)
+- Whether removing a spore by death triggers its effects.  (researched: no explosion; `afterRemove` runs on death and on a dead holder, afd6fcc, A-012)
+- Engage order and the engage "who".  (done in Plan 2b-1: 5809d8c, f430c9b, A-033; the zone-in lives in the encounter start)
+- Stale timer windows (EventMap time-until query).  (still open: Plan 2b-2; the engine has no time-until query yet)
+- `basePoints` are raw: value = basePoints + 1..dieSides.  (done in Plan 2b-1: ac08c9a, the spell data entries derive the value range; spell data file shape and validation 4e15d81, 78027a3)
+- Research before implementing (done: `docs/research/festergut-mechanics-25n.md`):
   - who applies the first ambient blight (Putricide's `ACTION_FESTERGUT_COMBAT` / the gas dummy);
   - how Gas Spore's removal produces Blighted Spores 69290;
   - the conditions rows for Inhale and Gaseous Blight targets;
-  - the exact `SelectTarget` distance rule (inclusive vs strict).
+  - the exact `SelectTarget` distance rule (inclusive vs strict).  (applied in Plan 2b-1: fe0d9d0, 527d11a, A-021)

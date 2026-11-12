@@ -1,33 +1,95 @@
+import { schoolMask } from './schools';
 import type { Simulation } from './sim';
-import { ID_PATTERN } from './units';
+import { compareStrings, ID_PATTERN } from './units';
 
 export type School = 'physical' | 'holy' | 'fire' | 'nature' | 'frost' | 'shadow' | 'arcane';
 
-export type Effect =
-  | { readonly type: 'damage'; readonly school: School; readonly min: number; readonly max: number }
+/** One school, or several: a spell school mask such as nature + shadow (40). */
+export type SchoolSet = School | readonly School[];
+
+export interface DamageEffect {
+  readonly type: 'damage';
+  readonly school: SchoolSet;
+  readonly min: number;
+  readonly max: number;
+}
+
+/** An effect on one unit. */
+export type LeafEffect =
+  | DamageEffect
   | { readonly type: 'heal'; readonly min: number; readonly max: number }
   | { readonly type: 'apply_aura'; readonly aura: string }
   | { readonly type: 'remove_aura'; readonly aura: string }
   | { readonly type: 'taunt'; readonly durationMs: number }
-  | {
-      readonly type: 'area';
-      readonly radius: number;
-      readonly includeCenter: boolean;
-      readonly filter: 'players' | 'creatures' | 'all';
-      readonly effects: readonly Effect[];
-    };
+  /** SCRIPT_EFFECT / DUMMY: no default handler; a spell script's onEffectHitTarget gives it meaning. */
+  | { readonly type: 'script' }
+  /** FORCE_CAST: the unit hit casts the spell on itself, triggered (SpellEffects.cpp 1043–1098, A-030). */
+  | { readonly type: 'force_cast'; readonly spell: string }
+  /** PERIODIC_TRIGGER_SPELL: at each tick the aura's holder casts the spell on itself (SpellAuraEffects.cpp 6252). Auras only. */
+  | { readonly type: 'periodic_trigger'; readonly spell: string }
+  /** INSTAKILL: damage equal to the target's health, without modifiers (SpellEffects.cpp 279-292). */
+  | { readonly type: 'instakill' };
+
+/**
+ * Effects on every unit in an area (implicit targets UNIT_SRC_AREA_* around the caster, UNIT_DEST_AREA_* around the
+ * explicit target). Membership: centre distance <= radius (A-003).
+ */
+export interface AreaEffect {
+  readonly type: 'area';
+  readonly radius: number;
+  /** 'caster': SRC_CASTER; 'target': the explicit target's position (for an aura effect: the holder's). */
+  readonly center: 'caster' | 'target';
+  /** Relation to the caster: enemy = the other side (players vs creatures), ally = the caster's side, any = both. */
+  readonly relation: 'enemy' | 'ally' | 'any';
+  /** SPELL_ATTR3_ONLY_ON_PLAYER (Spell.cpp 2161). */
+  readonly playersOnly?: boolean;
+  /** SPELL_ATTR1_EXCLUDE_CASTER: the caster is never hit (ally and any areas include it otherwise). */
+  readonly excludeCaster?: boolean;
+  /** MaxAffectedTargets: a random subset of this size when more units qualify (RandomResize, Spell.cpp 1414–1419). */
+  readonly maxTargets?: number;
+  readonly effects: readonly LeafEffect[];
+}
+
+/** Effects on the caster of the spell (implicit target TARGET_UNIT_CASTER) whatever the explicit target is. */
+export interface OnCasterEffect {
+  readonly type: 'on_caster';
+  readonly effects: readonly LeafEffect[];
+}
+
+/** TRIGGER_SPELL: at launch the caster casts the spell, triggered, at itself or the explicit target (A-030). Spells only. */
+export interface TriggerSpellEffect {
+  readonly type: 'trigger_spell';
+  readonly spell: string;
+  readonly on: 'caster' | 'target';
+}
+
+export type Effect = LeafEffect | AreaEffect | OnCasterEffect | TriggerSpellEffect;
 
 export interface DamageModifier {
-  readonly kind: 'damage_done_pct' | 'damage_taken_pct';
+  /**
+   * damage_done_pct / damage_taken_pct: every hit. aoe_damage_taken_pct (MOD_AOE_DAMAGE_AVOIDANCE): only damage that reaches
+   * the target through an area; creature_aoe_damage_taken_pct (MOD_CREATURE_AOE_DAMAGE_AVOIDANCE): the same, only when the
+   * original caster (the casting unit if none) is a creature (A-026).
+   */
+  readonly kind: 'damage_done_pct' | 'damage_taken_pct' | 'aoe_damage_taken_pct' | 'creature_aoe_damage_taken_pct';
   /** Percent change, e.g. -25 for 25 % less. */
   readonly pct: number;
   /** Multiply the percentage by the aura's stacks. */
   readonly perStack: boolean;
-  /** Limit to these schools; all schools when absent. */
-  readonly schools?: readonly School[];
+  /** Applies when these schools overlap the damage's schools (misc-value mask match); all schools when absent. */
+  readonly schools?: SchoolSet;
 }
 
-export type AuraRemoveReason = 'expired' | 'removed' | 'dispelled';
+/** Aura effects on unit stats (stats.ts): MOD_ATTACKSPEED / MOD_MELEE_HASTE (A-031), MOD_SCALE (A-032). */
+export interface StatModifier {
+  readonly kind: 'attack_speed_pct' | 'scale_pct';
+  readonly pct: number;
+  readonly perStack: boolean;
+}
+
+export type AuraModifier = DamageModifier | StatModifier;
+
+export type AuraRemoveReason = 'expired' | 'removed' | 'dispelled' | 'replaced' | 'death';
 
 export interface AuraHookContext {
   readonly sim: Simulation;
@@ -39,6 +101,8 @@ export interface AuraHookContext {
   readonly previousStacks: number;
   readonly appliedMs: number;
   readonly refreshedMs: number;
+  /** Expiry time of the instance, or null for a permanent aura. */
+  readonly expiresMs: number | null;
   readonly causes: readonly string[];
 }
 
@@ -49,7 +113,7 @@ export interface AuraHookContext {
 export interface AuraScript {
   afterApply?(ctx: AuraHookContext): void;
   afterStack?(ctx: AuraHookContext): void;
-  /** Not called when the aura is removed by death (A-012), nor when the holder is dead (e.g. killed by onExpire). */
+  /** Called for every removal, including by death and on a dead holder (A-012). */
   afterRemove?(ctx: AuraHookContext & { readonly reason: AuraRemoveReason }): void;
 }
 
@@ -61,8 +125,15 @@ export interface SpellHitContext {
   readonly causes: readonly string[];
 }
 
+export interface EffectHitContext extends SpellHitContext {
+  /** Index of the spell effect (its position in SpellDef.effects) that reached this unit. */
+  readonly effectIndex: number;
+}
+
 export interface SpellScript {
-  /** Runs after all effects of the spell were applied to the target (A-024); skipped if the target died. */
+  /** OnEffectHitTarget: once per unit and effect, before the effect's default handler and before the damage is dealt (A-024). */
+  onEffectHitTarget?(ctx: EffectHitContext): void;
+  /** Runs after everything of the spell reached the unit, for every unit hit (A-024); skipped if the unit died. */
   afterHitTarget?(ctx: SpellHitContext): void;
 }
 
@@ -71,11 +142,22 @@ export interface AuraDef {
   /** Milliseconds, or null for a permanent aura. */
   readonly durationMs: number | null;
   readonly maxStacks: number;
-  /** 'caster' (default): one instance per caster; 'unit': one instance per unit, any caster stacks it. */
-  readonly stackScope?: 'caster' | 'unit';
+  /**
+   * 'caster' (default): one instance per caster; 'unit': one instance per unit, any caster stacks it; 'unit_replace': one
+   * instance per unit, its caster stacks it and another caster's application replaces it (A-016).
+   */
+  readonly stackScope?: 'caster' | 'unit' | 'unit_replace';
   readonly periodic?: { readonly intervalMs: number; readonly effects: readonly Effect[] };
   readonly onExpire?: readonly Effect[];
-  readonly modifiers?: readonly DamageModifier[];
+  readonly modifiers?: readonly AuraModifier[];
+  /**
+   * SPELL_ATTR6_IGNORE_CASTER_DAMAGE_MODIFIERS for this aura's periodic and on-expire damage: the caster's done factors are
+   * not taken (A-029). Auras it applies from a tick or on expiry use their own flag. Keep the flag the same for every
+   * application of one aura id: the instance ORs it across re-stacks (a model choice, A-028).
+   */
+  readonly ignoreCasterDamageMods?: boolean;
+  /** Survives the holder's death (IsDeathPersistent, SpellInfo.cpp 1262; A-012). */
+  readonly deathPersistent?: boolean;
 }
 
 export interface SpellDef {
@@ -87,7 +169,58 @@ export interface SpellDef {
   readonly usableWhileMoving: boolean;
   readonly target: 'self' | 'unit';
   readonly travelSpeedYdPerSec?: number;
+  /** SPELL_ATTR6_IGNORE_CASTER_DAMAGE_MODIFIERS: the caster's damage-done modifiers do not apply (SpellInfo.cpp 1655–1674). */
+  readonly ignoreCasterDamageMods?: boolean;
+  /** SPELL_ATTR*_ALLOW_CAST_WHILE_DEAD: a dead unit may cast it (A-012). */
+  readonly allowDeadCaster?: boolean;
+  /** SPELL_ATTR*_ALLOW_DEAD_TARGET: it may target and hit a dead unit (A-012). */
+  readonly allowDeadTarget?: boolean;
   readonly effects: readonly Effect[];
+}
+
+function checkSchools(owner: string, schools: SchoolSet): void {
+  try {
+    schoolMask(schools);
+  } catch (e) {
+    throw new Error(`${owner}: ${(e as Error).message}`);
+  }
+}
+
+/**
+ * Validates effect definitions; `where` is a spell's effects, an aura's periodic effects or its on-expire effects. `nested`:
+ * inside an area or on_caster effect.
+ */
+function checkEffects(owner: string, effects: readonly Effect[], where: 'spell' | 'periodic' | 'expire', nested = false): void {
+  for (const e of effects) {
+    if (e.type === 'damage') checkSchools(owner, e.school);
+    if (e.type === 'area') {
+      if (!Number.isFinite(e.radius) || e.radius < 0) throw new Error(`${owner}: invalid area radius ${e.radius}`);
+      if (e.maxTargets !== undefined && (!Number.isInteger(e.maxTargets) || e.maxTargets < 1)) {
+        throw new Error(`${owner}: invalid maxTargets ${e.maxTargets}`);
+      }
+    }
+    if (e.type === 'area' || e.type === 'on_caster') checkEffects(owner, e.effects, where, true);
+    if (e.type === 'periodic_trigger' && where === 'spell') {
+      throw new Error(`${owner}: periodic_trigger is an aura effect; spells use trigger_spell or force_cast`);
+    }
+    if (e.type === 'periodic_trigger' && (where !== 'periodic' || nested)) {
+      throw new Error(`${owner}: periodic_trigger must be a top-level periodic effect of the aura`);
+    }
+    if ((e.type === 'trigger_spell' || e.type === 'force_cast' || e.type === 'periodic_trigger') && !ID_PATTERN.test(e.spell)) {
+      throw new Error(`${owner}: invalid spell id ${e.spell}`);
+    }
+    if (e.type === 'trigger_spell' && where !== 'spell') {
+      throw new Error(`${owner}: trigger_spell is a spell effect; auras use periodic_trigger`);
+    }
+  }
+}
+
+/** A spell or aura id that an effect refers to but the catalog does not hold. */
+export interface UnresolvedReference {
+  /** `spell <id>` or `aura <id>`: the definition whose effect refers to it. */
+  readonly owner: string;
+  readonly kind: 'spell' | 'aura';
+  readonly id: string;
 }
 
 export class Catalog {
@@ -102,6 +235,7 @@ export class Catalog {
     if (def.castTimeMs < 0 || def.gcdMs < 0 || def.cooldownMs < 0 || def.rangeYd < 0) {
       throw new Error(`negative timing or range in spell ${def.id}`);
     }
+    checkEffects(def.id, def.effects, 'spell');
     this.spells.set(def.id, def);
   }
 
@@ -114,7 +248,10 @@ export class Catalog {
     if (def.periodic && def.periodic.intervalMs <= 0) throw new Error(`aura ${def.id} needs a positive tick interval`);
     for (const m of def.modifiers ?? []) {
       if (!Number.isFinite(m.pct)) throw new Error(`aura ${def.id} has a non-finite modifier percentage`);
+      if ('schools' in m && m.schools !== undefined) checkSchools(def.id, m.schools);
     }
+    checkEffects(def.id, def.periodic?.effects ?? [], 'periodic');
+    checkEffects(def.id, def.onExpire ?? [], 'expire');
     this.auras.set(def.id, def);
   }
 
@@ -148,6 +285,28 @@ export class Catalog {
     const a = this.auras.get(id);
     if (!a) throw new Error(`unknown aura ${id}`);
     return a;
+  }
+
+  /**
+   * Every spell and aura id used by trigger_spell, force_cast, periodic_trigger, apply_aura and remove_aura that is not
+   * defined, walking nested area and on_caster effects. Definitions may be added in any order, so call it once all exist.
+   * Sorted by owner, kind, id.
+   */
+  unresolvedReferences(): UnresolvedReference[] {
+    const out: UnresolvedReference[] = [];
+    const walk = (owner: string, effects: readonly Effect[]): void => {
+      for (const e of effects) {
+        if (e.type === 'area' || e.type === 'on_caster') walk(owner, e.effects);
+        else if ((e.type === 'trigger_spell' || e.type === 'force_cast' || e.type === 'periodic_trigger') && !this.spells.has(e.spell)) {
+          out.push({ owner, kind: 'spell', id: e.spell });
+        } else if ((e.type === 'apply_aura' || e.type === 'remove_aura') && !this.auras.has(e.aura)) {
+          out.push({ owner, kind: 'aura', id: e.aura });
+        }
+      }
+    };
+    for (const s of this.spells.values()) walk(`spell ${s.id}`, s.effects);
+    for (const a of this.auras.values()) walk(`aura ${a.id}`, [...(a.periodic?.effects ?? []), ...(a.onExpire ?? [])]);
+    return out.sort((x, y) => compareStrings(x.owner, y.owner) || compareStrings(x.kind, y.kind) || compareStrings(x.id, y.id));
   }
 
   hasSpell(id: string): boolean {

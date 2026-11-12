@@ -1,35 +1,94 @@
-import type { DamageModifier, School } from './catalog';
+import type { AuraModifier, DamageModifier, SchoolSet } from './catalog';
+import { overlaps } from './schools';
 import type { Simulation } from './sim';
 import { compareStrings, type Unit } from './units';
 
-function applies(m: DamageModifier, school: School): boolean {
-  return !m.schools || m.schools.includes(school);
+// Exhaustive over DamageModifier['kind']: a new kind fails to compile until it is listed here.
+const DAMAGE_KIND_FLAGS: Record<DamageModifier['kind'], true> = {
+  damage_done_pct: true,
+  damage_taken_pct: true,
+  aoe_damage_taken_pct: true,
+  creature_aoe_damage_taken_pct: true,
+};
+const DAMAGE_KINDS: ReadonlySet<string> = new Set(Object.keys(DAMAGE_KIND_FLAGS));
+
+export function isDamageModifier(m: AuraModifier): m is DamageModifier {
+  return DAMAGE_KINDS.has(m.kind);
 }
 
-function factor(sim: Simulation, unit: Unit, kind: DamageModifier['kind'], school: School): number {
+/** A modifier applies when its schools overlap the damage's schools (Unit.cpp 6116–6124); all schools when it names none. */
+function applies(m: DamageModifier, school: SchoolSet): boolean {
+  return !m.schools || overlaps(m.schools, school);
+}
+
+function factor(sim: Simulation, unit: Unit, kind: DamageModifier['kind'], school: SchoolSet): number {
   let f = 1;
   for (const key of [...unit.auras.keys()].sort(compareStrings)) {
     const inst = unit.auras.get(key)!;
     for (const m of sim.catalog.aura(inst.auraId).modifiers ?? []) {
-      if (m.kind !== kind || !applies(m, school)) continue;
+      if (!isDamageModifier(m) || m.kind !== kind || !applies(m, school)) continue;
       f *= Math.max(0, 1 + (m.pct * (m.perStack ? inst.stacks : 1)) / 100);
     }
   }
   return f;
 }
 
-/** Product of the source's damage-done modifiers for the school (1 when the source no longer exists). */
-export function damageDoneFactor(sim: Simulation, sourceId: string, school: School): number {
+/** Product of the source's damage-done modifiers for the schools (1 when the source no longer exists). */
+export function damageDoneFactor(sim: Simulation, sourceId: string, school: SchoolSet): number {
   const source = sim.units.get(sourceId);
   return source ? factor(sim, source, 'damage_done_pct', school) : 1;
 }
 
-/** Product of the target's damage-taken modifiers for the school. */
-export function damageTakenFactor(sim: Simulation, targetId: string, school: School): number {
+/** Product of the target's damage-taken modifiers for the schools. */
+export function damageTakenFactor(sim: Simulation, targetId: string, school: SchoolSet): number {
   return factor(sim, sim.unit(targetId), 'damage_taken_pct', school);
 }
 
-/** Product of the source's damage-done and the target's damage-taken modifiers, never negative (spell effects). */
-export function damageMultiplier(sim: Simulation, sourceId: string, targetId: string, school: School): number {
-  return Math.max(0, damageDoneFactor(sim, sourceId, school) * damageTakenFactor(sim, targetId, school));
+/** How damage reaches its target. */
+export interface DamageRoute {
+  /** Through an area effect, directly or as a tick of an aura an area applied (A-026). */
+  readonly viaArea?: boolean;
+  /** Skip the source's damage-done factors (SPELL_ATTR6_IGNORE_CASTER_DAMAGE_MODIFIERS). */
+  readonly ignoreCasterMods?: boolean;
+}
+
+/** Unit::CalculateAOEDamageReduction (Unit.cpp 16030–16036): AoE avoidance, and creature AoE avoidance for a creature caster. */
+export function aoeDamageFactor(sim: Simulation, sourceId: string, targetId: string, school: SchoolSet): number {
+  const target = sim.unit(targetId);
+  const creatureSource = sim.units.get(sourceId)?.kind === 'creature';
+  const creature = creatureSource ? factor(sim, target, 'creature_aoe_damage_taken_pct', school) : 1;
+  return factor(sim, target, 'aoe_damage_taken_pct', school) * creature;
+}
+
+/**
+ * Spell damage after the modifiers, truncated to a whole number after each step in AzerothCore's order:
+ * damage done, damage taken, then the area reduction (A-017, A-026).
+ */
+export function modifiedSpellDamage(sim: Simulation, sourceId: string, targetId: string, school: SchoolSet, rolled: number, route: DamageRoute = {}): number {
+  return damageTakenStep(sim, sourceId, targetId, school, doneStep(sim, sourceId, school, rolled, route), route);
+}
+
+/** First step: the source's damage-done factors, truncated. */
+function doneStep(sim: Simulation, sourceId: string, school: SchoolSet, rolled: number, route: DamageRoute): number {
+  return route.ignoreCasterMods ? Math.trunc(rolled) : Math.trunc(rolled * damageDoneFactor(sim, sourceId, school));
+}
+
+/** Later steps: the target's damage-taken factor, then the area reduction, each truncated. */
+function damageTakenStep(sim: Simulation, sourceId: string, targetId: string, school: SchoolSet, amount: number, route: DamageRoute): number {
+  let result = Math.trunc(amount * damageTakenFactor(sim, targetId, school));
+  if (route.viaArea) result = Math.trunc(result * aoeDamageFactor(sim, sourceId, targetId, school));
+  return Math.max(0, result);
+}
+
+/**
+ * A periodic damage amount fixed at (re)application (AuraEffect::CalculateAmount, A-029): the rolled amount after the
+ * caster's damage-done step (truncated), multiplied by the stacks. The taken and area steps come at each tick.
+ */
+export function fixedPeriodicDamage(sim: Simulation, sourceId: string, school: SchoolSet, rolled: number, stacks: number, ignoreCasterMods: boolean): number {
+  return doneStep(sim, sourceId, school, rolled, { ignoreCasterMods }) * stacks;
+}
+
+/** One tick of a fixed periodic amount: damage taken on the victim, then the area reduction, each truncated (A-026, A-029). */
+export function periodicTickDamage(sim: Simulation, sourceId: string, targetId: string, school: SchoolSet, fixed: number, viaArea: boolean): number {
+  return damageTakenStep(sim, sourceId, targetId, school, fixed, { viaArea });
 }

@@ -3,6 +3,7 @@ import { attachBoss, type BossScript } from './boss';
 import { installCoreRules } from './casting';
 import { ActorController, type ActorPolicy } from './controller';
 import { CORE_DATA } from './core-data';
+import { engageEncounter } from './engage';
 import { collectLimitations } from './limitations';
 import { evaluateObservations, type CustomCheck } from './observations';
 import type { PreparedRun } from './plan/prepare';
@@ -34,8 +35,10 @@ export interface BossSetup {
   readonly bossUnitId: string;
   /** Units that must all die for a kill; defaults to the primary boss alone. */
   readonly mustKill?: readonly string[];
-  /** Sets initial aggro once every player exists. */
-  pull(sim: Simulation): void;
+  /** Sets initial aggro once every player exists. Give exactly one of `pull` and `puller`. */
+  pull?(sim: Simulation): void;
+  /** The pulling player's id, once every player exists: the encounter engages with `who` (A-033). */
+  puller?(sim: Simulation): string;
 }
 
 export interface BossModule {
@@ -91,6 +94,10 @@ function checkCatalogReferences(p: PreparedRun, sim: Simulation): LoadProblem[] 
       problems.push({ file: p.planFile, path: `rules.${i}.do.spell`, message: `unknown spell ${r.do.spell}` });
     }
   });
+  // Spells and auras the content defines may only refer to ids that exist (trigger_spell, force_cast, periodic_trigger, apply_aura).
+  for (const r of sim.catalog.unresolvedReferences()) {
+    problems.push({ file: `boss:${p.plan.boss}`, path: r.owner, message: `unknown ${r.kind} ${r.id}` });
+  }
   return problems;
 }
 
@@ -149,6 +156,9 @@ export function runScenario(prepared: PreparedRun, registry: ContentRegistry): R
     if (!existing.has(id)) return setupFailure(`boss:${boss.id}`, new Error(`mustKill references unknown unit ${id}`));
   }
   for (const id of killSet) sim.mustKill.add(id);
+  if ((setup.pull === undefined) === (setup.puller === undefined)) {
+    return setupFailure(`boss:${boss.id}`, new Error('a boss setup needs exactly one of pull and puller'));
+  }
   const handlers = new Map<string, ActionHandler>(BUILTIN_ACTIONS);
   if (plan.rules.some((r) => r.do.do === 'taunt')) {
     handlers.set(
@@ -214,11 +224,19 @@ export function runScenario(prepared: PreparedRun, registry: ContentRegistry): R
     for (const m of standins) installStandin(sim, m, params);
   }
   const aiUpdateIntervalMs = data.num('core.ai_update_interval_ms');
-  attachBoss(sim, setup.script, setup.bossUnitId, aiUpdateIntervalMs);
-  try {
-    setup.pull(sim);
-  } catch (e) {
-    return setupFailure(`boss:${boss.id}`, e);
+  if (setup.puller) {
+    try {
+      engageEncounter(sim, setup.script, setup.bossUnitId, aiUpdateIntervalMs, setup.puller(sim));
+    } catch (e) {
+      return setupFailure(`boss:${boss.id}`, e);
+    }
+  } else {
+    attachBoss(sim, setup.script, setup.bossUnitId, aiUpdateIntervalMs);
+    try {
+      setup.pull!(sim);
+    } catch (e) {
+      return setupFailure(`boss:${boss.id}`, e);
+    }
   }
   const outcome = sim.run();
 

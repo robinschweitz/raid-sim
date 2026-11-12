@@ -1,4 +1,6 @@
-import { Catalog, type School } from './catalog';
+import { removeAurasOnDeath } from './auras';
+import { Catalog, type SchoolSet } from './catalog';
+import { schoolLabel } from './schools';
 import { positionAt, travelTimeMs } from './movement';
 import { EventClass, EventQueue, type Scheduled } from './queue';
 import { RngRegistry } from './rng';
@@ -29,7 +31,8 @@ export interface SimOptions {
 export interface HitInfo {
   readonly sourceId: string;
   readonly ability: string;
-  readonly school: School;
+  /** Schools of the damage; traced as a label such as 'nature+shadow'. */
+  readonly school: SchoolSet;
 }
 
 const r3 = (n: number): number => Math.round(n * 1000) / 1000;
@@ -47,6 +50,8 @@ export class Simulation {
   readonly timerWindows = new Map<string, TimerWindow>();
   /** Units that must all die for a kill; when empty, every boss-role unit must die. */
   readonly mustKill = new Set<string>();
+  /** Spells being resolved through startCast, outermost first: guards trigger chains (casting.ts). */
+  readonly castChain: string[] = [];
   private readonly listeners: Array<(ev: TraceEvent) => void> = [];
   private nextSampleMs = 0;
   private lastSampleMs = -1;
@@ -125,7 +130,7 @@ export class Simulation {
     if (lethal) u.alive = false;
     const id = this.emit(
       'damage',
-      { target: u.id, source: info.sourceId, ability: info.ability, school: info.school, amount: dealt, overkill: rounded - dealt },
+      { target: u.id, source: info.sourceId, ability: info.ability, school: schoolLabel(info.school), amount: dealt, overkill: rounded - dealt },
       causes,
     );
     if (lethal) this.kill(u, id);
@@ -227,13 +232,7 @@ export class Simulation {
     }
     const deathId = this.emit('death', { unit: u.id }, [cause]);
     u.diedAtEvent = deathId;
-    for (const key of [...u.auras.keys()].sort(compareStrings)) {
-      const a = u.auras.get(key)!;
-      this.cancel(a.expiry);
-      this.cancel(a.tick);
-      u.auras.delete(key);
-      this.emit('aura_removed', { unit: u.id, aura: a.auraId, caster: a.casterId, reason: 'death' }, [deathId]);
-    }
+    removeAurasOnDeath(this, u.id, deathId);
     this.checkOutcome(deathId);
   }
 

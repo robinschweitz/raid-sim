@@ -9,9 +9,9 @@ function newSim() {
   const sim = new Simulation({ seed: 3, maxDurationMs: 20000, sampleIntervalMs: 1000 });
   sim.addUnit({ id: 'boss', name: 'Boss', kind: 'creature', role: 'boss', maxHealth: 1e6, pos: { x: 0, y: 30 }, speedYdPerSec: 7, combatReach: 5, boundingRadius: 2 });
   sim.addUnit({ ...player, id: 'p1', name: 'P1', pos: { x: 0, y: 0 } });
-  sim.addUnit({ ...player, id: 'p2', name: 'P2', pos: { x: 9.5, y: 0 } });
-  sim.addUnit({ ...player, id: 'p3', name: 'P3', pos: { x: -9.49, y: 0 } });
-  sim.addUnit({ ...player, id: 'p4', name: 'P4', pos: { x: 0, y: -9.51 } });
+  sim.addUnit({ ...player, id: 'p2', name: 'P2', pos: { x: 8, y: 0 } });
+  sim.addUnit({ ...player, id: 'p3', name: 'P3', pos: { x: -7.99, y: 0 } });
+  sim.addUnit({ ...player, id: 'p4', name: 'P4', pos: { x: 0, y: -8.01 } });
   sim.catalog.addAura({ id: 'stacker', durationMs: 10000, maxStacks: 3 });
   sim.catalog.addAura({
     id: 'dot',
@@ -24,7 +24,7 @@ function newSim() {
     durationMs: 2000,
     maxStacks: 1,
     onExpire: [
-      { type: 'area', radius: 8, includeCenter: true, filter: 'players', effects: [{ type: 'damage', school: 'nature', min: 1000, max: 1000 }] },
+      { type: 'area', radius: 8, center: 'target', relation: 'enemy', effects: [{ type: 'damage', school: 'nature', min: 1000, max: 1000 }] },
     ],
   });
   return sim;
@@ -69,7 +69,7 @@ describe('auras', () => {
     sim.at(0, EventClass.SpellHit, () => void applyAura(sim, 'bomb', 'boss', 'p1', []));
     sim.run();
     const hitIds = events(sim, 'damage').map((e) => e.data.target);
-    // p2: edge distance exactly 8 (hit); p3: 7.99 (hit); p4: 8.01 (miss); p1 is the centre.
+    // p2: centre distance exactly 8 (hit); p3: 7.99 (hit); p4: 8.01 (miss); p1 is the centre (A-003).
     expect(hitIds).toEqual(['p1', 'p2', 'p3']);
     const removal = events(sim, 'aura_removed')[0];
     expect(events(sim, 'damage')[0].causes).toEqual([removal.id]);
@@ -186,8 +186,8 @@ describe('auras', () => {
         {
           type: 'area',
           radius: 200,
-          includeCenter: true,
-          filter: 'all',
+          center: 'target',
+          relation: 'any',
           effects: [
             { type: 'damage', school: 'shadow', min: 1e6, max: 1e6 },
             { type: 'apply_aura', aura: 'stacker' },

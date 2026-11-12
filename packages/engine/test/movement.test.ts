@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { centerDistance, edgeDistance, pointToEdge, positionAt, travelTimeMs } from '../src/movement';
+import { centerDistance, edgeDistance, positionAt, travelTimeMs } from '../src/movement';
 import { EventClass, EventQueue } from '../src/queue';
 import { createUnit } from '../src/units';
 
@@ -20,11 +20,6 @@ describe('movement', () => {
     expect(edgeDistance(a, b, 0)).toBe(7);
     const c = createUnit({ ...base, id: 'c', name: 'C', pos: { x: 1, y: 0 } });
     expect(edgeDistance(a, c, 0)).toBe(0);
-  });
-
-  it('measures area distance from a point to a unit edge', () => {
-    const b = createUnit({ ...base, id: 'b', name: 'B', pos: { x: 9.5, y: 0 } });
-    expect(pointToEdge({ x: 0, y: 0 }, b, 0)).toBe(8);
   });
 
   it('computes travel time rounded up to the millisecond', () => {

@@ -11,6 +11,11 @@ function fnv1a(text: string): number {
   return h >>> 0;
 }
 
+/** Throws unless `name` is a valid random stream name. */
+export function assertStreamName(name: string): void {
+  if (!STREAM_NAME.test(name)) throw new Error(`invalid stream name: ${name}`);
+}
+
 /** mulberry32 generator. */
 export class Rng {
   private state: number;
@@ -66,7 +71,7 @@ export class RngRegistry {
   }
 
   stream(name: string): Rng {
-    if (!STREAM_NAME.test(name)) throw new Error(`invalid stream name: ${name}`);
+    assertStreamName(name);
     let s = this.streams.get(name);
     if (!s) {
       s = new Rng(fnv1a(`${this.seed}|${name}`));

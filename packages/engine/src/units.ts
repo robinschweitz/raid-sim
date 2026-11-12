@@ -45,6 +45,12 @@ export interface AuraInstance {
   /** Time of the next periodic tick anchor (applied + k * interval); keeps tick phase across refreshes. */
   nextTickMs: number;
   appliedEvent: string;
+  /** Applied by an area effect: its periodic damage counts as area damage (SpellAuraEffects.cpp 6398–6405). */
+  readonly viaArea: boolean;
+  /** The applying spell or the aura skips the caster's damage-done factors for periodic damage; kept by re-stacks (A-028, A-029). */
+  ignoreCasterMods: boolean;
+  /** Per periodic effect: the amount fixed at the last (re)application, or null for effects that are not damage or heal (A-029). */
+  periodicAmounts: (number | null)[];
 }
 
 export interface CastState {
@@ -68,7 +74,11 @@ export interface Unit {
   pos: Vec2;
   move: Move | null;
   readonly speedYdPerSec: number;
-  readonly combatReach: number;
+  /** Combat reach at scale 1 (creature_model_info, or the player default). */
+  readonly baseCombatReach: number;
+  /** baseCombatReach × scale (stats.ts, A-032). */
+  combatReach: number;
+  /** Not scaled by MOD_SCALE (AzerothCore scales it, Creature.cpp 3598): the engine does not read it. */
   readonly boundingRadius: number;
   readonly level: number;
   readonly armor: number;
@@ -79,6 +89,8 @@ export interface Unit {
   readonly threatMultiplier: number;
   /** Earliest time of the next melee swing. */
   nextSwingMs: number;
+  /** Product of the attack-speed factors of the unit's auras (stats.ts, A-031); 1 without such auras. */
+  swingFactor: number;
   /** Key: auraKey(auraId, casterId). */
   readonly auras: Map<string, AuraInstance>;
   cast: CastState | null;
@@ -147,6 +159,7 @@ export function createUnit(init: UnitInit): Unit {
     pos: { x: init.pos.x, y: init.pos.y },
     move: null,
     speedYdPerSec: init.speedYdPerSec,
+    baseCombatReach: init.combatReach,
     combatReach: init.combatReach,
     boundingRadius: init.boundingRadius,
     level,
@@ -155,6 +168,7 @@ export function createUnit(init: UnitInit): Unit {
     melee: melee ? { ...melee } : null,
     threatMultiplier,
     nextSwingMs: 0,
+    swingFactor: 1,
     auras: new Map(),
     cast: null,
     gcdUntilMs: 0,
@@ -163,8 +177,8 @@ export function createUnit(init: UnitInit): Unit {
   };
 }
 
-export const auraKey = (auraId: string, casterId: string, scope: 'caster' | 'unit' = 'caster'): string =>
-  scope === 'unit' ? `${auraId}|*` : `${auraId}|${casterId}`;
+export const auraKey = (auraId: string, casterId: string, scope: 'caster' | 'unit' | 'unit_replace' = 'caster'): string =>
+  scope === 'caster' ? `${auraId}|${casterId}` : `${auraId}|*`;
 
 /** Locale-independent string order (UTF-16 code units); the one comparator used wherever order must be deterministic. */
 export const compareStrings = (a: string, b: string): number => (a < b ? -1 : a > b ? 1 : 0);

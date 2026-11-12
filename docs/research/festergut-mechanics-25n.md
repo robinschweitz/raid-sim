@@ -293,6 +293,7 @@ modifiers.ts, movement.ts, melee.ts, threat.ts).
    (`caster` / `target position at launch` for DEST_TARGET areas such as Vile Gas) and
    enemy/ally relation to the caster instead of `players | creatures | all`, players-only, and
    "caster included" for SRC ally areas. Radius 50000 = whole room.
+   (resolved by A-003 in Plan 2b-1 Task 2)
 2. **AoE damage avoidance as its own modifier kind** (`aoe_damage_taken_pct`, per stack), applied
    only to area-targeted damage effects (direct and periodic). Today `damage_taken_pct` would also
    reduce Gastric Bloat and melee.
@@ -323,7 +324,7 @@ modifiers.ts, movement.ts, melee.ts, threat.ts).
     `1 + pct × stacks / 100`, multiplicative) read by `melee.ts` (today `attackTimeMs` is fixed), and
     scale (MOD_SCALE summed → combat reach = model reach × scale) feeding melee range and target
     selection.
-11. **`selectTarget` semantics (A-021):** minimum distance must be inclusive (edge ≥ 5; today `> 5`)
+11. **`selectTarget` semantics (A-021, resolved by A-021 in Plan 2b-1 Task 15):** minimum distance must be inclusive (edge ≥ 5; today `> 5`)
     and maximum strict (edge < max; today `≤`); add `playersOnly`, and a count helper
     (`SelectTargetList` up to n) for the Vile Gas "8 far players" test.
 12. **Engage with a "who"**: `startEncounter` should take the pulling unit, put it first on the

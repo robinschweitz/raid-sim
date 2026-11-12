@@ -1,7 +1,8 @@
 import type { SpellDef } from './catalog';
-import { applyEffects } from './effects';
-import { edgeDistance, positionAt, travelTimeMs } from './movement';
+import { launchSpell } from './launch';
+import { edgeDistance } from './movement';
 import { EventClass } from './queue';
+import { assertStreamName } from './rng';
 import type { Simulation } from './sim';
 import type { CastState, Unit } from './units';
 
@@ -33,11 +34,11 @@ export function checkCast(sim: Simulation, casterId: string, spellId: string, ta
   const spell = sim.catalog.spell(spellId);
   const caster = sim.unit(casterId);
   const target = sim.units.get(resolveTarget(spell, casterId, targetId));
-  if (!caster.alive) return fail('dead');
+  if (!caster.alive && !spell.allowDeadCaster) return fail('dead');
   if (caster.cast) return fail('casting');
   if (spell.gcdMs > 0 && sim.now < caster.gcdUntilMs) return fail('gcd');
   if ((caster.cooldowns.get(spellId) ?? 0) > sim.now) return fail('cooldown');
-  if (!target || !target.alive) return fail('target_dead');
+  if (!target || (!target.alive && !spell.allowDeadTarget)) return fail('target_dead');
   if (caster.move && spell.castTimeMs > 0 && !spell.usableWhileMoving) return fail('moving');
   if (target.id !== caster.id && edgeDistance(caster, target, sim.now) > spell.rangeYd) return fail('out_of_range');
   return { ok: true };
@@ -48,6 +49,12 @@ export interface CastOptions {
    * A triggered cast still has projectile travel time, can still fail with `target_dead` while in flight, and is traced
    * with `castTimeMs: 0` and `triggered: true`. */
   readonly triggered?: boolean;
+  /** SPELLVALUE_MAX_TARGETS for the spell's areas (A-027). */
+  readonly maxTargets?: number;
+  /** Random stream for the max-target subset; default `unit:<caster>.<spell>.targets`. */
+  readonly targetStream?: string;
+  /** The unit that made this unit cast (a boss script, an aura holder's caster); traced as `originalCaster` (A-020). */
+  readonly originalCasterId?: string;
 }
 
 export function startCast(
@@ -58,6 +65,12 @@ export function startCast(
   causes: readonly string[],
   options: CastOptions = {},
 ): CastResult {
+  if (options.maxTargets !== undefined && (!Number.isInteger(options.maxTargets) || options.maxTargets < 1)) {
+    throw new Error(`invalid maxTargets ${options.maxTargets}`);
+  }
+  if (options.targetStream !== undefined) assertStreamName(options.targetStream);
+  if (options.originalCasterId !== undefined) sim.unit(options.originalCasterId);
+  const origin: Record<string, string> = options.originalCasterId === undefined ? {} : { originalCaster: options.originalCasterId };
   // No events once the outcome is decided; `event` is empty because nothing was written.
   if (sim.over) return { ok: false, reason: 'fight_over', event: '' };
   const failed = (reason: CastFailure): CastResult => {
@@ -70,14 +83,14 @@ export function startCast(
     const caster = sim.unit(casterId);
     const tId = resolveTarget(spell, casterId, targetId);
     const target = sim.units.get(tId);
-    if (!caster.alive) return failed('dead');
-    if (!target || !target.alive) return failed('target_dead');
+    if (!caster.alive && !spell.allowDeadCaster) return failed('dead');
+    if (!target || (!target.alive && !spell.allowDeadTarget)) return failed('target_dead');
     const event = sim.emit(
       'cast_start',
-      { caster: casterId, spell: spellId, target: tId, castTimeMs: 0, endMs: sim.now, triggered: true },
+      { caster: casterId, spell: spellId, target: tId, castTimeMs: 0, endMs: sim.now, triggered: true, ...origin },
       causes,
     );
-    complete(sim, caster, spell, tId, event, true);
+    resolve(sim, caster, spell, tId, event, options);
     return { ok: true, event };
   }
   const check = checkCast(sim, casterId, spellId, targetId);
@@ -87,8 +100,8 @@ export function startCast(
   const tId = resolveTarget(spell, casterId, targetId);
   if (spell.gcdMs > 0) caster.gcdUntilMs = sim.now + spell.gcdMs;
   if (spell.castTimeMs === 0) {
-    const event = sim.emit('cast_start', { caster: casterId, spell: spellId, target: tId, castTimeMs: 0, endMs: sim.now }, causes);
-    complete(sim, caster, spell, tId, event);
+    const event = sim.emit('cast_start', { caster: casterId, spell: spellId, target: tId, castTimeMs: 0, endMs: sim.now, ...origin }, causes);
+    resolve(sim, caster, spell, tId, event, options);
     return { ok: true, event };
   }
   const endMs = sim.now + spell.castTimeMs;
@@ -100,46 +113,54 @@ export function startCast(
     handle: sim.at(endMs, EventClass.SpellHit, () => {
       if (caster.cast !== cast) return;
       caster.cast = null;
-      complete(sim, caster, spell, tId, cast.startEvent);
+      resolve(sim, caster, spell, tId, cast.startEvent, options);
     }),
     startEvent: '',
   };
   caster.cast = cast;
   cast.startEvent = sim.emit(
     'cast_start',
-    { caster: casterId, spell: spellId, target: tId, castTimeMs: spell.castTimeMs, endMs },
+    { caster: casterId, spell: spellId, target: tId, castTimeMs: spell.castTimeMs, endMs, ...origin },
     causes,
   );
   return { ok: true, event: cast.startEvent };
 }
 
-function complete(sim: Simulation, caster: Unit, spell: SpellDef, targetId: string, startEvent: string, triggered = false): void {
-  if (!caster.alive) return;
+/** Longest chain of casts that trigger casts (trigger_spell, force_cast, periodic_trigger) before the engine gives up. */
+export const MAX_TRIGGER_DEPTH = 16;
+
+/** `complete` inside the trigger-chain guard: a spell that triggers itself (directly or through others) fails loudly. */
+function resolve(sim: Simulation, caster: Unit, spell: SpellDef, targetId: string, startEvent: string, options: CastOptions): void {
+  if (sim.castChain.length >= MAX_TRIGGER_DEPTH) {
+    throw new Error(`trigger depth > ${MAX_TRIGGER_DEPTH}: spell chain ${[...sim.castChain, spell.id].join('->')}`);
+  }
+  sim.castChain.push(spell.id);
+  try {
+    complete(sim, caster, spell, targetId, startEvent, options);
+  } finally {
+    sim.castChain.pop();
+  }
+}
+
+function complete(sim: Simulation, caster: Unit, spell: SpellDef, targetId: string, startEvent: string, options: CastOptions): void {
+  if (!caster.alive && !spell.allowDeadCaster) return;
   const target = sim.unit(targetId);
-  if (!target.alive) {
+  if (!target.alive && !spell.allowDeadTarget) {
     sim.emit('cast_failed', { caster: caster.id, spell: spell.id, target: targetId, reason: 'target_dead' }, [startEvent]);
     return;
   }
+  const triggered = options.triggered === true;
   if (!triggered && target.id !== caster.id && edgeDistance(caster, target, sim.now) > spell.rangeYd) {
     sim.emit('cast_failed', { caster: caster.id, spell: spell.id, target: targetId, reason: 'out_of_range' }, [startEvent]);
     return;
   }
   if (!triggered && spell.cooldownMs > 0) caster.cooldowns.set(spell.id, sim.now + spell.cooldownMs);
   const success = sim.emit('cast_success', { caster: caster.id, spell: spell.id, target: targetId }, [startEvent]);
-  if (spell.travelSpeedYdPerSec && target.id !== caster.id) {
-    const delay = travelTimeMs(positionAt(caster, sim.now), positionAt(target, sim.now), spell.travelSpeedYdPerSec);
-    sim.at(sim.now + delay, EventClass.SpellHit, () => hit(sim, caster.id, spell, targetId, success));
-  } else {
-    hit(sim, caster.id, spell, targetId, success);
-  }
-}
-
-function hit(sim: Simulation, casterId: string, spell: SpellDef, targetId: string, cause: string): void {
-  if (!sim.unit(targetId).alive) return;
-  const hitId = sim.emit('spell_hit', { caster: casterId, spell: spell.id, target: targetId }, [cause]);
-  applyEffects(sim, spell.effects, { casterId, targetId, ability: spell.id, causes: [hitId] });
-  if (!sim.unit(targetId).alive) return;
-  sim.catalog.spellScript(spell.id)?.afterHitTarget?.({ sim, spellId: spell.id, casterId, targetId, causes: [hitId] });
+  launchSpell(sim, caster.id, spell, targetId, success, {
+    maxTargets: options.maxTargets,
+    targetStream: options.targetStream,
+    originalCasterId: options.originalCasterId,
+  });
 }
 
 export function interruptCast(

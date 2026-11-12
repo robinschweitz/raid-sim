@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { applyAura, removeAuras } from '../src/auras';
 import { installCoreRules, startCast } from '../src/casting';
-import { damageMultiplier } from '../src/modifiers';
+import { modifiedSpellDamage } from '../src/modifiers';
 import { EventClass } from '../src/queue';
 import { Simulation } from '../src/sim';
 
@@ -87,9 +87,9 @@ describe('aura extensions', () => {
       applyAura(sim, 'inoc', 'p1', 'p1', []);
     });
     sim.at(10, EventClass.SpellHit, () => {
-      expect(damageMultiplier(sim, 'boss', 'p1', 'nature')).toBeCloseTo((1 + 0.6) * (1 - 0.25), 10);
-      expect(damageMultiplier(sim, 'boss', 'p1', 'physical')).toBeCloseTo(1.6, 10);
-      expect(damageMultiplier(sim, 'p2', 'p1', 'nature')).toBeCloseTo(0.75, 10);
+      expect(modifiedSpellDamage(sim, 'boss', 'p1', 'nature', 1000)).toBe(1200); // trunc(1000 × 1.6) × 0.75
+      expect(modifiedSpellDamage(sim, 'boss', 'p1', 'physical', 1000)).toBe(1600);
+      expect(modifiedSpellDamage(sim, 'p2', 'p1', 'nature', 1000)).toBe(750);
     });
     sim.run();
   });
@@ -125,7 +125,7 @@ describe('aura extensions', () => {
       for (let i = 0; i < 4; i++) applyAura(sim, 'ward', 'p1', 'p1', []);
     });
     sim.at(10, EventClass.SpellHit, () => {
-      expect(damageMultiplier(sim, 'boss', 'p1', 'nature')).toBe(0);
+      expect(modifiedSpellDamage(sim, 'boss', 'p1', 'nature', 1000)).toBe(0);
     });
     sim.run();
   });
@@ -145,7 +145,7 @@ describe('aura extensions', () => {
     expect(calls).toEqual(['apply:0>1', 'stack:1>2', 'stack:2>2']);
   });
 
-  it('afterRemove does not run when the holder was killed by the on-expire effect', () => {
+  it('afterRemove runs after the on-expire effect even when that effect killed the holder (A-012)', () => {
     const sim = newSim();
     const calls: string[] = [];
     sim.catalog.addAura({ id: 'bomb', durationMs: 1000, maxStacks: 1, onExpire: [{ type: 'damage', school: 'nature', min: 1e6, max: 1e6 }] });
@@ -153,7 +153,7 @@ describe('aura extensions', () => {
     sim.at(0, EventClass.SpellHit, () => void applyAura(sim, 'bomb', 'boss', 'p1', []));
     sim.run();
     expect(sim.unit('p1').alive).toBe(false);
-    expect(calls).toEqual([]);
+    expect(calls).toEqual(['expired']);
   });
 
   it('afterHitTarget is skipped when the spell effects kill the target', () => {
@@ -167,8 +167,8 @@ describe('aura extensions', () => {
     expect(hits).toEqual([]);
   });
 
-  it('a hook that kills the holder prevents later removal hooks (death removes the other instances silently)', () => {
-    // removeAuras on an already-dead holder cannot happen: death removes auras first, without hooks.
+  it('a hook that kills the holder: death removes the other instances and runs their afterRemove with reason death', () => {
+    // The first removal's hook kills p1; death removes the second instance (afterRemove, reason death), so removeAuras skips it.
     const sim = newSim();
     const calls: string[] = [];
     sim.catalog.addAura({ id: 'spore', durationMs: 12000, maxStacks: 1 });
@@ -185,7 +185,7 @@ describe('aura extensions', () => {
     sim.at(10, EventClass.SpellHit, () => void removeAuras(sim, 'p1', 'spore', 'removed', []));
     sim.run();
     expect(sim.unit('p1').alive).toBe(false);
-    expect(calls).toHaveLength(1);
+    expect(calls).toEqual(['boss', 'p2']);
     const reasons = sim.trace.list().filter((e) => e.kind === 'aura_removed').map((e) => e.data.reason);
     expect(reasons).toEqual(['removed', 'death']);
   });

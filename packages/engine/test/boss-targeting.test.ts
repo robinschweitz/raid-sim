@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { makeBossContext } from '../src/boss';
 import { installCoreRules, startCast } from '../src/casting';
-import { edgeDistance } from '../src/movement';
 import { EventClass } from '../src/queue';
 import { Simulation } from '../src/sim';
 import { ThreatManager } from '../src/threat';
@@ -145,13 +144,41 @@ describe('boss target selection', () => {
     makeBossContext(sim, 'boss').selectTarget(mechanic, o);
   const killUnit = (sim: Simulation, id: string) => sim.damage(id, 1e9, { sourceId: 'boss', ability: 'x', school: 'nature' }, []);
 
-  it('treats minDistanceYd as strict and maxDistanceYd as inclusive at the exact edge distance', () => {
+  it('minDistanceYd is inclusive and maxDistanceYd strict, on centre distance against the bound plus both reaches (A-021)', () => {
     const sim = newSim();
-    const d = edgeDistance(sim.unit('boss'), sim.unit('t1'), sim.now);
-    for (let i = 0; i < 20; i++) expect(sel(sim, 'a', { minDistanceYd: d })?.id).not.toBe('t1');
-    for (let i = 0; i < 20; i++) expect(sel(sim, 'b', { maxDistanceYd: d })?.id).toBe('t1');
-    expect(sel(sim, 'c', { minDistanceYd: d, maxDistanceYd: d })).toBeNull();
-    expect(sel(sim, 'd', { minDistanceYd: d - 0.001, maxDistanceYd: d })?.id).toBe('t1');
+    const ctx = makeBossContext(sim, 'boss');
+    // t1: centre distance 10 = 0.5 + 8 (boss reach) + 1.5 (player reach).
+    expect(ctx.countTargets({ minDistanceYd: 0.5 })).toBe(5);
+    expect(ctx.countTargets({ minDistanceYd: 0.501 })).toBe(4);
+    expect(ctx.countTargets({ maxDistanceYd: 0.5 })).toBe(0);
+    expect(ctx.countTargets({ maxDistanceYd: 0.501 })).toBe(1);
+    expect(sel(sim, 'c', { minDistanceYd: 0.5, maxDistanceYd: 0.5 })).toBeNull();
+    expect(sel(sim, 'd', { minDistanceYd: 0.5, maxDistanceYd: 0.501 })?.id).toBe('t1');
+  });
+
+  it('a distance bound of 0 is ignored like AzerothCore (dist == 0)', () => {
+    const sim = newSim();
+    const ctx = makeBossContext(sim, 'boss');
+    expect(ctx.countTargets({ minDistanceYd: 0 })).toBe(5);
+    expect(ctx.countTargets({ maxDistanceYd: 0 })).toBe(5);
+    expect(ctx.countTargets({ minDistanceYd: 0, maxDistanceYd: 0 })).toBe(5);
+    expect(ctx.countTargets({ minDistanceYd: 0, maxDistanceYd: 0.501 })).toBe(1);
+  });
+
+  it('countTargets counts like selectTarget and draws no random numbers', () => {
+    const sim = newSim();
+    const ctx = makeBossContext(sim, 'boss');
+    // Festergut's Vile Gas rule: edge distance >= 5, i.e. centre >= 14.5 here: h1 (25), r1 (30), r2 (35).
+    expect(ctx.countTargets({ minDistanceYd: 5 })).toBe(3);
+    expect(ctx.countTargets({ excludeVictim: true })).toBe(4);
+    expect(Object.keys(sim.rng.usage()).filter((s) => s.startsWith('boss:'))).toEqual([]);
+  });
+
+  it('playersOnly keeps players (the threat list holds only players today)', () => {
+    const sim = newSim();
+    const ctx = makeBossContext(sim, 'boss');
+    expect(ctx.countTargets({ playersOnly: true })).toBe(5);
+    for (let i = 0; i < 10; i++) expect(ctx.selectTarget('x', { playersOnly: true, minDistanceYd: 5 })?.kind).toBe('player');
   });
 
   it('drops dead units from the candidates', () => {

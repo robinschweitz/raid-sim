@@ -122,6 +122,9 @@ describe('Simulation', () => {
         tick: null,
         nextTickMs: 0,
         appliedEvent: '',
+        viaArea: false,
+        ignoreCasterMods: false,
+        periodicAmounts: [],
       });
       sim.damage('p1', 1e6, hit('boss'), []);
     });

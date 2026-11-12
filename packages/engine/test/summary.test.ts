@@ -64,7 +64,7 @@ describe('summary (§9)', () => {
     expect(s.durationMs).toBe(10000);
     expect(s.deaths).toHaveLength(1);
     const d = s.deaths[0];
-    expect(d).toMatchObject({ unit: 'p1', atMs: 3000, killingBlow: { ability: 'rot', source: 'boss', amount: 50, overkill: 50 } });
+    expect(d).toMatchObject({ unit: 'p1', atMs: 2000, killingBlow: { ability: 'rot', source: 'boss', amount: 50, overkill: 150 } });
     expect(d.chain.map((id) => trace.events.find((e) => e.id === id)!.kind)).toEqual(['damage', 'periodic_tick', 'aura_applied']);
   });
 

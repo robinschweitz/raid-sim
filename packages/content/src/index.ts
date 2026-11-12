@@ -1,6 +1,9 @@
 import type { ContentRegistry } from '@raid/engine';
 import { trainingDummy } from './training-dummy/boss';
 import { trainingCaster } from './training-dummy/caster';
+export * from './spelldata/file';
+export * from './spelldata/variants';
+export * from './spelldata/entries';
 
 export const CONTENT: ContentRegistry = {
   bosses: new Map([[trainingDummy.id, trainingDummy]]),
