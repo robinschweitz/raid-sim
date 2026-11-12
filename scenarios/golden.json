@@ -1,3 +1,6 @@
 {
+  "scenarios/festergut/clean-kill.yaml": "7ec1d6810b4bca2769b2036788fcead1b835a3a0726e38892610a8cf9026faab",
+  "scenarios/festergut/late-tank-swap.yaml": "921b7f4ec08a86841d1cbbc64457c0b6460dd855061318511e87df1f3515ce04",
+  "scenarios/festergut/missed-spore-group.yaml": "7c5c20971eb370e5d4bb21e7b1f9af200d4d00055b5d19541dcd6fe4dafb12ef",
   "scenarios/training-dummy/clean.yaml": "48e5db47443cd4daa8c299e83d0836945b4c7d82e29109eb2260bf8551bcebf5"
 }
