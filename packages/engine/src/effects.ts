@@ -6,7 +6,10 @@ import type { Simulation } from './sim';
 import { threatFor } from './threat';
 
 export interface EffectContext {
+  /** The casting unit: area relation, range and taunts (A-020). */
   readonly casterId: string;
+  /** The unit the spell is cast for; owns damage, healing and applied auras. Defaults to `casterId` (A-020). */
+  readonly originalCasterId?: string;
   readonly targetId: string;
   readonly ability: string;
   readonly causes: readonly string[];
@@ -15,6 +18,9 @@ export interface EffectContext {
   /** The spell (or aura) skips the caster's damage-done factors, also for the auras it applies (A-028). */
   readonly ignoreCasterMods?: boolean;
 }
+
+/** The unit that owns an effect's damage, healing and auras (AzerothCore's m_originalCaster, A-020). */
+export const sourceOf = (ctx: EffectContext): string => ctx.originalCasterId ?? ctx.casterId;
 
 /** Effects outside a spell launch: aura ticks and on-expire effects (spells resolve through launchSpell). */
 export function applyEffects(sim: Simulation, effects: readonly Effect[], ctx: EffectContext): void {
@@ -50,18 +56,18 @@ export function applyLeafEffect(sim: Simulation, e: LeafEffect, ctx: EffectConte
   switch (e.type) {
     case 'damage': {
       if (!target.alive) return;
-      const amount = rollDamage(sim, ctx.casterId, target.id, e, { viaArea: ctx.viaArea === true, ignoreCasterMods: ctx.ignoreCasterMods === true });
-      sim.damage(target.id, amount, { sourceId: ctx.casterId, ability: ctx.ability, school: e.school }, ctx.causes);
+      const amount = rollDamage(sim, sourceOf(ctx), target.id, e, { viaArea: ctx.viaArea === true, ignoreCasterMods: ctx.ignoreCasterMods === true });
+      sim.damage(target.id, amount, { sourceId: sourceOf(ctx), ability: ctx.ability, school: e.school }, ctx.causes);
       return;
     }
     case 'heal': {
       if (!target.alive) return;
-      const amount = sim.rng.stream(`unit:${ctx.casterId}.amount`).int(e.min, e.max);
-      sim.heal(target.id, amount, { sourceId: ctx.casterId, ability: ctx.ability, school: 'holy' }, ctx.causes);
+      const amount = sim.rng.stream(`unit:${sourceOf(ctx)}.amount`).int(e.min, e.max);
+      sim.heal(target.id, amount, { sourceId: sourceOf(ctx), ability: ctx.ability, school: 'holy' }, ctx.causes);
       return;
     }
     case 'apply_aura':
-      applyAura(sim, e.aura, ctx.casterId, target.id, ctx.causes, { viaArea: ctx.viaArea === true, ignoreCasterMods: ctx.ignoreCasterMods === true });
+      applyAura(sim, e.aura, sourceOf(ctx), target.id, ctx.causes, { viaArea: ctx.viaArea === true, ignoreCasterMods: ctx.ignoreCasterMods === true });
       return;
     case 'remove_aura':
       removeAuras(sim, target.id, e.aura, 'removed', ctx.causes);

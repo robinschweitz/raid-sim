@@ -140,7 +140,11 @@ function complete(sim: Simulation, caster: Unit, spell: SpellDef, targetId: stri
   }
   if (!triggered && spell.cooldownMs > 0) caster.cooldowns.set(spell.id, sim.now + spell.cooldownMs);
   const success = sim.emit('cast_success', { caster: caster.id, spell: spell.id, target: targetId }, [startEvent]);
-  launchSpell(sim, caster.id, spell, targetId, success, { maxTargets: options.maxTargets, targetStream: options.targetStream });
+  launchSpell(sim, caster.id, spell, targetId, success, {
+    maxTargets: options.maxTargets,
+    targetStream: options.targetStream,
+    originalCasterId: options.originalCasterId,
+  });
 }
 
 export function interruptCast(

@@ -12,6 +12,8 @@ export interface LaunchOptions {
   readonly maxTargets?: number;
   /** Stream for the random subset; default `unit:<caster>.<spell>.targets` (A-027). */
   readonly targetStream?: string;
+  /** The unit the spell is cast for: it owns damage, healing, threat and applied auras (A-020). */
+  readonly originalCasterId?: string;
 }
 
 /** Spell.cpp 8730–8735: a player's area damage on more units than this is scaled by cap / units (A-028). */
@@ -41,6 +43,8 @@ export function launchSpell(
   options: LaunchOptions = {},
 ): void {
   const caster = sim.unit(casterId);
+  // AzerothCore's m_originalCaster (Spell.cpp 2680): defaults to the casting unit; a dead one still counts, units stay in the world.
+  const sourceId = options.originalCasterId ?? casterId;
   const lists = new Map<string, readonly Unit[]>();
   /** Effects with the same targeting share one unit list (Spell.cpp 1002–1011). */
   const areaUnits = (e: AreaEffect): readonly Unit[] => {
@@ -77,12 +81,12 @@ export function launchSpell(
   for (const [unitId, items] of deliveries) {
     for (const it of items) {
       if (it.effect.type !== 'damage') continue;
-      const amount = rollDamage(sim, casterId, unitId, it.effect, { ignoreCasterMods, viaArea: it.viaArea });
+      const amount = rollDamage(sim, sourceId, unitId, it.effect, { ignoreCasterMods, viaArea: it.viaArea });
       it.amount = capped && it.viaArea ? Math.trunc((amount * PLAYER_AOE_TARGET_CAP) / deliveries.size) : amount;
     }
   }
   const deliver = (): void => {
-    for (const [unitId, items] of deliveries) hitUnit(sim, casterId, spell, unitId, items, cause);
+    for (const [unitId, items] of deliveries) hitUnit(sim, casterId, sourceId, spell, unitId, items, cause);
   };
   if (spell.travelSpeedYdPerSec && targetId !== casterId) {
     const delay = travelTimeMs(positionAt(caster, sim.now), positionAt(sim.unit(targetId), sim.now), spell.travelSpeedYdPerSec);
@@ -93,7 +97,7 @@ export function launchSpell(
 }
 
 /** DoSpellHitOnUnit and the damage after it (Spell.cpp 3253, 3336–3354, 5866–5871, 2885–2957). */
-function hitUnit(sim: Simulation, casterId: string, spell: SpellDef, unitId: string, items: readonly Item[], cause: string): void {
+function hitUnit(sim: Simulation, casterId: string, sourceId: string, spell: SpellDef, unitId: string, items: readonly Item[], cause: string): void {
   const unit = sim.unit(unitId);
   const deadOk = spell.allowDeadTarget === true;
   if ((!unit.alive && !deadOk) || sim.over) return;
@@ -102,7 +106,7 @@ function hitUnit(sim: Simulation, casterId: string, spell: SpellDef, unitId: str
   const script = sim.catalog.spellScript(spell.id);
   // The spell's auras first.
   for (const it of items) {
-    if (it.effect.type === 'apply_aura') applyAura(sim, it.effect.aura, casterId, unitId, causes, { viaArea: it.viaArea, allowDeadTarget: deadOk, ignoreCasterMods: spell.ignoreCasterDamageMods === true });
+    if (it.effect.type === 'apply_aura') applyAura(sim, it.effect.aura, sourceId, unitId, causes, { viaArea: it.viaArea, allowDeadTarget: deadOk, ignoreCasterMods: spell.ignoreCasterDamageMods === true });
   }
   // Then per effect: the OnEffectHitTarget hook, then the effect's default handler.
   for (const index of [...new Set(items.map((it) => it.index))]) {
@@ -112,12 +116,12 @@ function hitUnit(sim: Simulation, casterId: string, spell: SpellDef, unitId: str
     if (!unit.alive && !deadOk) return;
     for (const it of items) {
       if (it.index !== index || it.effect.type === 'apply_aura' || it.effect.type === 'damage') continue;
-      applyLeafEffect(sim, it.effect, { casterId, targetId: unitId, ability: spell.id, causes, viaArea: it.viaArea, ignoreCasterMods: spell.ignoreCasterDamageMods === true });
+      applyLeafEffect(sim, it.effect, { casterId, originalCasterId: sourceId, targetId: unitId, ability: spell.id, causes, viaArea: it.viaArea, ignoreCasterMods: spell.ignoreCasterDamageMods === true });
     }
   }
   // The damage fixed at launch is dealt last.
   for (const it of items) {
-    if (it.effect.type === 'damage') sim.damage(unitId, it.amount, { sourceId: casterId, ability: spell.id, school: it.effect.school }, causes);
+    if (it.effect.type === 'damage') sim.damage(unitId, it.amount, { sourceId, ability: spell.id, school: it.effect.school }, causes);
   }
   if (!unit.alive && !deadOk) return;
   script?.afterHitTarget?.({ sim, spellId: spell.id, casterId, targetId: unitId, causes });
