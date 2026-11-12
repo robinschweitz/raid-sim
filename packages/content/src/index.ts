@@ -2,6 +2,7 @@ import type { ContentRegistry } from '@raid/engine';
 import { genericCaster } from './generic/caster';
 import { genericHealer } from './generic/healer';
 import { festergut } from './festergut/boss';
+import { FESTERGUT_TEXT_EN } from './festergut/text';
 import { trainingDummy } from './training-dummy/boss';
 import { trainingCaster } from './training-dummy/caster';
 export * from './spelldata/file';
@@ -24,6 +25,7 @@ export const CONTENT: ContentRegistry = {
 
 /** English names of content abilities and scenario texts, for the formatter. */
 export const CONTENT_TEXT_EN: Readonly<Record<string, string>> = {
+  ...FESTERGUT_TEXT_EN,
   'ability.mark': 'Mark of the Dummy',
   'ability.melee': 'Melee',
   'ability.training_bolt': 'Training Bolt',
