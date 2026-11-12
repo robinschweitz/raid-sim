@@ -29,11 +29,6 @@ export function edgeDistance(a: Unit, b: Unit, t: number): number {
   return Math.max(0, centerDistance(positionAt(a, t), positionAt(b, t)) - a.combatReach - b.combatReach);
 }
 
-/** Area check: distance from an area centre to a unit's edge, never negative (A-003). */
-export function pointToEdge(p: Vec2, u: Unit, t: number): number {
-  return Math.max(0, centerDistance(p, positionAt(u, t)) - u.combatReach);
-}
-
 /** AzerothCore NOMINAL_MELEE_RANGE (ObjectDefines.h line 47). */
 export const NOMINAL_MELEE_RANGE_YD = 5;
 

@@ -7,19 +7,40 @@ export type School = 'physical' | 'holy' | 'fire' | 'nature' | 'frost' | 'shadow
 /** One school, or several: a spell school mask such as nature + shadow (40). */
 export type SchoolSet = School | readonly School[];
 
-export type Effect =
-  | { readonly type: 'damage'; readonly school: SchoolSet; readonly min: number; readonly max: number }
+export interface DamageEffect {
+  readonly type: 'damage';
+  readonly school: SchoolSet;
+  readonly min: number;
+  readonly max: number;
+}
+
+/** An effect on one unit. */
+export type LeafEffect =
+  | DamageEffect
   | { readonly type: 'heal'; readonly min: number; readonly max: number }
   | { readonly type: 'apply_aura'; readonly aura: string }
   | { readonly type: 'remove_aura'; readonly aura: string }
-  | { readonly type: 'taunt'; readonly durationMs: number }
-  | {
-      readonly type: 'area';
-      readonly radius: number;
-      readonly includeCenter: boolean;
-      readonly filter: 'players' | 'creatures' | 'all';
-      readonly effects: readonly Effect[];
-    };
+  | { readonly type: 'taunt'; readonly durationMs: number };
+
+/**
+ * Effects on every unit in an area (implicit targets UNIT_SRC_AREA_* around the caster, UNIT_DEST_AREA_* around the
+ * explicit target). Membership: centre distance <= radius (A-003).
+ */
+export interface AreaEffect {
+  readonly type: 'area';
+  readonly radius: number;
+  /** 'caster': SRC_CASTER; 'target': the explicit target's position (for an aura effect: the holder's). */
+  readonly center: 'caster' | 'target';
+  /** Relation to the caster: enemy = the other side (players vs creatures), ally = the caster's side, any = both. */
+  readonly relation: 'enemy' | 'ally' | 'any';
+  /** SPELL_ATTR3_ONLY_ON_PLAYER (Spell.cpp 2161). */
+  readonly playersOnly?: boolean;
+  /** SPELL_ATTR1_EXCLUDE_CASTER: the caster is never hit (ally and any areas include it otherwise). */
+  readonly excludeCaster?: boolean;
+  readonly effects: readonly LeafEffect[];
+}
+
+export type Effect = LeafEffect | AreaEffect;
 
 export interface DamageModifier {
   readonly kind: 'damage_done_pct' | 'damage_taken_pct';
@@ -106,7 +127,10 @@ function checkSchools(owner: string, schools: SchoolSet): void {
 function checkEffects(owner: string, effects: readonly Effect[]): void {
   for (const e of effects) {
     if (e.type === 'damage') checkSchools(owner, e.school);
-    if (e.type === 'area') checkEffects(owner, e.effects);
+    if (e.type === 'area') {
+      if (!Number.isFinite(e.radius) || e.radius < 0) throw new Error(`${owner}: invalid area radius ${e.radius}`);
+      checkEffects(owner, e.effects);
+    }
   }
 }
 

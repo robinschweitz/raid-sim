@@ -1,3 +1,4 @@
+export * from './area';
 export * from './auras';
 export * from './boss';
 export * from './casting';

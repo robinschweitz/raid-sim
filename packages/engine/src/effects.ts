@@ -1,10 +1,9 @@
+import { areaCenter, areaTargets } from './area';
 import { applyAura, removeAuras } from './auras';
-import type { Effect } from './catalog';
+import type { Effect, LeafEffect } from './catalog';
 import { damageMultiplier } from './modifiers';
-import { pointToEdge, positionAt } from './movement';
 import type { Simulation } from './sim';
 import { threatFor } from './threat';
-import type { Unit } from './units';
 
 export interface EffectContext {
   readonly casterId: string;
@@ -13,16 +12,24 @@ export interface EffectContext {
   readonly causes: readonly string[];
 }
 
-function matchesFilter(filter: 'players' | 'creatures' | 'all', u: Unit): boolean {
-  if (filter === 'all') return true;
-  return filter === 'players' ? u.kind === 'player' : u.kind === 'creature';
-}
-
 export function applyEffects(sim: Simulation, effects: readonly Effect[], ctx: EffectContext): void {
   for (const e of effects) applyEffect(sim, e, ctx);
 }
 
 function applyEffect(sim: Simulation, e: Effect, ctx: EffectContext): void {
+  switch (e.type) {
+    case 'area': {
+      const hit = areaTargets(sim, sim.unit(ctx.casterId), e, areaCenter(sim, e, ctx.casterId, ctx.targetId));
+      for (const u of hit) applyEffects(sim, e.effects, { ...ctx, targetId: u.id });
+      return;
+    }
+    default:
+      applyLeafEffect(sim, e, ctx);
+  }
+}
+
+/** One effect on one unit. */
+export function applyLeafEffect(sim: Simulation, e: LeafEffect, ctx: EffectContext): void {
   const target = sim.unit(ctx.targetId);
   switch (e.type) {
     case 'damage': {
@@ -47,17 +54,5 @@ function applyEffect(sim: Simulation, e: Effect, ctx: EffectContext): void {
     case 'taunt':
       threatFor(sim)?.taunt(target.id, ctx.casterId, e.durationMs, ctx.causes);
       return;
-    case 'area': {
-      const center = positionAt(target, sim.now);
-      const hit = sim.sortedUnits(
-        (u) =>
-          u.alive &&
-          (e.includeCenter || u.id !== target.id) &&
-          matchesFilter(e.filter, u) &&
-          pointToEdge(center, u, sim.now) <= e.radius,
-      );
-      for (const u of hit) applyEffects(sim, e.effects, { ...ctx, targetId: u.id });
-      return;
-    }
   }
 }
