@@ -1,5 +1,6 @@
 import { damageDoneFactor, damageTakenFactor } from './modifiers';
 import { withinMeleeRange } from './movement';
+import { swingIntervalMs } from './stats';
 import type { Simulation } from './sim';
 import type { Avoidance, Unit } from './units';
 
@@ -56,7 +57,7 @@ export function meleeIfReady(sim: Simulation, attackerId: string, victim: Unit |
   const a = sim.unit(attackerId);
   if (!a.alive || sim.over || !a.melee || a.cast || !victim || !victim.alive) return null;
   if (sim.now < a.nextSwingMs || !withinMeleeRange(a, victim, sim.now)) return null;
-  a.nextSwingMs = sim.now + a.melee.attackTimeMs;
+  a.nextSwingMs = sim.now + swingIntervalMs(a);
   const rng = sim.rng.stream(`unit:${a.id}.melee`);
   const result = meleeOutcome(rng.int(0, 10000), victim.avoidance);
   if (result !== 'hit') return sim.emit('melee_avoided', { source: a.id, target: victim.id, result }, causes);

@@ -80,6 +80,15 @@ export interface DamageModifier {
   readonly schools?: SchoolSet;
 }
 
+/** Aura effects on unit stats (stats.ts): MOD_ATTACKSPEED / MOD_MELEE_HASTE (A-031). */
+export interface StatModifier {
+  readonly kind: 'attack_speed_pct';
+  readonly pct: number;
+  readonly perStack: boolean;
+}
+
+export type AuraModifier = DamageModifier | StatModifier;
+
 export type AuraRemoveReason = 'expired' | 'removed' | 'dispelled' | 'replaced' | 'death';
 
 export interface AuraHookContext {
@@ -140,7 +149,7 @@ export interface AuraDef {
   readonly stackScope?: 'caster' | 'unit' | 'unit_replace';
   readonly periodic?: { readonly intervalMs: number; readonly effects: readonly Effect[] };
   readonly onExpire?: readonly Effect[];
-  readonly modifiers?: readonly DamageModifier[];
+  readonly modifiers?: readonly AuraModifier[];
   /**
    * SPELL_ATTR6_IGNORE_CASTER_DAMAGE_MODIFIERS for this aura's periodic and on-expire damage: the caster's done factors are
    * not taken (A-029). Auras it applies from a tick or on expiry use their own flag. Keep the flag the same for every
@@ -239,7 +248,7 @@ export class Catalog {
     if (def.periodic && def.periodic.intervalMs <= 0) throw new Error(`aura ${def.id} needs a positive tick interval`);
     for (const m of def.modifiers ?? []) {
       if (!Number.isFinite(m.pct)) throw new Error(`aura ${def.id} has a non-finite modifier percentage`);
-      if (m.schools !== undefined) checkSchools(def.id, m.schools);
+      if ('schools' in m && m.schools !== undefined) checkSchools(def.id, m.schools);
     }
     checkEffects(def.id, def.periodic?.effects ?? [], 'periodic');
     checkEffects(def.id, def.onExpire ?? [], 'expire');

@@ -22,6 +22,7 @@ export * from './run';
 export * from './schools';
 export * from './sim';
 export * from './standin';
+export * from './stats';
 export * from './summary';
 export * from './threat';
 export * from './trace';

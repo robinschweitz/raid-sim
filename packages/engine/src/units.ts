@@ -85,6 +85,8 @@ export interface Unit {
   readonly threatMultiplier: number;
   /** Earliest time of the next melee swing. */
   nextSwingMs: number;
+  /** Product of the attack-speed factors of the unit's auras (stats.ts, A-031); 1 without such auras. */
+  swingFactor: number;
   /** Key: auraKey(auraId, casterId). */
   readonly auras: Map<string, AuraInstance>;
   cast: CastState | null;
@@ -161,6 +163,7 @@ export function createUnit(init: UnitInit): Unit {
     melee: melee ? { ...melee } : null,
     threatMultiplier,
     nextSwingMs: 0,
+    swingFactor: 1,
     auras: new Map(),
     cast: null,
     gcdUntilMs: 0,

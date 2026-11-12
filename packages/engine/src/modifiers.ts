@@ -1,7 +1,13 @@
-import type { DamageModifier, SchoolSet } from './catalog';
+import type { AuraModifier, DamageModifier, SchoolSet } from './catalog';
 import { overlaps } from './schools';
 import type { Simulation } from './sim';
 import { compareStrings, type Unit } from './units';
+
+const DAMAGE_KINDS: ReadonlySet<string> = new Set(['damage_done_pct', 'damage_taken_pct', 'aoe_damage_taken_pct', 'creature_aoe_damage_taken_pct']);
+
+export function isDamageModifier(m: AuraModifier): m is DamageModifier {
+  return DAMAGE_KINDS.has(m.kind);
+}
 
 /** A modifier applies when its schools overlap the damage's schools (Unit.cpp 6116–6124); all schools when it names none. */
 function applies(m: DamageModifier, school: SchoolSet): boolean {
@@ -13,7 +19,7 @@ function factor(sim: Simulation, unit: Unit, kind: DamageModifier['kind'], schoo
   for (const key of [...unit.auras.keys()].sort(compareStrings)) {
     const inst = unit.auras.get(key)!;
     for (const m of sim.catalog.aura(inst.auraId).modifiers ?? []) {
-      if (m.kind !== kind || !applies(m, school)) continue;
+      if (!isDamageModifier(m) || m.kind !== kind || !applies(m, school)) continue;
       f *= Math.max(0, 1 + (m.pct * (m.perStack ? inst.stacks : 1)) / 100);
     }
   }

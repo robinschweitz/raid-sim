@@ -2,6 +2,7 @@ import { applyEffects } from './effects';
 import { fixedPeriodicDamage, periodicTickDamage } from './modifiers';
 import { EventClass, type Scheduled } from './queue';
 import type { Simulation } from './sim';
+import { hasStatModifiers, refreshStats } from './stats';
 import type { AuraHookContext, AuraRemoveReason } from './catalog';
 import { auraKey, compareStrings, type AuraInstance } from './units';
 
@@ -52,6 +53,7 @@ export function applyAura(
     existing.refreshedMs = sim.now;
     existing.ignoreCasterMods ||= options.ignoreCasterMods === true || def.ignoreCasterDamageMods === true;
     fixPeriodicAmounts(sim, existing);
+    if (hasStatModifiers(def)) refreshStats(sim, targetId);
     const id = sim.emit(
       'aura_stack',
       { unit: targetId, aura: auraId, caster: casterId, stacks: existing.stacks, expiresMs: traceExpiry },
@@ -82,6 +84,7 @@ export function applyAura(
   inst.expiry = schedule(inst);
   fixPeriodicAmounts(sim, inst);
   target.auras.set(key, inst);
+  if (hasStatModifiers(def)) refreshStats(sim, targetId);
   inst.appliedEvent = sim.emit('aura_applied', { unit: targetId, aura: auraId, caster: casterId, stacks: 1, expiresMs: traceExpiry }, causes);
   if (def.periodic && target.auras.get(key) === inst) scheduleTick(sim, targetId, key, inst);
   if (target.alive || deadOk) sim.catalog.auraScript(auraId)?.afterApply?.(hookContext(sim, inst, targetId, [inst.appliedEvent], 0));
@@ -126,6 +129,7 @@ function removeInstance(
   sim.cancel(inst.expiry);
   sim.cancel(inst.tick);
   sim.unit(targetId).auras.delete(key);
+  if (hasStatModifiers(sim.catalog.aura(inst.auraId))) refreshStats(sim, targetId);
   const removed = sim.emit('aura_removed', { unit: targetId, aura: inst.auraId, caster: inst.casterId, reason }, causes);
   afterRemove(sim, inst, targetId, removed, reason);
   return removed;
@@ -192,6 +196,7 @@ function expire(sim: Simulation, targetId: string, key: string, inst: AuraInstan
   if (target.auras.get(key) !== inst) return;
   sim.cancel(inst.tick);
   target.auras.delete(key);
+  if (hasStatModifiers(sim.catalog.aura(inst.auraId))) refreshStats(sim, targetId);
   const removed = sim.emit(
     'aura_removed',
     { unit: targetId, aura: inst.auraId, caster: inst.casterId, reason: 'expired' },
