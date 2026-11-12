@@ -1,0 +1,21 @@
+id: festergut-missed-spore-group
+plan: plan-25n.yaml
+difficulty: 25n
+seed: 1
+maxDurationMs: 330000
+mistakes:
+  # Farid (r06) does not run to the melee group when Gas Spore is cast.
+  - { type: exclude_from_rule, rule: stack-for-spores, player: r06 }
+observation:
+  text: scenario.festergut_missed_spore_group.observation
+  checks:
+    # Fewer Inoculated stacks than everyone else at the first Pungent Blight, and more damage from it.
+    - { check: custom, name: festergut.missed_spores, params: { player: r06 } }
+    # The rest of the raid is protected.
+    - { check: custom, name: festergut.inoculated_at_pungent, params: { minStacks: 3, except: [r06] } }
+    # With this seed r06 never carries a spore, has no stack at all, and the full hit kills.
+    - { check: event_absent, kind: aura_applied, where: { aura: inoculated, unit: r06 } }
+    - { check: event_occurs, kind: death, where: { unit: r06 } }
+annotations:
+  - { text: scenario.festergut.note.stays_out, at: { event: cast_start, where: { spell: gas_spore } } }
+  - { text: scenario.festergut.note.pungent_blight, at: { event: cast_start, where: { spell: pungent_blight } } }
