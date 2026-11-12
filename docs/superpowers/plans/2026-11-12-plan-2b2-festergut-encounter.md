@@ -359,9 +359,7 @@ Expected: PASS (5 tests).
 | A-034 | Timer windows follow the EventMap. `EventMap.timeUntilEvent(id)` is AzerothCore's GetTimeUntilEvent (EventMap.cpp 200–207; null instead of `Milliseconds::max()`), `hasTimeUntilEvent` its HasTimeUntilEvent (209–212). `EventScriptedAI.publishWindow` publishes a window for a scheduled event and throws when the event is not due inside it; `raiseWindow` is called after a delay (DelayEventsToMax) with the delay as floor: both bounds move up to now + floor, the window of an event that is no longer scheduled is cleared, an unchanged window is not published again. The published bounds come only from what the script announced and from the delay, never from the hidden scheduled time (spec §8.6). Windows are kept in EventMap time, which stands still while the boss has no victim; the published times then lag by that pause. The helpers do nothing once the fight is over. | Boss-mod timers are player knowledge and not part of AzerothCore; a wrong window would mislead actors and readers. | `timer-windows.test.ts` |
 ```
 
-In `docs/superpowers/plans/2026-11-10-contract-changes-for-plans-2-3.md` replace `Add an EventMap query like
-   `GetTimeUntilEvent` and derive published windows from it.  (partly: `clearTimer`)` with `Add an EventMap query like
-   `GetTimeUntilEvent` and derive published windows from it.  (done in Plan 2b-2: `timeUntilEvent`, `publishWindow`, `raiseWindow`, A-034)`, and replace `(still open: Plan 2b-2; the engine has no time-until query yet)` with `(done in Plan 2b-2, A-034)`.
+In `docs/superpowers/plans/2026-11-10-contract-changes-for-plans-2-3.md`, in item 8 of "Plan 2 — Festergut", replace the status in parentheses at its end, "(partly: `clearTimer`)", with "(done in Plan 2b-2: `timeUntilEvent`, `publishWindow`, `raiseWindow`, A-034)"; in the section "Found in the Plan 2a final review", replace "(still open: Plan 2b-2; the engine has no time-until query yet)" with "(done in Plan 2b-2, A-034)".
 
 - [ ] **Step 6: Commit**
 
@@ -3073,4 +3071,1172 @@ Co-Authored-By: Claude Fable 5.2 <noreply@anthropic.com>"
 
 ---
 
-> **Work in progress:** Tasks 10 to 15 (English names, observation checks, the raid plan and the three scenarios, CLI and golden runs, final verification) and the coverage review follow in the next commit.
+### Task 10: English names and scenario texts
+
+Canonical output holds ids and keys only (D6); the formatter looks up `ability.<id>` and the scenario text keys in `CONTENT_TEXT_EN`. The two Gaseous Blight spells of each strength share a name, as do Gas Spore and its carrier aura.
+
+**Files:**
+- Create: `packages/content/src/festergut/text.ts`, `packages/content/test/festergut/text.test.ts`
+- Modify: `packages/content/src/index.ts`
+
+**Changed behaviour:** none (the training dummy's texts stay).
+
+- [ ] **Step 1: Write the failing test** `packages/content/test/festergut/text.test.ts`:
+
+```ts
+import { DataRegistry } from '@raid/data';
+import { CORE_DATA, Simulation } from '@raid/engine';
+import { describe, expect, it } from 'vitest';
+import { festergut } from '../../src/festergut/boss';
+import { FESTERGUT_BASE_IDS } from '../../src/festergut/spell-ids';
+import { FESTERGUT_TEXT_EN } from '../../src/festergut/text';
+import { CONTENT_TEXT_EN } from '../../src/index';
+
+describe('English names (D6: the trace holds ids, the formatter the words)', () => {
+  it('every Festergut spell and aura has a name', () => {
+    const sim = new Simulation({ seed: 1, maxDurationMs: 1000, sampleIntervalMs: 1000 });
+    festergut.setup({ sim, data: new DataRegistry([...CORE_DATA, ...festergut.data]), difficulty: '25n' });
+    for (const id of Object.keys(FESTERGUT_BASE_IDS)) {
+      expect(sim.catalog.hasSpell(id) || sim.catalog.hasAura(id), `${id} is in the catalog`).toBe(true);
+      expect(CONTENT_TEXT_EN[`ability.${id}`], id).toBeTruthy();
+    }
+    expect(CONTENT_TEXT_EN['ability.pungent_blight']).toBe('Pungent Blight');
+    expect(CONTENT_TEXT_EN['ability.gas_spore_carrier']).toBe('Gas Spore');
+  });
+
+  it('has the observation text of each Gate 1 scenario and keeps the existing texts', () => {
+    for (const scenario of ['festergut_clean_kill', 'festergut_missed_spore_group', 'festergut_late_tank_swap']) {
+      expect(CONTENT_TEXT_EN[`scenario.${scenario}.observation`], scenario).toBeTruthy();
+    }
+    expect(CONTENT_TEXT_EN['ability.melee']).toBe('Melee');
+    expect(Object.keys(FESTERGUT_TEXT_EN).every((k) => /^[a-z0-9_.]+$/.test(k))).toBe(true);
+  });
+});
+```
+
+- [ ] **Step 2: Run it to verify it fails**
+
+Run: `pnpm test packages/content/test/festergut/text.test.ts`
+Expected: FAIL, cannot resolve `../../src/festergut/text`.
+
+- [ ] **Step 3: Write `packages/content/src/festergut/text.ts`:**
+
+```ts
+/** English names of Festergut's spells and auras (`ability.<engine id>`) and the texts of the Festergut scenarios. */
+export const FESTERGUT_TEXT_EN: Readonly<Record<string, string>> = {
+  'ability.inhale_blight': 'Inhale Blight',
+  'ability.inhaled_blight': 'Inhaled Blight',
+  'ability.pungent_blight': 'Pungent Blight',
+  'ability.gaseous_blight_large': 'Gaseous Blight (strong)',
+  'ability.gaseous_blight_medium': 'Gaseous Blight (medium)',
+  'ability.gaseous_blight_small': 'Gaseous Blight (weak)',
+  'ability.gaseous_blight_large_damage': 'Gaseous Blight (strong)',
+  'ability.gaseous_blight_medium_damage': 'Gaseous Blight (medium)',
+  'ability.gaseous_blight_small_damage': 'Gaseous Blight (weak)',
+  'ability.gas_spore': 'Gas Spore',
+  'ability.gas_spore_carrier': 'Gas Spore',
+  'ability.blighted_spores': 'Blighted Spores',
+  'ability.inoculated': 'Inoculated',
+  'ability.vile_gas': 'Vile Gas',
+  'ability.vile_gas_splash': 'Vile Gas (splash)',
+  'ability.gastric_bloat': 'Gastric Bloat',
+  'ability.gastric_explosion': 'Gastric Explosion',
+  'ability.berserk': 'Berserk',
+  'scenario.festergut_clean_kill.observation':
+    'A clean kill before the berserk: the raid stacks for every Gas Spore, so everyone has three Inoculated stacks when Pungent Blight hits, and the tanks swap at nine Gastric Bloat stacks.',
+  'scenario.festergut_missed_spore_group.observation':
+    'One ranged player stays out when the raid stacks for the Gas Spores: without Inoculated, Pungent Blight hits that player for its full damage.',
+  'scenario.festergut_late_tank_swap.observation':
+    'The tank swap is set to ten Gastric Bloat stacks instead of nine: the tenth stack is Gastric Explosion, which kills the tank and hits everyone within 10 yards.',
+  'scenario.festergut.note.first_spores': 'Gas Spore: three random players carry a spore that explodes after 12 seconds. Everyone within 8 yards of a carrier gets Blighted Spores and, when it ends, one Inoculated stack.',
+  'scenario.festergut.note.pungent_blight': 'Pungent Blight: about 50,000 shadow damage to everyone; each Inoculated stack takes off a quarter.',
+  'scenario.festergut.note.tank_swap': 'The second tank taunts at nine Gastric Bloat stacks.',
+  'scenario.festergut.note.stays_out': 'This player does not run in and misses the spores.',
+  'scenario.festergut.note.gastric_explosion': 'The tenth Gastric Bloat stack: Gastric Explosion.',
+};
+```
+
+- [ ] **Step 4: Add the texts to `CONTENT_TEXT_EN`.**
+
+In `packages/content/src/index.ts` replace
+
+```ts
+import { festergut } from './festergut/boss';
+```
+
+with
+
+```ts
+import { festergut } from './festergut/boss';
+import { FESTERGUT_TEXT_EN } from './festergut/text';
+```
+
+In `packages/content/src/index.ts` replace
+
+```ts
+export const CONTENT_TEXT_EN: Readonly<Record<string, string>> = {
+```
+
+with
+
+```ts
+export const CONTENT_TEXT_EN: Readonly<Record<string, string>> = {
+  ...FESTERGUT_TEXT_EN,
+```
+
+- [ ] **Step 5: Run the test to verify it passes**
+
+Run: `pnpm test packages/content/test/festergut/text.test.ts`
+Expected: PASS (2 tests).
+
+- [ ] **Step 6: Commit**
+
+Run: `pnpm test && pnpm typecheck && pnpm golden`.
+
+```bash
+git add packages/content
+git commit -m "feat(content): English names of Festergut's abilities and the scenario texts
+
+Co-Authored-By: Claude Fable 5.2 <noreply@anthropic.com>"
+```
+
+---
+
+### Task 11: Observation checks for the Gate 1 scenarios (contract item 11)
+
+The built-in checks (`outcome_is`, `event_occurs`, `event_absent`) match single events. Four statements of spec §10.3 need more, so they become custom checks in `CONTENT.checks` (design decision 12); no new check kind is added to the engine.
+
+| Check | Says |
+| --- | --- |
+| `raid.no_player_deaths` | No player dies (`event_absent` on `death` would also match the boss's death). |
+| `festergut.inoculated_at_pungent` | Every player hit by a Pungent Blight has at least `minStacks` Inoculated stacks then (`except` lists exceptions). |
+| `festergut.missed_spores` | At the first Pungent Blight, `player` has fewer stacks than everyone else and takes more damage. |
+| `festergut.late_swap` | `tank` casts Gastric Explosion; the Gastric Bloat hit behind it added the last stack; `rule` fired on that stack event; the scenario lists a `set_stack_threshold` mistake for `rule`. This is how "the cause chain links it to the rule threshold" is checked: a rule that fires too late is in the trace, hanging on the same stack event as the explosion. |
+
+They read the trace only. Facts they rely on (A-024): `spell_hit` is caused by the `cast_success`; the damage and the script's removals are caused by the `spell_hit`; `aura_stack` and the explosion's `cast_start` are both caused by the Gastric Bloat `spell_hit`; `rule_fired` is caused by the event that triggered the rule.
+
+**Files:**
+- Create: `packages/content/src/festergut/checks.ts`, `packages/content/test/festergut/checks.test.ts`
+- Modify: `packages/content/src/index.ts`, `docs/superpowers/plans/2026-11-10-contract-changes-for-plans-2-3.md`
+
+**Changed behaviour:** none.
+
+- [ ] **Step 1: Write the failing test** `packages/content/test/festergut/checks.test.ts`:
+
+```ts
+import { TraceWriter, type Trace, type TraceValue } from '@raid/engine';
+import { describe, expect, it } from 'vitest';
+import { FESTERGUT_CHECKS } from '../../src/festergut/checks';
+import { CONTENT } from '../../src/index';
+
+type Data = Readonly<Record<string, TraceValue>>;
+
+/** A small hand-written trace: `add` returns the event id, to be used as a cause. */
+function traceOf(build: (add: (t: number, kind: Parameters<TraceWriter['emit']>[1], data: Data, causes?: string[]) => string) => void, mistakes: unknown[] = []): Trace {
+  const w = new TraceWriter();
+  build((t, kind, data, causes = []) => w.emit(t, kind, data, causes).id);
+  const unit = (id: string, kind: 'player' | 'creature') => ({ id, name: id, kind, role: kind === 'player' ? 'ranged' : 'boss', approximate: true });
+  return w.build({
+    engineVersion: 'test', azerothcoreCommit: 'test', spellDataVersions: [], scenario: 'test', plan: 'test', maxDurationMs: 1, mistakes: mistakes.map((m) => JSON.stringify(m)),
+    boss: 'festergut', difficulty: '25n', seed: 1, profile: 'azerothcore', aiUpdateIntervalMs: 10, sampleIntervalMs: 100,
+    units: [unit('festergut', 'creature'), unit('a', 'player'), unit('b', 'player'), unit('t1', 'player')],
+  });
+}
+
+const check = (name: string, trace: Trace, params: Record<string, unknown> = {}) => FESTERGUT_CHECKS.get(name)!({ trace, params });
+
+/** One Pungent Blight on a (stacks, damage) and b. */
+function pungent(a: [number, number], b: [number, number]): Trace {
+  return traceOf((add) => {
+    for (const [unit, [stacks]] of [['a', a], ['b', b]] as const) {
+      if (stacks > 0) add(100, 'aura_applied', { unit, aura: 'inoculated', caster: unit, stacks: 1, expiresMs: 1 });
+      for (let s = 2; s <= stacks; s++) add(100 + s, 'aura_stack', { unit, aura: 'inoculated', caster: unit, stacks: s, expiresMs: 1 });
+    }
+    const cast = add(1000, 'cast_success', { caster: 'festergut', spell: 'pungent_blight', target: 'festergut' });
+    for (const [unit, [stacks, damage]] of [['a', a], ['b', b]] as const) {
+      const hit = add(1000, 'spell_hit', { caster: 'festergut', spell: 'pungent_blight', target: unit }, [cast]);
+      if (stacks > 0) add(1000, 'aura_removed', { unit, aura: 'inoculated', caster: unit, reason: 'removed' }, [hit]);
+      add(1000, 'damage', { target: unit, source: 'festergut', ability: 'pungent_blight', school: 'shadow', amount: Math.min(damage, 30000), overkill: Math.max(0, damage - 30000) }, [hit]);
+    }
+    add(1000, 'spell_hit', { caster: 'festergut', spell: 'pungent_blight', target: 'festergut' }, [cast]);
+  });
+}
+
+describe('Festergut observation checks', () => {
+  it('are registered in the content', () => {
+    expect([...CONTENT.checks.keys()].sort()).toEqual(['festergut.inoculated_at_pungent', 'festergut.late_swap', 'festergut.missed_spores', 'raid.no_player_deaths']);
+  });
+
+  it('raid.no_player_deaths ignores the boss', () => {
+    const kill = traceOf((add) => void add(5, 'death', { unit: 'festergut' }));
+    expect(check('raid.no_player_deaths', kill)).toEqual({ pass: true, detail: 'no player died' });
+    const loss = traceOf((add) => void add(5, 'death', { unit: 'b' }));
+    expect(check('raid.no_player_deaths', loss)).toEqual({ pass: false, detail: 'died: b' });
+  });
+
+  it('festergut.inoculated_at_pungent reads the stacks at the hit, before they are removed', () => {
+    expect(check('festergut.inoculated_at_pungent', pungent([3, 12500], [3, 12600]), { minStacks: 3 })).toEqual({ pass: true, detail: '1 Pungent Blight cast(s); lowest stacks 3' });
+    expect(check('festergut.inoculated_at_pungent', pungent([3, 12500], [1, 37500]), { minStacks: 3 })).toEqual({ pass: false, detail: 'b had 1 at 1000 ms' });
+    expect(check('festergut.inoculated_at_pungent', pungent([3, 12500], [1, 37500]), { minStacks: 3, except: ['b'] }).pass).toBe(true);
+    expect(check('festergut.inoculated_at_pungent', traceOf(() => {}))).toEqual({ pass: false, detail: 'Pungent Blight was never cast' });
+  });
+
+  it('festergut.missed_spores compares the player with everyone else; overkill counts as damage', () => {
+    expect(check('festergut.missed_spores', pungent([3, 12500], [0, 50000]), { player: 'b' })).toEqual({
+      pass: true,
+      detail: 'b: 0 stacks, 50000 damage; the others: at least 3 stacks, at most 12500 damage',
+    });
+    expect(check('festergut.missed_spores', pungent([3, 12500], [3, 12400]), { player: 'b' }).pass).toBe(false);
+    expect(check('festergut.missed_spores', pungent([3, 12500], [0, 50000]), { player: 't1' })).toEqual({ pass: false, detail: 't1 was not hit by the first Pungent Blight' });
+    expect(() => check('festergut.missed_spores', pungent([3, 1], [0, 2]), {})).toThrow(/param player/);
+  });
+
+  it('festergut.late_swap links the explosion, the last stack, the late rule and the mistake', () => {
+    const build = (ruleFires: boolean) => (add: Parameters<Parameters<typeof traceOf>[0]>[0]) => {
+      const hit = add(900, 'spell_hit', { caster: 'festergut', spell: 'gastric_bloat', target: 't1' });
+      const stack = add(900, 'aura_stack', { unit: 't1', aura: 'gastric_bloat', caster: 'festergut', stacks: 10, expiresMs: 1 }, [hit]);
+      if (ruleFires) add(900, 'rule_fired', { rule: 'swap-to-t2', actor: 't2' }, [stack]);
+      add(900, 'cast_start', { caster: 't1', spell: 'gastric_explosion', target: 't1', castTimeMs: 0, endMs: 900, triggered: true }, [hit]);
+    };
+    const mistake = { type: 'set_stack_threshold', rule: 'swap-to-t2', atLeast: 10 };
+    const params = { rule: 'swap-to-t2', tank: 't1' };
+    expect(check('festergut.late_swap', traceOf(build(true), [mistake]), params)).toEqual({
+      pass: true,
+      detail: 'rule swap-to-t2 (threshold 10, a scenario mistake) fired at 900 ms on stack 10 of Gastric Bloat, the stack that made t1 explode',
+    });
+    expect(check('festergut.late_swap', traceOf(build(false), [mistake]), params).detail).toMatch(/did not fire on the stack that caused the explosion/);
+    expect(check('festergut.late_swap', traceOf(build(true)), params).detail).toMatch(/no set_stack_threshold mistake/);
+    expect(check('festergut.late_swap', traceOf(() => {}, [mistake]), params)).toEqual({ pass: false, detail: 't1 never cast Gastric Explosion' });
+  });
+});
+```
+
+- [ ] **Step 2: Run it to verify it fails**
+
+Run: `pnpm test packages/content/test/festergut/checks.test.ts`
+Expected: FAIL, cannot resolve `../../src/festergut/checks`.
+
+- [ ] **Step 3: Write `packages/content/src/festergut/checks.ts`:**
+
+```ts
+import type { CustomCheck, Trace, TraceEvent } from '@raid/engine';
+
+type Result = ReturnType<CustomCheck>;
+
+const players = (trace: Trace): Set<string> => new Set(trace.meta.units.filter((u) => u.kind === 'player').map((u) => u.id));
+
+function text(params: Readonly<Record<string, unknown>>, key: string): string {
+  const v = params[key];
+  if (typeof v !== 'string' || v === '') throw new Error(`param ${key} must be a non-empty string`);
+  return v;
+}
+
+/** One Pungent Blight cast: the Inoculated stacks of every player it hit, and the damage it did (overkill included). */
+interface PungentCast {
+  readonly atMs: number;
+  readonly stacks: Map<string, number>;
+  readonly damage: Map<string, number>;
+}
+
+/** Walks the trace once: Inoculated stacks are read at each player's `spell_hit`, before the spell script removes them. */
+export function pungentCasts(trace: Trace): PungentCast[] {
+  const stacks = new Map<string, number>();
+  const casts: PungentCast[] = [];
+  const byCast = new Map<string, PungentCast>();
+  const hitOf = new Map<string, PungentCast>();
+  for (const e of trace.events) {
+    const d = e.data;
+    if (d.aura === 'inoculated' && typeof d.unit === 'string') {
+      if (e.kind === 'aura_removed') stacks.delete(d.unit);
+      else if (e.kind === 'aura_applied' || e.kind === 'aura_stack') stacks.set(d.unit, Number(d.stacks));
+    } else if (e.kind === 'cast_success' && d.spell === 'pungent_blight') {
+      const cast: PungentCast = { atMs: e.t, stacks: new Map(), damage: new Map() };
+      casts.push(cast);
+      byCast.set(e.id, cast);
+    } else if (e.kind === 'spell_hit' && d.spell === 'pungent_blight' && typeof d.target === 'string' && d.target !== d.caster) {
+      const cast = byCast.get(e.causes[0] ?? '');
+      if (!cast) continue;
+      cast.stacks.set(d.target, stacks.get(d.target) ?? 0);
+      hitOf.set(e.id, cast);
+    } else if (e.kind === 'damage' && d.ability === 'pungent_blight' && typeof d.target === 'string') {
+      hitOf.get(e.causes[0] ?? '')?.damage.set(d.target, Number(d.amount) + Number(d.overkill));
+    }
+  }
+  return casts;
+}
+
+/** No player dies. (The built-in `event_absent` on `death` cannot say this: the boss's death is a death event too.) */
+const noPlayerDeaths: CustomCheck = ({ trace }): Result => {
+  const ids = players(trace);
+  const dead = trace.events.filter((e) => e.kind === 'death' && ids.has(String(e.data.unit))).map((e) => String(e.data.unit));
+  return { pass: dead.length === 0, detail: dead.length === 0 ? 'no player died' : `died: ${dead.join(', ')}` };
+};
+
+/**
+ * Every player a Pungent Blight hits has at least `minStacks` Inoculated stacks at that moment, except the players in
+ * `except`; at least one Pungent Blight must be cast.
+ */
+const inoculatedAtPungent: CustomCheck = ({ trace, params }): Result => {
+  const min = Number(params.minStacks ?? 3);
+  const except = new Set(Array.isArray(params.except) ? params.except.map(String) : []);
+  const casts = pungentCasts(trace);
+  if (casts.length === 0) return { pass: false, detail: 'Pungent Blight was never cast' };
+  const short: string[] = [];
+  let lowest = Number.POSITIVE_INFINITY;
+  for (const c of casts) {
+    for (const [unit, n] of c.stacks) {
+      if (except.has(unit)) continue;
+      lowest = Math.min(lowest, n);
+      if (n < min) short.push(`${unit} had ${n} at ${c.atMs} ms`);
+    }
+  }
+  return { pass: short.length === 0, detail: short.length === 0 ? `${casts.length} Pungent Blight cast(s); lowest stacks ${lowest}` : short.join('; ') };
+};
+
+/**
+ * The first Pungent Blight finds `player` with fewer Inoculated stacks than every other player it hits, and does more
+ * damage to `player` than to any of them.
+ */
+const missedSpores: CustomCheck = ({ trace, params }): Result => {
+  const player = text(params, 'player');
+  const first = pungentCasts(trace)[0];
+  if (!first) return { pass: false, detail: 'Pungent Blight was never cast' };
+  const own = first.stacks.get(player);
+  const ownDamage = first.damage.get(player);
+  if (own === undefined || ownDamage === undefined) return { pass: false, detail: `${player} was not hit by the first Pungent Blight` };
+  const others = [...first.stacks].filter(([id]) => id !== player);
+  if (others.length === 0) return { pass: false, detail: 'nobody else was hit' };
+  const fewestOther = Math.min(...others.map(([, n]) => n));
+  const mostOtherDamage = Math.max(...others.map(([id]) => first.damage.get(id) ?? 0));
+  return {
+    pass: own < fewestOther && ownDamage > mostOtherDamage,
+    detail: `${player}: ${own} stacks, ${ownDamage} damage; the others: at least ${fewestOther} stacks, at most ${mostOtherDamage} damage`,
+  };
+};
+
+/**
+ * Gastric Explosion and its cause (spec §10.3, "the cause chain links it to the rule threshold"): `tank` casts Gastric
+ * Explosion; the Gastric Bloat hit behind it also raised the aura to its last stack; rule `rule` fired on that same
+ * stack event, so it fired too late; and the scenario lists a `set_stack_threshold` mistake for that rule.
+ */
+const lateSwap: CustomCheck = ({ trace, params }): Result => {
+  const rule = text(params, 'rule');
+  const tank = text(params, 'tank');
+  const explosion = trace.events.find((e) => e.kind === 'cast_start' && e.data.spell === 'gastric_explosion' && e.data.caster === tank);
+  if (!explosion) return { pass: false, detail: `${tank} never cast Gastric Explosion` };
+  const hit = explosion.causes[0];
+  const stack = trace.events.find((e) => e.kind === 'aura_stack' && e.data.aura === 'gastric_bloat' && e.data.unit === tank && e.causes.includes(hit ?? ''));
+  if (!stack) return { pass: false, detail: 'no Gastric Bloat stack event shares the cause of the explosion' };
+  const fired = trace.events.find((e: TraceEvent) => e.kind === 'rule_fired' && e.data.rule === rule && e.causes.includes(stack.id));
+  if (!fired) return { pass: false, detail: `rule ${rule} did not fire on the stack that caused the explosion (stack ${stack.data.stacks})` };
+  const mistake = trace.meta.mistakes.map((m) => JSON.parse(m) as { type?: string; rule?: string; atLeast?: number }).find((m) => m.type === 'set_stack_threshold' && m.rule === rule);
+  if (!mistake) return { pass: false, detail: `the scenario has no set_stack_threshold mistake for rule ${rule}` };
+  return {
+    pass: true,
+    detail: `rule ${rule} (threshold ${mistake.atLeast}, a scenario mistake) fired at ${fired.t} ms on stack ${stack.data.stacks} of Gastric Bloat, the stack that made ${tank} explode`,
+  };
+};
+
+export const FESTERGUT_CHECKS: ReadonlyMap<string, CustomCheck> = new Map([
+  ['raid.no_player_deaths', noPlayerDeaths],
+  ['festergut.inoculated_at_pungent', inoculatedAtPungent],
+  ['festergut.missed_spores', missedSpores],
+  ['festergut.late_swap', lateSwap],
+]);
+```
+
+- [ ] **Step 4: Register the checks.**
+
+In `packages/content/src/index.ts` replace
+
+```ts
+import { festergut } from './festergut/boss';
+```
+
+with
+
+```ts
+import { festergut } from './festergut/boss';
+import { FESTERGUT_CHECKS } from './festergut/checks';
+```
+
+In `packages/content/src/index.ts` replace
+
+```ts
+  checks: new Map(),
+```
+
+with
+
+```ts
+  checks: new Map(FESTERGUT_CHECKS),
+```
+
+- [ ] **Step 5: Run the test to verify it passes**
+
+Run: `pnpm test packages/content/test/festergut/checks.test.ts`
+Expected: PASS (5 tests).
+
+- [ ] **Step 6: Contract status.** In `docs/superpowers/plans/2026-11-10-contract-changes-for-plans-2-3.md`, at the end of item 11 of "Plan 2 — Festergut" (after `Use a custom observation check or a threshold annotation.`) add `  (done in Plan 2b-2: custom check `festergut.late_swap`; the late-swap scenario sets the threshold to 10, so the rule fires on the stack that explodes and is in the trace)`.
+
+- [ ] **Step 7: Commit**
+
+Run: `pnpm test && pnpm typecheck && pnpm golden`.
+
+```bash
+git add packages/content docs
+git commit -m "feat(content): observation checks for the Festergut scenarios
+
+Co-Authored-By: Claude Fable 5.2 <noreply@anthropic.com>"
+```
+
+---
+
+### Task 12: The 25-player raid plan and the clean kill (adds A-039)
+
+The plan file (design decisions 10, 11, 13) and the first Gate 1 scenario.
+
+**The raid:** two tank stand-ins (`t1` tanks, `t2` waits in the melee group), five melee stand-ins, six generic healers (`h1`, `h2` stand with the melee group and never move; `h3`–`h6` at range), twelve generic casters.
+
+**Positions** (room coordinates; Festergut at his spawn (4267.92, 3137.26), `SQL/creature` line 138459). Relative to him: tank (0, −9.5); melee group (5, −5.5), which is 6.4 yd from the tank, so a spore on either reaches both (8 yd), and Gastric Explosion (10 yd) reaches the melee group; the sixteen ranged spots form a grid, columns x = ±4.5, ±13.5, ±22.5, rows y = −23, −32, −41 (the two far corners unused). Why these numbers:
+- 9 yd between spots: Vile Gas and its splash reach 8 yd (centre distance).
+- At least 23.4 yd from Festergut's centre: a player counts as "far" for Vile Gas at centre distance ≥ 5 + his reach + 1.5; his reach grows from 8 to 12.8 (three Inhaled Blight stacks) and 14.8 with Berserk, so the threshold is at most 21.3 yd. Sixteen far players ≥ the 8 the script wants.
+- At most 43.2 yd from his centre: 40 yd range from edge to edge allows 49.5 yd; the healers in the middle of the grid reach every spot, the tank and the melee group.
+- The run from the farthest spot to the melee group is 40.0 yd, 5.7 s at 7 yd/s plus up to 0.8 s reaction: inside the 12 s of a spore, and back out inside the 8 s between the explosion and the earliest Vile Gas.
+
+**What must come out** (seed 1, from the prototype): Festergut dies at 4:07.899; nobody else dies; Gas Spore at 20.81 s, 63.51 s, 103.57 s; Pungent Blight is cast at 128.01 s and lands at 131.01 s on 25 players with 3 stacks each; `t2` taunts at 147.884 s when `t1` has 9 stacks; the kill comes before the second Pungent Blight and before the berserk.
+
+**Files:**
+- Create: `scenarios/festergut/plan-25n.yaml`, `scenarios/festergut/clean-kill.yaml`, `packages/content/test/festergut/scenario.ts`, `packages/content/test/festergut/clean-kill.test.ts`
+- Modify: `docs/adaptations.md`
+
+**Changed behaviour:** none for existing scenarios.
+
+- [ ] **Step 1: Write the test helper** `packages/content/test/festergut/scenario.ts`:
+
+```ts
+import { readFileSync } from 'node:fs';
+import { parsePlan, parseScenario, prepareRun, runScenario, type Summary, type Trace, type TraceEvent } from '@raid/engine';
+import { CONTENT } from '../../src/index';
+
+const DIR = 'scenarios/festergut';
+
+export interface ScenarioRun {
+  readonly trace: Trace;
+  readonly summary: Summary;
+  events(kind: TraceEvent['kind'], where?: Readonly<Record<string, unknown>>): TraceEvent[];
+}
+
+/** Runs `scenarios/festergut/<name>.yaml` with its plan, as the CLI does. */
+export function runFestergutScenario(name: string): ScenarioRun {
+  const scenarioFile = `${DIR}/${name}.yaml`;
+  const scenario = parseScenario(scenarioFile, readFileSync(scenarioFile, 'utf8'));
+  if (!scenario.ok) throw new Error(JSON.stringify(scenario.problems));
+  const planFile = `${DIR}/${scenario.value.plan}`;
+  const plan = parsePlan(planFile, readFileSync(planFile, 'utf8'));
+  if (!plan.ok) throw new Error(JSON.stringify(plan.problems));
+  const prepared = prepareRun({ plan: plan.value, planFile, scenario: scenario.value, scenarioFile });
+  if (!prepared.ok) throw new Error(JSON.stringify(prepared.problems));
+  const r = runScenario(prepared.value, CONTENT);
+  if (r.outcome === 'invalid') throw new Error(JSON.stringify(r.problems));
+  const { trace, summary } = r;
+  return {
+    trace,
+    summary,
+    events: (kind, where = {}) => trace.events.filter((e) => e.kind === kind && Object.entries(where).every(([k, v]) => e.data[k] === v)),
+  };
+}
+
+/** The text keys a scenario file uses (its observation and its annotations). */
+export function scenarioTextKeys(name: string): string[] {
+  const scenario = parseScenario(name, readFileSync(`${DIR}/${name}.yaml`, 'utf8'));
+  if (!scenario.ok) throw new Error(JSON.stringify(scenario.problems));
+  return [scenario.value.observation.text, ...scenario.value.annotations.map((a) => a.text)];
+}
+```
+
+- [ ] **Step 2: Write the failing test** `packages/content/test/festergut/clean-kill.test.ts`:
+
+```ts
+import { canonicalStringify } from '@raid/engine';
+import { describe, expect, it } from 'vitest';
+import { CONTENT_TEXT_EN } from '../../src/index';
+import { runFestergutScenario, scenarioTextKeys } from './scenario';
+
+describe('scenario: Festergut clean kill (spec §10.3)', () => {
+  const r = runFestergutScenario('clean-kill');
+
+  it('kills Festergut before the berserk with every observation passing', () => {
+    expect(r.summary.outcome).toBe('kill');
+    expect(r.summary.durationMs).toBeLessThan(300000);
+    expect(r.summary.observations.filter((o) => !o.pass)).toEqual([]);
+    expect(r.summary.observations.map((o) => o.check)).toEqual([
+      'outcome_is',
+      'event_absent:cast_start',
+      'custom:raid.no_player_deaths',
+      'custom:festergut.inoculated_at_pungent',
+      'event_occurs:taunt',
+      'event_absent:cast_start',
+    ]);
+    for (const key of scenarioTextKeys('clean-kill')) expect(CONTENT_TEXT_EN[key], key).toBeTruthy();
+  });
+
+  it('the raid stacks for the spores and spreads again before Vile Gas', () => {
+    const spore = r.events('cast_start', { spell: 'gas_spore' })[0];
+    expect(r.events('rule_fired', { rule: 'stack-for-spores' }).filter((e) => e.t === spore.t)).toHaveLength(16);
+    expect(r.events('rule_fired', { rule: 'spread-after-spores' }).filter((e) => e.t === spore.t + 12000)).toHaveLength(16);
+    const vile = r.events('ai_event', { event: 'vile_gas' })[0];
+    expect(vile.t).toBeGreaterThanOrEqual(spore.t + 20000);
+    // Sixteen players are back at range, so Vile Gas takes one of them.
+    expect(vile.data.farTargets).toBe(16);
+  });
+
+  it('all 25 players have three Inoculated stacks at the first Pungent Blight and take a quarter of it', () => {
+    const hits = r.events('damage', { ability: 'pungent_blight' });
+    expect(hits).toHaveLength(25);
+    // 48,750 to 51,250, × 0.25.
+    expect(hits.every((e) => Number(e.data.amount) >= 12187 && Number(e.data.amount) <= 12812)).toBe(true);
+    expect(r.summary.maxStacks.inoculated.stacks).toBe(3);
+  });
+
+  it('the second tank taunts at nine Gastric Bloat stacks and takes Festergut over', () => {
+    const nine = r.events('aura_stack', { aura: 'gastric_bloat', unit: 't1', stacks: 9 })[0];
+    const fired = r.events('rule_fired', { rule: 'swap-to-t2', actor: 't2' })[0];
+    expect(fired.causes).toEqual([nine.id]);
+    const taunt = r.events('taunt', { actor: 't2' })[0];
+    expect(taunt.t - nine.t).toBeGreaterThanOrEqual(300);
+    expect(taunt.t - nine.t).toBeLessThanOrEqual(600);
+    expect(r.events('threat_target').map((e) => e.data.target)).toEqual(['t1', 't2']);
+    expect(r.summary.maxStacks.gastric_bloat).toEqual({ unit: 't1', stacks: 9 });
+    const next = r.events('cast_start', { spell: 'gastric_bloat' }).find((e) => e.t > taunt.t);
+    expect(next?.data.target).toBe('t2');
+  });
+
+  it('reports every raid member as a stand-in, with the assumptions and the partial mechanics (spec §6.4)', () => {
+    const l = r.summary.limitations;
+    expect(l.standIns).toHaveLength(25);
+    expect(r.trace.meta.units.filter((u) => u.kind === 'player').every((u) => u.approximate)).toBe(true);
+    expect(l.partialMechanics.map((m) => m.key)).toEqual([
+      'festergut.gaseous_blight',
+      'festergut.gas_spore',
+      'festergut.inoculated',
+      'festergut.vile_gas',
+      'festergut.gastric_explosion',
+      'festergut.melee',
+    ]);
+    const assumed = l.assumptions.map((a) => a.key);
+    for (const key of ['core.ai_update_interval_ms', 'core.taunt_range_yd', 'generic_caster.bolt_min', 'generic_healer.heal_min']) expect(assumed, key).toContain(key);
+    // Nothing about Festergut himself is an assumption.
+    expect(assumed.filter((k) => k.startsWith('festergut.') || k.startsWith('spell.') || k.startsWith('putricide.'))).toEqual([]);
+    expect(l.knownServerDifferences).toHaveLength(1);
+  });
+
+  it('is deterministic: the same scenario gives a byte-identical canonical trace (spec §11)', () => {
+    expect(canonicalStringify(runFestergutScenario('clean-kill').trace)).toBe(canonicalStringify(r.trace));
+  });
+});
+```
+
+- [ ] **Step 3: Run it to verify it fails**
+
+Run: `pnpm test packages/content/test/festergut/clean-kill.test.ts`
+Expected: FAIL, `ENOENT … scenarios/festergut/clean-kill.yaml`.
+
+- [ ] **Step 4: Write `scenarios/festergut/plan-25n.yaml`:**
+
+```yaml
+# Festergut, 25-player normal. Positions are room coordinates in yards; Festergut stands at (4267.92, 3137.26).
+# Every raid member is a stand-in (spec §6.3): tanks and melee are rate stand-ins, healers and ranged are generic
+# ability-using actors (A-035). The three Gate 1 specs replace t1, one healer and one ranged in Plan 3.
+id: festergut-25n
+boss: festergut
+roster:
+  - { id: t1, name: Tormund, kind: standin, role: tank, maxHealth: 95000, ratePerSecond: 3000, armor: 50000, avoidance: { missPct: 8, dodgePct: 27, parryPct: 22 }, threatMultiplier: 8, reaction: { minMs: 300, maxMs: 600 } }
+  - { id: t2, name: Brakka, kind: standin, role: tank, maxHealth: 95000, ratePerSecond: 3000, armor: 50000, avoidance: { missPct: 8, dodgePct: 27, parryPct: 22 }, threatMultiplier: 8, reaction: { minMs: 300, maxMs: 600 } }
+  - { id: h1, name: Lindra, kind: modelled, spec: generic_healer, profile: default, reaction: { minMs: 300, maxMs: 800 } }
+  - { id: h2, name: Osric, kind: modelled, spec: generic_healer, profile: default, reaction: { minMs: 300, maxMs: 800 } }
+  - { id: h3, name: Maela, kind: modelled, spec: generic_healer, profile: default, reaction: { minMs: 300, maxMs: 800 } }
+  - { id: h4, name: Tobin, kind: modelled, spec: generic_healer, profile: default, reaction: { minMs: 300, maxMs: 800 } }
+  - { id: h5, name: Yselle, kind: modelled, spec: generic_healer, profile: default, reaction: { minMs: 300, maxMs: 800 } }
+  - { id: h6, name: Garrow, kind: modelled, spec: generic_healer, profile: default, reaction: { minMs: 300, maxMs: 800 } }
+  - { id: m1, name: Ragnok, kind: standin, role: melee, maxHealth: 34000, ratePerSecond: 9500, reaction: { minMs: 300, maxMs: 800 } }
+  - { id: m2, name: Sylda, kind: standin, role: melee, maxHealth: 34000, ratePerSecond: 9500, reaction: { minMs: 300, maxMs: 800 } }
+  - { id: m3, name: Dervin, kind: standin, role: melee, maxHealth: 34000, ratePerSecond: 9500, reaction: { minMs: 300, maxMs: 800 } }
+  - { id: m4, name: Kessa, kind: standin, role: melee, maxHealth: 34000, ratePerSecond: 9500, reaction: { minMs: 300, maxMs: 800 } }
+  - { id: m5, name: Holt, kind: standin, role: melee, maxHealth: 34000, ratePerSecond: 9500, reaction: { minMs: 300, maxMs: 800 } }
+  - { id: r01, name: Alice, kind: modelled, spec: generic_caster, profile: default, reaction: { minMs: 300, maxMs: 800 } }
+  - { id: r02, name: Bob, kind: modelled, spec: generic_caster, profile: default, reaction: { minMs: 300, maxMs: 800 } }
+  - { id: r03, name: Cara, kind: modelled, spec: generic_caster, profile: default, reaction: { minMs: 300, maxMs: 800 } }
+  - { id: r04, name: Dorian, kind: modelled, spec: generic_caster, profile: default, reaction: { minMs: 300, maxMs: 800 } }
+  - { id: r05, name: Elin, kind: modelled, spec: generic_caster, profile: default, reaction: { minMs: 300, maxMs: 800 } }
+  - { id: r06, name: Farid, kind: modelled, spec: generic_caster, profile: default, reaction: { minMs: 300, maxMs: 800 } }
+  - { id: r07, name: Greta, kind: modelled, spec: generic_caster, profile: default, reaction: { minMs: 300, maxMs: 800 } }
+  - { id: r08, name: Hakon, kind: modelled, spec: generic_caster, profile: default, reaction: { minMs: 300, maxMs: 800 } }
+  - { id: r09, name: Ines, kind: modelled, spec: generic_caster, profile: default, reaction: { minMs: 300, maxMs: 800 } }
+  - { id: r10, name: Jarek, kind: modelled, spec: generic_caster, profile: default, reaction: { minMs: 300, maxMs: 800 } }
+  - { id: r11, name: Kira, kind: modelled, spec: generic_caster, profile: default, reaction: { minMs: 300, maxMs: 800 } }
+  - { id: r12, name: Lorn, kind: modelled, spec: generic_caster, profile: default, reaction: { minMs: 300, maxMs: 800 } }
+spots:
+  # The tank in front of Festergut; the melee group at his flank, 6.4 yd from the tank. Both are inside his 8 yd reach.
+  tank: { x: 4267.92, y: 3127.76 }
+  melee: { x: 4272.92, y: 3131.76 }
+  # Ranged and healers: a grid in front of him, 9 yd apart (Vile Gas and its splash reach 8 yd), 23 to 43 yd from his centre.
+  g11: { x: 4245.42, y: 3114.26 }
+  g12: { x: 4254.42, y: 3114.26 }
+  g13: { x: 4263.42, y: 3114.26 }
+  g14: { x: 4272.42, y: 3114.26 }
+  g15: { x: 4281.42, y: 3114.26 }
+  g16: { x: 4290.42, y: 3114.26 }
+  g21: { x: 4245.42, y: 3105.26 }
+  g22: { x: 4254.42, y: 3105.26 }
+  g23: { x: 4263.42, y: 3105.26 }
+  g24: { x: 4272.42, y: 3105.26 }
+  g25: { x: 4281.42, y: 3105.26 }
+  g26: { x: 4290.42, y: 3105.26 }
+  g32: { x: 4254.42, y: 3096.26 }
+  g33: { x: 4263.42, y: 3096.26 }
+  g34: { x: 4272.42, y: 3096.26 }
+  g35: { x: 4281.42, y: 3096.26 }
+phases:
+  - phase: default
+    assignments: { t1: tank, t2: melee, h1: melee, h2: melee, h3: g22, h4: g23, h5: g24, h6: g25, m1: melee, m2: melee, m3: melee, m4: melee, m5: melee, r01: g11, r02: g12, r03: g13, r04: g14, r05: g15, r06: g16, r07: g21, r08: g26, r09: g32, r10: g33, r11: g34, r12: g35 }
+rules:
+  # Gas Spore: everyone at range runs to the melee group, so all three spores explode on the whole raid.
+  - id: stack-for-spores
+    who: [h3, h4, h5, h6, r01, r02, r03, r04, r05, r06, r07, r08, r09, r10, r11, r12]
+    when: { on: cast_start, spell: gas_spore, caster: boss }
+    do: { do: move_to, spot: melee }
+    priority: 60
+  # The spores exploded (12 s after the cast): back out before Vile Gas, which Gas Spore delays to 20 s after the cast.
+  - id: spread-after-spores
+    who: [h3, h4, h5, h6, r01, r02, r03, r04, r05, r06, r07, r08, r09, r10, r11, r12]
+    when: { on: aura_applied, aura: blighted_spores, target: self }
+    do: { do: return_to_assignment }
+    priority: 50
+    cooldownMs: 5000
+    retry: { times: 3, everyMs: 1000 }
+  # Tank swap at 9 stacks of Gastric Bloat: the tenth stack is Gastric Explosion.
+  - id: swap-to-t2
+    who: [t2]
+    when: { on: aura_stacks, aura: gastric_bloat, target: t1, atLeast: 9 }
+    do: { do: taunt, target: boss }
+    priority: 70
+    retry: { times: 2, everyMs: 1000 }
+  - id: swap-to-t1
+    who: [t1]
+    when: { on: aura_stacks, aura: gastric_bloat, target: t2, atLeast: 9 }
+    do: { do: taunt, target: boss }
+    priority: 70
+    retry: { times: 2, everyMs: 1000 }
+```
+
+- [ ] **Step 5: Write `scenarios/festergut/clean-kill.yaml`:**
+
+```yaml
+id: festergut-clean-kill
+plan: plan-25n.yaml
+difficulty: 25n
+seed: 1
+maxDurationMs: 330000
+observation:
+  text: scenario.festergut_clean_kill.observation
+  checks:
+    - { check: outcome_is, outcome: kill }
+    # Before the berserk at 5 minutes.
+    - { check: event_absent, kind: cast_start, where: { spell: berserk } }
+    - { check: custom, name: raid.no_player_deaths }
+    # Every player has three Inoculated stacks whenever Pungent Blight hits.
+    - { check: custom, name: festergut.inoculated_at_pungent, params: { minStacks: 3 } }
+    # The tanks swap, and nobody reaches the tenth Gastric Bloat stack.
+    - { check: event_occurs, kind: taunt, where: { actor: t2 } }
+    - { check: event_absent, kind: cast_start, where: { spell: gastric_explosion } }
+annotations:
+  - { text: scenario.festergut.note.first_spores, at: { event: cast_start, where: { spell: gas_spore } } }
+  - { text: scenario.festergut.note.pungent_blight, at: { event: cast_start, where: { spell: pungent_blight } } }
+  - { text: scenario.festergut.note.tank_swap, at: { event: taunt, where: { actor: t2 } } }
+```
+
+- [ ] **Step 6: Run the test to verify it passes**
+
+Run: `pnpm test packages/content/test/festergut/clean-kill.test.ts`
+Expected: PASS (6 tests).
+
+If a test fails although the code of Tasks 1 to 11 is exactly as written, do not tune numbers to make it pass: the run is deterministic and was verified with these files; a difference means an earlier task deviates. Compare the first Gas Spore time (20,810 ms) and the kill time (247,899 ms) to find where.
+
+- [ ] **Step 7: Run it from the command line**
+
+Run: `pnpm sim run scenarios/festergut/clean-kill.yaml`
+Expected (exit code 0; files in `out/festergut-clean-kill/`):
+
+```
+festergut-clean-kill: kill at 04:07.899
+deaths: 1
+  festergut at 04:07.899 (caster_bolt from r04)
+PASS outcome_is: expected kill, got kill
+PASS event_absent:cast_start: 0 matching events
+PASS custom:raid.no_player_deaths: no player died
+PASS custom:festergut.inoculated_at_pungent: 1 Pungent Blight cast(s); lowest stacks 3
+PASS event_occurs:taunt: 1 matching events
+PASS event_absent:cast_start: 0 matching events
+limitations: 25 stand-ins, 28 assumptions, 6 partial mechanics
+wrote out\festergut-clean-kill
+```
+
+- [ ] **Step 8: Append to the table in `docs/adaptations.md`:**
+
+```markdown
+| A-039 | The Festergut raid plan (player behaviour, not AzerothCore): on Gas Spore's cast every player at range runs to the melee group and returns when Blighted Spores lands; two healers stay with the melee group; the second tank taunts when the first has nine Gastric Bloat stacks. All 25 raid members are stand-ins (A-011, A-035). The tank stand-in's profile (95,000 health, 50,000 armor = the 75 % cap, 57 % avoidance) stands for what real tanks add with cooldowns and block at three Inhaled Blight stacks; healing and damage numbers of the generic actors are assumptions tuned so that this plan kills Festergut in about 4:08 with seed 1. Outcomes of other seeds vary (a tank can die in the three-stack phase), so the scenarios pin their seed. | Gate 1's modelled specs come with Plan 3; until then the scenarios teach the boss mechanics, not player performance. | `festergut/clean-kill.test.ts` |
+```
+
+- [ ] **Step 9: Commit**
+
+Run: `pnpm test && pnpm typecheck && pnpm golden`.
+
+```bash
+git add scenarios/festergut packages/content docs/adaptations.md
+git commit -m "feat(scenarios): Festergut 25n raid plan and the clean kill
+
+Co-Authored-By: Claude Fable 5.2 <noreply@anthropic.com>"
+```
+
+---
+
+### Task 13: Scenario "missed spore group"
+
+One ranged player (`r06`, Farid) is taken out of the `stack-for-spores` rule (`exclude_from_rule`). With seed 1 the spores of the first three rounds go to m5, r09, r12 / h4, r08, r09 / h6, m5, r02, never to r06, so r06 has no Inoculated at all when Pungent Blight lands at 131.01 s and takes the full 49,576 (the others at most 12,784) on 34,000 health. The mistake changes nobody's eligibility, so the carriers are the same as in the clean kill (spec §8.7); the test pins that.
+
+**Files:**
+- Create: `scenarios/festergut/missed-spore-group.yaml`, `packages/content/test/festergut/missed-spore-group.test.ts`
+
+**Changed behaviour:** none.
+
+- [ ] **Step 1: Write the failing test** `packages/content/test/festergut/missed-spore-group.test.ts`:
+
+```ts
+import { describe, expect, it } from 'vitest';
+import { CONTENT_TEXT_EN } from '../../src/index';
+import { runFestergutScenario, scenarioTextKeys, type ScenarioRun } from './scenario';
+
+describe('scenario: a ranged player misses the spore group (spec §10.3)', () => {
+  const r = runFestergutScenario('missed-spore-group');
+  const clean = runFestergutScenario('clean-kill');
+
+  it('every observation passes', () => {
+    expect(r.summary.observations.filter((o) => !o.pass)).toEqual([]);
+    expect(r.summary.observations).toHaveLength(4);
+    expect(r.trace.meta.mistakes).toEqual(['{"player":"r06","rule":"stack-for-spores","type":"exclude_from_rule"}']);
+    for (const key of scenarioTextKeys('missed-spore-group')) expect(CONTENT_TEXT_EN[key], key).toBeTruthy();
+  });
+
+  it('r06 stays at range while the other fifteen run in', () => {
+    const spore = r.events('cast_start', { spell: 'gas_spore' })[0];
+    const moved = r.events('rule_fired', { rule: 'stack-for-spores' }).filter((e) => e.t === spore.t).map((e) => e.data.actor);
+    expect(moved).toHaveLength(15);
+    expect(moved).not.toContain('r06');
+    expect(r.events('move_start', { unit: 'r06' })).toEqual([]);
+  });
+
+  it('the same players carry the first three rounds of spores as in the clean kill (spec §8.7)', () => {
+    // The mistake changes nobody's eligibility, so it must not shift the random picks.
+    const carriers = (run: ScenarioRun) => run.events('aura_applied', { aura: 'gas_spore_carrier' }).slice(0, 9).map((e) => `${e.t}:${e.data.unit}`);
+    expect(carriers(r)).toEqual(carriers(clean));
+    expect(carriers(r).some((c) => c.endsWith(':r06'))).toBe(false);
+  });
+
+  it('Pungent Blight hits r06 in full and kills, while the raid takes a quarter', () => {
+    const hits = r.events('damage', { ability: 'pungent_blight' });
+    const own = hits.find((e) => e.data.target === 'r06')!;
+    const full = Number(own.data.amount) + Number(own.data.overkill);
+    expect(full).toBeGreaterThanOrEqual(48750);
+    expect(full).toBeLessThanOrEqual(51250);
+    expect(hits.filter((e) => e.data.target !== 'r06').every((e) => Number(e.data.amount) <= 12812)).toBe(true);
+    expect(r.summary.deaths.find((d) => d.unit === 'r06')?.killingBlow).toMatchObject({ ability: 'pungent_blight', source: 'festergut' });
+    expect(r.summary.deaths.map((d) => d.unit).sort()).toEqual(['festergut', 'r06']);
+  });
+});
+```
+
+- [ ] **Step 2: Run it to verify it fails**
+
+Run: `pnpm test packages/content/test/festergut/missed-spore-group.test.ts`
+Expected: FAIL, `ENOENT … scenarios/festergut/missed-spore-group.yaml`.
+
+- [ ] **Step 3: Write `scenarios/festergut/missed-spore-group.yaml`:**
+
+```yaml
+id: festergut-missed-spore-group
+plan: plan-25n.yaml
+difficulty: 25n
+seed: 1
+maxDurationMs: 330000
+mistakes:
+  # Farid (r06) does not run to the melee group when Gas Spore is cast.
+  - { type: exclude_from_rule, rule: stack-for-spores, player: r06 }
+observation:
+  text: scenario.festergut_missed_spore_group.observation
+  checks:
+    # Fewer Inoculated stacks than everyone else at the first Pungent Blight, and more damage from it.
+    - { check: custom, name: festergut.missed_spores, params: { player: r06 } }
+    # The rest of the raid is protected.
+    - { check: custom, name: festergut.inoculated_at_pungent, params: { minStacks: 3, except: [r06] } }
+    # With this seed r06 never carries a spore, has no stack at all, and the full hit kills.
+    - { check: event_absent, kind: aura_applied, where: { aura: inoculated, unit: r06 } }
+    - { check: event_occurs, kind: death, where: { unit: r06 } }
+annotations:
+  - { text: scenario.festergut.note.stays_out, at: { event: cast_start, where: { spell: gas_spore } } }
+  - { text: scenario.festergut.note.pungent_blight, at: { event: cast_start, where: { spell: pungent_blight } } }
+```
+
+- [ ] **Step 4: Run the test to verify it passes**
+
+Run: `pnpm test packages/content/test/festergut/missed-spore-group.test.ts`
+Expected: PASS (4 tests).
+
+- [ ] **Step 5: Run it from the command line**
+
+Run: `pnpm sim run scenarios/festergut/missed-spore-group.yaml`
+Expected (exit code 0):
+
+```
+festergut-missed-spore-group: kill at 04:16.022
+deaths: 2
+  r06 at 02:11.010 (pungent_blight from festergut)
+  festergut at 04:16.022 (caster_bolt from r05)
+PASS custom:festergut.missed_spores: r06: 0 stacks, 49576 damage; the others: at least 3 stacks, at most 12784 damage
+PASS custom:festergut.inoculated_at_pungent: 1 Pungent Blight cast(s); lowest stacks 3
+PASS event_absent:aura_applied: 0 matching events
+PASS event_occurs:death: 1 matching events
+limitations: 25 stand-ins, 28 assumptions, 6 partial mechanics
+wrote out\festergut-missed-spore-group
+```
+
+- [ ] **Step 6: Commit**
+
+Run: `pnpm test && pnpm typecheck && pnpm golden`.
+
+```bash
+git add scenarios/festergut packages/content
+git commit -m "feat(scenarios): Festergut, a ranged player misses the spore group
+
+Co-Authored-By: Claude Fable 5.2 <noreply@anthropic.com>"
+```
+
+---
+
+### Task 14: Scenario "late tank swap"
+
+The mistake `set_stack_threshold` raises the threshold of `swap-to-t2` from 9 to 10. The rule then fires on the tenth stack, which is the stack that explodes: at 165.51 s `t1` casts Gastric Explosion, dies, and the explosion hits the melee group. The raid has no Inoculated at that moment (Pungent Blight removed it at 131 s), so the melee group dies with the tank and the fight ends in a wipe at 4:55.330; the scenario's observation is the explosion and its cause, not the outcome.
+
+**Files:**
+- Create: `scenarios/festergut/late-tank-swap.yaml`, `packages/content/test/festergut/late-tank-swap.test.ts`
+
+**Changed behaviour:** none.
+
+- [ ] **Step 1: Write the failing test** `packages/content/test/festergut/late-tank-swap.test.ts`:
+
+```ts
+import { causeChain } from '@raid/engine';
+import { describe, expect, it } from 'vitest';
+import { CONTENT_TEXT_EN } from '../../src/index';
+import { runFestergutScenario, scenarioTextKeys } from './scenario';
+
+describe('scenario: the tank swap comes too late (spec §10.3)', () => {
+  const r = runFestergutScenario('late-tank-swap');
+
+  it('every observation passes', () => {
+    expect(r.summary.observations.filter((o) => !o.pass)).toEqual([]);
+    expect(r.summary.observations).toHaveLength(4);
+    expect(r.trace.meta.mistakes).toEqual(['{"atLeast":10,"rule":"swap-to-t2","type":"set_stack_threshold"}']);
+    for (const key of scenarioTextKeys('late-tank-swap')) expect(CONTENT_TEXT_EN[key], key).toBeTruthy();
+  });
+
+  it('nobody taunts at nine stacks; the tenth stack is Gastric Explosion', () => {
+    const nine = r.events('aura_stack', { aura: 'gastric_bloat', unit: 't1', stacks: 9 })[0];
+    const ten = r.events('aura_stack', { aura: 'gastric_bloat', unit: 't1', stacks: 10 })[0];
+    expect(r.events('taunt').filter((e) => e.t < ten.t)).toEqual([]);
+    expect(ten.t - nine.t).toBeGreaterThanOrEqual(15000);
+    const explosion = r.events('cast_start', { spell: 'gastric_explosion' })[0];
+    expect(explosion).toMatchObject({ t: ten.t, data: { caster: 't1', triggered: true } });
+    expect(r.summary.maxStacks.gastric_bloat).toEqual({ unit: 't1', stacks: 10 });
+  });
+
+  it('the cause chain of the death leads back to the Gastric Bloat cast, and the late rule hangs on the same stack', () => {
+    const death = r.events('death', { unit: 't1' })[0];
+    const chain = causeChain(r.trace, death).map((id) => r.trace.events.find((e) => e.id === id)!);
+    expect(chain.map((e) => `${e.kind}:${e.data.spell ?? e.data.ability ?? e.data.event}`)).toEqual([
+      'damage:gastric_explosion',
+      'spell_hit:gastric_explosion',
+      'cast_success:gastric_explosion',
+      'cast_start:gastric_explosion',
+      'spell_hit:gastric_bloat',
+      'cast_success:gastric_bloat',
+      'cast_start:gastric_bloat',
+      'ai_event:gastric_bloat',
+    ]);
+    const ten = r.events('aura_stack', { aura: 'gastric_bloat', unit: 't1', stacks: 10 })[0];
+    expect(chain.map((e) => e.id)).toContain(ten.causes[0]);
+    const fired = r.events('rule_fired', { rule: 'swap-to-t2' })[0];
+    expect(fired.causes).toEqual([ten.id]);
+    expect(r.summary.deaths.find((d) => d.unit === 't1')?.killingBlow).toMatchObject({ ability: 'gastric_explosion', source: 't1' });
+  });
+
+  it('the explosion hits the melee group within 10 yd of the tank, not the players at their ranged spots', () => {
+    const explosion = r.events('cast_start', { spell: 'gastric_explosion' })[0];
+    const hit = r.events('damage', { ability: 'gastric_explosion' }).filter((e) => e.t === explosion.t).map((e) => String(e.data.target));
+    for (const id of ['m1', 'm2', 'm3', 'm4', 't2', 'h1', 'h2']) expect(hit, id).toContain(id);
+    expect(hit.every((id) => r.events('damage', { ability: 'gastric_explosion', target: id })[0].data.source === 't1')).toBe(true);
+  });
+});
+```
+
+- [ ] **Step 2: Run it to verify it fails**
+
+Run: `pnpm test packages/content/test/festergut/late-tank-swap.test.ts`
+Expected: FAIL, `ENOENT … scenarios/festergut/late-tank-swap.yaml`.
+
+- [ ] **Step 3: Write `scenarios/festergut/late-tank-swap.yaml`:**
+
+```yaml
+id: festergut-late-tank-swap
+plan: plan-25n.yaml
+difficulty: 25n
+seed: 1
+maxDurationMs: 330000
+mistakes:
+  # The swap rule waits for ten stacks; the plan says nine.
+  - { type: set_stack_threshold, rule: swap-to-t2, atLeast: 10 }
+observation:
+  text: scenario.festergut_late_tank_swap.observation
+  checks:
+    - { check: event_occurs, kind: aura_stack, where: { aura: gastric_bloat, unit: t1, stacks: 10 } }
+    - { check: event_occurs, kind: cast_start, where: { spell: gastric_explosion, caster: t1 } }
+    - { check: event_occurs, kind: death, where: { unit: t1 } }
+    # The explosion, the tenth stack and the late rule share one cause chain; the threshold is the scenario's mistake.
+    - { check: custom, name: festergut.late_swap, params: { rule: swap-to-t2, tank: t1 } }
+annotations:
+  - { text: scenario.festergut.note.gastric_explosion, at: { event: cast_start, where: { spell: gastric_explosion } } }
+```
+
+- [ ] **Step 4: Run the test to verify it passes**
+
+Run: `pnpm test packages/content/test/festergut/late-tank-swap.test.ts`
+Expected: PASS (4 tests).
+
+- [ ] **Step 5: Run it from the command line**
+
+Run: `pnpm sim run scenarios/festergut/late-tank-swap.yaml`
+Expected (exit code 0; the 25 death lines are left out here, the first eight (h1, h2, m1 to m5, t1) are `gastric_explosion from t1` at 02:45.510):
+
+```
+festergut-late-tank-swap: wipe at 04:55.330
+deaths: 25
+PASS event_occurs:aura_stack: 1 matching events
+PASS event_occurs:cast_start: 1 matching events
+PASS event_occurs:death: 1 matching events
+PASS custom:festergut.late_swap: rule swap-to-t2 (threshold 10, a scenario mistake) fired at 165510 ms on stack 10 of Gastric Bloat, the stack that made t1 explode
+limitations: 25 stand-ins, 28 assumptions, 6 partial mechanics
+wrote out\festergut-late-tank-swap
+```
+
+- [ ] **Step 6: Commit**
+
+Run: `pnpm test && pnpm typecheck && pnpm golden`.
+
+```bash
+git add scenarios/festergut packages/content
+git commit -m "feat(scenarios): Festergut, the tank swap comes too late
+
+Co-Authored-By: Claude Fable 5.2 <noreply@anthropic.com>"
+```
+
+---
+
+### Task 15: CLI test, golden runs, contract status, final verification
+
+**Files:**
+- Create: `packages/cli/test/festergut-cli.test.ts`
+- Modify: `scenarios/golden.json`, `docs/superpowers/plans/2026-11-10-contract-changes-for-plans-2-3.md`
+
+**Changed behaviour:** three new golden runs. The existing fingerprint must stay.
+
+- [ ] **Step 1: Write the failing test** `packages/cli/test/festergut-cli.test.ts`:
+
+```ts
+import { readFileSync } from 'node:fs';
+import { describe, expect, it } from 'vitest';
+import { runCli, type Io } from '../src/cli';
+import { readGolden } from '../src/golden';
+
+function run(scenario: string) {
+  const written = new Map<string, string>();
+  const lines: string[] = [];
+  const io: Io = {
+    readFile: (p) => readFileSync(p, 'utf8'),
+    writeFile: (p, c) => void written.set(p.replace(/\\/g, '/'), c),
+    mkdir: () => {},
+    out: (l) => void lines.push(l),
+  };
+  const code = runCli(['run', `scenarios/festergut/${scenario}.yaml`, '--out', 'out/test'], io);
+  return { code, lines, log: written.get('out/test/log.txt') ?? '', summary: JSON.parse(written.get('out/test/summary.json') ?? '{}') };
+}
+
+describe('raid-sim run scenarios/festergut/<name>.yaml', () => {
+  it('clean kill: exit code 0, a readable log with English names, the limitation line', () => {
+    const r = run('clean-kill');
+    expect(r.code).toBe(0);
+    expect(r.lines[0]).toMatch(/^festergut-clean-kill: kill at 04:\d\d\.\d{3}$/);
+    expect(r.lines.filter((l) => l.startsWith('FAIL'))).toEqual([]);
+    expect(r.lines).toContain('limitations: 25 stand-ins, 28 assumptions, 6 partial mechanics');
+    expect(r.log).toContain('[00:00.000] Festergut engaged');
+    expect(r.log).toContain('[00:06.790] Festergut gains Gaseous Blight (strong)');
+    expect(r.log).toMatch(/\[00:2\d\.\d{3}\] Festergut casts Gas Spore → Festergut/);
+    expect(r.log).toMatch(/Festergut begins casting Pungent Blight → Festergut/);
+    expect(r.log).toMatch(/Brakka taunts Festergut/);
+    expect(r.log).toMatch(/Alice gains Inoculated \(3\)/);
+    // No raw ability id is left in the lines that name abilities.
+    expect(r.log.split('\n').filter((l) => /gaseous_blight|gas_spore_carrier|caster_bolt|healer_heal/.test(l) && !l.includes('Festergut: '))).toEqual([]);
+  });
+
+  it('missed spore group and late tank swap: every observation passes', () => {
+    const missed = run('missed-spore-group');
+    expect(missed.code).toBe(0);
+    expect(missed.lines.some((l) => l.startsWith('PASS custom:festergut.missed_spores: r06: 0 stacks'))).toBe(true);
+    expect(missed.lines.some((l) => /^ {2}r06 at 02:\d\d\.\d{3} \(pungent_blight from festergut\)$/.test(l))).toBe(true);
+    const late = run('late-tank-swap');
+    expect(late.code).toBe(0);
+    expect(late.lines.some((l) => l.startsWith('PASS custom:festergut.late_swap: rule swap-to-t2 (threshold 10, a scenario mistake) fired'))).toBe(true);
+    expect(late.summary.deaths[0].killingBlow).toMatchObject({ ability: 'gastric_explosion' });
+  });
+
+  it('the three scenarios are pinned as golden runs next to the training dummy', () => {
+    expect(Object.keys(readGolden({ readFile: (p) => readFileSync(p, 'utf8') })).sort()).toEqual([
+      'scenarios/festergut/clean-kill.yaml',
+      'scenarios/festergut/late-tank-swap.yaml',
+      'scenarios/festergut/missed-spore-group.yaml',
+      'scenarios/training-dummy/clean.yaml',
+    ]);
+  });
+});
+```
+
+- [ ] **Step 2: Run it to verify it fails**
+
+Run: `pnpm test packages/cli/test/festergut-cli.test.ts`
+Expected: the first two tests PASS (the CLI needed no change); the third FAILS (golden.json lists only the training dummy).
+
+- [ ] **Step 3: Pin the golden runs.** Replace the content of `scenarios/golden.json` with (empty strings for the new runs):
+
+```json
+{
+  "scenarios/festergut/clean-kill.yaml": "",
+  "scenarios/festergut/late-tank-swap.yaml": "",
+  "scenarios/festergut/missed-spore-group.yaml": "",
+  "scenarios/training-dummy/clean.yaml": "48e5db47443cd4daa8c299e83d0836945b4c7d82e29109eb2260bf8551bcebf5"
+}
+```
+
+Run: `pnpm golden:update`
+Expected: `updated 4 fingerprints in scenarios/golden.json`.
+
+Run: `git diff scenarios/golden.json`
+Expected: three added lines and **no change to the `training-dummy` line**. If that line changed, stop: an earlier task changed an existing trace.
+
+The prototype of this plan produced these fingerprints:
+
+```json
+{
+  "scenarios/festergut/clean-kill.yaml": "7ec1d6810b4bca2769b2036788fcead1b835a3a0726e38892610a8cf9026faab",
+  "scenarios/festergut/late-tank-swap.yaml": "921b7f4ec08a86841d1cbbc64457c0b6460dd855061318511e87df1f3515ce04",
+  "scenarios/festergut/missed-spore-group.yaml": "7c5c20971eb370e5d4bb21e7b1f9af200d4d00055b5d19541dcd6fe4dafb12ef",
+  "scenarios/training-dummy/clean.yaml": "48e5db47443cd4daa8c299e83d0836945b4c7d82e29109eb2260bf8551bcebf5"
+}
+```
+
+A canonical trace contains unit names, ids, every event and every snapshot, so the same code and files give the same values. If yours differ although all tests pass, find the first differing event against a second run before accepting them (a changed name or comment-free YAML value is enough); record the reason in the commit message.
+
+- [ ] **Step 4: Run the test to verify it passes**
+
+Run: `pnpm test packages/cli`
+Expected: PASS; `festergut-cli.test.ts` has 3 tests, `golden.test.ts` still 2.
+
+- [ ] **Step 5: Contract status.** In `docs/superpowers/plans/2026-11-10-contract-changes-for-plans-2-3.md`:
+  - item 3 of "Plan 2 — Festergut": replace `(partly: triggered casts done; max targets at launch and casting as another unit are needed in Plan 2b)` with `(done: triggered casts in Plan 2a, max targets and casting as another unit in Plan 2b-1; used by Festergut in Plan 2b-2)`;
+  - item 13: append `  (Plan 2b-2: not needed by Festergut: Gas Spore draws only when more players qualify than its limit (A-027), and selectTarget picks one of a non-empty pool; EventMap phases are unused by this script)`;
+  - item 14: append `  (Plan 2b-2: the window helpers do nothing after the outcome, and the Festergut script emits its `ai` event before the cast that could end the fight; a general guard in `emit` stays open)`;
+  - at the end of the file add:
+
+```markdown
+## Found while writing Plan 2b-2 (for Plan 3 and Gate 4)
+
+- `@raid/engine` did not export `melee.ts` and `modifiers.ts`; Plan 2b-2 exports them.
+- The boss does not move: a victim outside melee range is never chased. Fine while a tank holds Festergut; needed as soon as a fight has movement.
+- Rate stand-ins bypass damage modifiers (`sim.damage` with a fixed amount): Gastric Bloat's +10 % per stack does not raise a stand-in tank's damage or threat. A modelled tank (Plan 3) gets the bonus and may pull threat back after a swap; the swap rules then need a threat-aware trigger (the rule vocabulary has none for `threat_target`).
+- Healers need area heals and tanks need cooldowns before a fight like Festergut can be healed by real specs; the generic healer's splash heal and the stand-in tank profile stand in for both (A-035, A-039).
+- `db` sources have no line field; Plan 2b-2 writes row, column, SQL file and line into `key`.
+- Areas cannot filter by creature entry (the gas visuals on NPC 36659), and there is no LINKED aura, no spell hit/resist roll, no missile travel for area-at-target spells with an aura (Vile Gas): all listed as omissions of the Festergut mechanics.
+- Rule triggers cannot express "the first spore carrier goes to the melee group": the plan sends everyone in. Carrier-specific assignments need a new trigger or a boss-package action (spec §10.2).
+```
+
+- [ ] **Step 6: Final verification**
+
+Run: `pnpm test && pnpm typecheck && pnpm golden`
+Expected: 623 tests pass in 67 files (534 before this plan + 89: `timer-windows` 5, `approximate-actors` 2, `generic-actors` 6, `festergut/data` 9, `spells` 9, `script` 17, `pungent-blight` 5, `blighted-spores` 8, `gastric-explosion` 4, `text` 2, `checks` 5, `clean-kill` 6, `missed-spore-group` 4, `late-tank-swap` 4, `festergut-cli` 3), no type errors, `all golden runs match`.
+
+Run: `grep -c '^| A-0' docs/adaptations.md`
+Expected: `39`.
+
+Run: `pnpm sim run scenarios/festergut/clean-kill.yaml && pnpm sim run scenarios/festergut/missed-spore-group.yaml && pnpm sim run scenarios/festergut/late-tank-swap.yaml`
+Expected: the three outputs of Tasks 12 to 14, each with exit code 0.
+
+- [ ] **Step 7: Commit**
+
+```bash
+git add packages/cli scenarios/golden.json docs
+git commit -m "test: Festergut scenarios on the command line and as golden runs; contract status
+
+Co-Authored-By: Claude Fable 5.2 <noreply@anthropic.com>"
+```
+
+---
+
+## Coverage (self-review)
+
+**Spec, Gate 1 (§4, §10, §11):**
+
+| Requirement | Where |
+| --- | --- |
+| One encounter, Festergut 25 normal | Tasks 4–9 |
+| Gaseous Blight steps down, Inhaled Blight raises his damage | Task 6 (`script.test.ts`, inhale cycle) |
+| Pungent Blight after the third inhale; removes Inhaled Blight and Inoculated; reschedules Gas Spore | Tasks 6, 7 |
+| Gas Spore on 3 players; explosion gives Inoculated; delays Vile Gas | Tasks 6, 8 |
+| Vile Gas on ranged targets; Gastric Bloat with Gastric Explosion at its limit; melee; berserk | Tasks 6, 9 |
+| Modelled specs Protection Paladin, Restoration Druid, Fire Mage | **Not in this plan** (Plan 3). Design decision 10 states what stands in and how it is reported. |
+| Scenarios clean kill, missed spore group, late tank swap, each checked automatically | Tasks 11–14 |
+| The limitation report lists every stand-in and assumption | Tasks 2, 3, 12 (`clean-kill.test.ts`) |
+| CLI outputs | Tasks 12–15 |
+| Provenance for every value (§7) | Task 4 (`data.test.ts`), Task 5 (only `spelldata`/`derived` are read), Task 12 (no Festergut assumption in a run) |
+| Core semantics §5.1 (timers advance while casting, one event per update, reschedule and delay) | engine tests of Plan 1; observed in Task 6 (`CAST_HOLD`, Gas Spore delaying Vile Gas) and Task 7 (reschedule) |
+| Worked examples | Task 4 (health, armor, melee, first gas), Task 6 (three-stack swing time and damage), Tasks 7, 12 (quarter damage) |
+| Boundary tests | radius and tick/expiry boundaries are engine tests of Plan 2b-1; here: 10 yd explosion with players at 6 and 10.5 yd (Task 9), 1 s and 10 s rules at 7 s / 10.5 s (Task 8), tank swap with the next Gastric Bloat on the new tank (Task 12) |
+| Determinism and the randomness guarantee | Task 12 (byte-identical rerun), Task 13 (same carriers with the mistake) |
+| Golden runs | Task 15 |
+
+**Notes for Plan 2b-2:** hook casts without an original caster → design decision 5, Tasks 8, 9; no entry filter, gas visuals left out → Task 5, statuses in Task 6; "Flu Shot Shortage" pattern → design decision 6, Task 8, A-038; Inoculated's PERIODIC_DUMMY and Gas Spore's DUMMY left out and listed → Tasks 5, 6; variant lookups from hooks with an id mapping → `FestergutSpells`, Tasks 4, 7; P3 limitations (refresh-resets-tick, hit/resist, Gastric Explosion crits, Vile Gas missile, root, LINKED slow) → `FESTERGUT_MECHANICS`, pinned by the last test of `script.test.ts`; first gas as a script timer with AI granularity → design decision 7, A-036; EventMap time-until → Task 1; Malleable Goo not needed → left out; `periodic_trigger` with the holder casting → Gaseous Blight, Gas Spore carrier, Vile Gas splash (Task 5).
+
+**Research §10 leftovers:** 13 (delayed first gas) → Tasks 4, 6; 16–17 (limitations) → Task 6.
+
+**Contract list:** item 8 → Task 1; item 11 → Task 11; items 3, 13, 14 → status in Task 15.
+
+**Names used across tasks:** `EventMap.timeUntilEvent`, `hasTimeUntilEvent`, `EventScriptedAI.publishWindow`, `raiseWindow` (1); `PolicyFactory.approximate` (2); `genericCaster`, `genericHealer`, `chooseHealTarget`, spells `caster_bolt`, `healer_heal` (3); `FESTERGUT_SPELL_FILE`, `FESTERGUT_BASE_IDS`, `FestergutSpellName`, `FestergutSpells` (`variant`, `variantIds`, `id`, `key`, `num`), `festergutData`, `FESTERGUT_DATA_25N` (4); `addFestergutSpells` (5); `FESTERGUT_ID`, `DATA_INOCULATED_STACK`, `FESTERGUT_MECHANICS`, `FestergutTimers`, `festergutTimers`, `FestergutAI` (`setData`, `getData`), `festergut` (module), test helpers `newFight`, `ring`, `BOSS`, `TestPlayer` (6); `pungentBlightScript` (7); `blightedSporesScript` (8); `gastricBloatScript` (9); `FESTERGUT_TEXT_EN` (10); `FESTERGUT_CHECKS`, `pungentCasts`, checks `raid.no_player_deaths`, `festergut.inoculated_at_pungent`, `festergut.missed_spores`, `festergut.late_swap` (11); `runFestergutScenario`, `scenarioTextKeys`, `ScenarioRun`, rules `stack-for-spores`, `spread-after-spores`, `swap-to-t2`, `swap-to-t1` (12). Engine ids: `inhale_blight`, `inhaled_blight`, `pungent_blight`, `gaseous_blight_{large,medium,small}` and `…_damage`, `gas_spore`, `gas_spore_carrier`, `blighted_spores`, `inoculated`, `vile_gas`, `vile_gas_splash`, `gastric_bloat`, `gastric_explosion`, `berserk`.
+
+## Open questions and assumptions
+
+1. **Player model.** No Gate 1 spec exists yet; all 25 raid members are stand-ins: 7 rate stand-ins (2 tanks, 5 melee) and 18 generic ability users (6 healers, 12 casters). The owner should confirm that Gate 1's demonstration waits for Plan 3 or accepts this as the encounter half of it.
+2. **Generic actor numbers are assumptions** (health 34,000; bolt 22,000–26,000 per 2 s; heal 12,000–14,000 per 1.5 s plus 6,500–7,500 on up to five players within 10 yd; heal threshold 6,000; tank priority below 85 %). They were tuned for a kill at about 4:08, not taken from any source.
+3. **The tank stand-in profile is generous** (design decision 13). With real tank cooldowns unmodelled, lower values let the tank die at three Inhaled Blight stacks in most seeds.
+4. **Seed sensitivity.** The clean kill is clean for seeds 1 and 3–8 in the prototype and loses a tank with seed 2. The scenarios pin seed 1.
+5. **BaseAttackTime** is 0 in the database and becomes 2000 through the core default (see "A correction to the research notes"). `festergut-azerothcore.md` should be corrected when it is next touched.
+6. **First gas:** the map-update latency of Putricide's arrival and whether a pull can happen before he could arrive are not modelled (research, open questions); Gate 2 logs can show the real delay.
+7. **Rising-Gods:** nothing is validated against logs; `knownServerDifferences` says so in every run.
+8. **`BossContext.setData`/`getData` are unused by Festergut** (design decision 6). Whether to remove them or make them reachable from hooks is left to the next boss that needs script state.
+9. **Stream names:** the EventMap draws all timers from one stream (`boss:festergut.timers`); spec §8.7 would allow one per mechanic. Not changed here because it would not change any guarantee the scenarios rely on.
