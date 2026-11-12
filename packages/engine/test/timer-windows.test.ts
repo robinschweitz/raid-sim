@@ -95,10 +95,12 @@ describe('published timer windows follow the EventMap (A-034)', () => {
       // The same event under a new name: the old name is cleared first.
       [10000, 'a', null, null],
       [10000, 'a_again', 20000, 20000],
+      // B was a one-shot: its window is cleared by the check after the update in which it fired.
+      [18000, 'b', null, null],
     ]);
     const b = sim.trace.list().find((e) => e.kind === 'ai_event' && e.data.event === 'b');
     expect(b?.t).toBe(18000);
-    expect(sim.timerWindows.get('boss|b')).toEqual({ boss: 'boss', ability: 'b', earliestMs: 18000, latestMs: 18000 });
+    expect(sim.timerWindows.has('boss|b')).toBe(false);
   });
 
   it('a window that does not contain its event throws', () => {
@@ -109,5 +111,99 @@ describe('published timer windows follow the EventMap (A-034)', () => {
     const sim = run('cancel_b');
     expect(windows(sim)).toContainEqual([10000, 'b', null, null]);
     expect(sim.timerWindows.has('boss|b')).toBe(false);
+  });
+});
+
+/** Scripts that break the contract after the fact, to see the automatic check after every update. */
+class AutoAI extends EventScriptedAI {
+  readonly bossId = 'boss';
+  readonly mechanics: readonly MechanicStatus[] = [];
+  constructor(private readonly mode: 'reschedule_unpublished' | 'one_shot' | 'same_name' | 'partial_raise' | 'unchanged_raise' | 'fixed_delay') {
+    super();
+  }
+  protected engage(ctx: BossContext): void {
+    this.events.schedule(EVENT_A, 5000);
+    this.publishWindow(ctx, 'a', EVENT_A, 5000, 5000, []);
+    if (this.mode === 'same_name') {
+      this.events.schedule(EVENT_B, 6000);
+      this.publishWindow(ctx, 'a', EVENT_B, 6000, 6000, []);
+    }
+    if (this.mode === 'partial_raise' || this.mode === 'unchanged_raise' || this.mode === 'fixed_delay') {
+      this.events.scheduleRange(EVENT_B, 8000, 15000, GROUP_B);
+      this.publishWindow(ctx, 'b', EVENT_B, 8000, 15000, []);
+    }
+  }
+  protected executeEvent(id: number, ctx: BossContext): void {
+    if (id !== EVENT_A) return;
+    const ev = ctx.ai('a');
+    switch (this.mode) {
+      case 'reschedule_unpublished':
+        this.events.schedule(EVENT_A, 3000);
+        return;
+      case 'partial_raise':
+        // B is due at 8 to 15 s; at 5 s a floor of 7 s means 12 s: the earliest bound moves, the latest stays.
+        this.events.delayEventsToMax(7000, GROUP_B);
+        this.raiseWindow(ctx, EVENT_B, 7000, [ev]);
+        return;
+      case 'unchanged_raise':
+        this.events.delayEventsToMax(1000, GROUP_B);
+        this.raiseWindow(ctx, EVENT_B, 1000, [ev]);
+        return;
+      case 'fixed_delay':
+        this.events.delayEvents(2000, GROUP_B);
+        this.raiseWindow(ctx, EVENT_B, 2000, [ev]);
+        return;
+      default:
+        return;
+    }
+  }
+}
+
+function runAuto(mode: ConstructorParameters<typeof AutoAI>[0], maxDurationMs = 9000) {
+  const sim = new Simulation({ seed: 3, maxDurationMs, sampleIntervalMs: 1000 });
+  installCoreRules(sim);
+  sim.addUnit({ id: 'boss', name: 'Boss', kind: 'creature', role: 'boss', maxHealth: 1e6, pos: { x: 0, y: 0 }, speedYdPerSec: 0, combatReach: 5, boundingRadius: 2 });
+  sim.addUnit({ id: 'p1', name: 'p1', kind: 'player', role: 'tank', maxHealth: 1000, pos: { x: 5, y: 0 }, speedYdPerSec: 7, combatReach: 1.5, boundingRadius: 0.389 });
+  const threat = new ThreatManager(sim, 1000);
+  threat.install();
+  threat.add('boss', 'p1', 1);
+  attachBoss(sim, new AutoAI(mode), 'boss', 10);
+  sim.run();
+  return sim;
+}
+
+describe('the check after every boss update (fixups)', () => {
+  it('an event rescheduled without publishing throws', () => {
+    expect(() => runAuto('reschedule_unpublished')).toThrow(/timer window a \[5000, 5000\] does not contain event 1 \(due at 8\d{3}\)/);
+  });
+
+  it('the window of a one-shot event is cleared after it fires', () => {
+    const sim = runAuto('one_shot');
+    expect(windows(sim)).toEqual([
+      [0, 'a', 5000, 5000],
+      [5000, 'a', null, null],
+    ]);
+    expect(sim.timerWindows.has('boss|a')).toBe(false);
+  });
+
+  it('two events cannot publish under one ability name', () => {
+    expect(() => runAuto('same_name')).toThrow(/timer window name a is already used by event 1, not event 2/);
+  });
+
+  it('a raise that moves one bound republishes the window with the other unchanged', () => {
+    const sim = runAuto('partial_raise', 6000);
+    expect(windows(sim).filter((w) => w[1] === 'b')).toEqual([
+      [0, 'b', 8000, 15000],
+      [5000, 'b', 12000, 15000],
+    ]);
+  });
+
+  it('a raise that changes nothing is not published again', () => {
+    const sim = runAuto('unchanged_raise', 6000);
+    expect(windows(sim).filter((w) => w[1] === 'b')).toEqual([[0, 'b', 8000, 15000]]);
+  });
+
+  it('a fixed-amount delay followed by raiseWindow is a mismatch and throws', () => {
+    expect(() => runAuto('fixed_delay', 6000)).toThrow(/timer window b \[\d+, \d+\] does not contain event 2/);
   });
 });

@@ -95,6 +95,10 @@ export abstract class EventScriptedAI implements BossScript {
    */
   protected publishWindow(ctx: BossContext, ability: string, eventId: number, minMs: number, maxMs: number, causes: readonly string[]): void {
     if (ctx.sim.over) return;
+    for (const [id, other] of this.windows) {
+      // `sim.timerWindows` has one entry per boss and ability name.
+      if (id !== eventId && other.ability === ability) throw new Error(`timer window name ${ability} is already used by event ${id}, not event ${eventId}`);
+    }
     const until = this.events.timeUntilEvent(eventId);
     if (until === null || until < minMs || until > maxMs) {
       throw new Error(`timer window ${ability} [${minMs}, ${maxMs}] does not contain event ${eventId} (${until === null ? 'not scheduled' : `due in ${until} ms`})`);
@@ -106,9 +110,11 @@ export abstract class EventScriptedAI implements BossScript {
   }
 
   /**
-   * After the script delayed events (DelayEventsToMax): the event is now due no earlier than floorMs from now, so both
-   * bounds of its window move up to that floor, which is all a boss mod could know. A window whose event is no longer
-   * scheduled is cleared; an unchanged window is not published again.
+   * After the script delayed events with DelayEventsToMax: the event is now due no earlier than floorMs from now, so both
+   * bounds of its window move up to that floor, which is all a boss mod could know. This models that floor only: after a
+   * fixed-amount DelayEvents the event's time is not a floor, and the republished window does not contain it, so
+   * `publishWindow` throws the mismatch. A window whose event is no longer scheduled is cleared; an unchanged window is
+   * not published again.
    */
   protected raiseWindow(ctx: BossContext, eventId: number, floorMs: number, causes: readonly string[]): void {
     if (ctx.sim.over) return;
@@ -127,12 +133,37 @@ export abstract class EventScriptedAI implements BossScript {
   }
 
   updateAI(ctx: BossContext, diffMs: number): void {
+    this.step(ctx, diffMs);
+    this.checkWindows(ctx);
+  }
+
+  private step(ctx: BossContext, diffMs: number): void {
     if (!ctx.victim()) return;
     this.events.update(diffMs);
     if (ctx.self.cast) return;
     const id = this.events.execute();
     if (id !== 0) this.executeEvent(id, ctx);
     if (!ctx.self.cast) this.afterEvents(ctx);
+  }
+
+  /**
+   * After every update: a published window whose event is no longer scheduled (a one-shot that fired, or a cancelled
+   * event) is cleared; an event outside its window means the script changed a timer without publishing it, which throws.
+   */
+  private checkWindows(ctx: BossContext): void {
+    if (ctx.sim.over) return;
+    for (const [eventId, w] of this.windows) {
+      const until = this.events.timeUntilEvent(eventId);
+      if (until === null) {
+        this.windows.delete(eventId);
+        ctx.clearTimer(w.ability, []);
+        continue;
+      }
+      const due = this.events.now + until;
+      if (due < w.earliest || due > w.latest) {
+        throw new Error(`timer window ${w.ability} [${w.earliest}, ${w.latest}] does not contain event ${eventId} (due at ${due})`);
+      }
+    }
   }
 
   /** DoMeleeAttackIfReady by default; override to change what happens after events. */
