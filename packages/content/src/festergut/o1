@@ -1,2 +1,0 @@
-    if (target.auras.get(key) === inst) scheduleTick(sim, targetId, key, inst);
-  });
