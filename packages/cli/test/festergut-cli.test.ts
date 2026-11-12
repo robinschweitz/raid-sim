@@ -35,8 +35,15 @@ describe('raid-sim run scenarios/festergut/<name>.yaml', () => {
     expect(r.log).toContain('[00:06.790] Festergut gains Gaseous Blight (strong)');
     expect(r.log).toMatch(/\[00:2\d\.\d{3}\] Festergut casts Gas Spore → Festergut/);
     expect(r.log).toMatch(/Festergut begins casting Pungent Blight → Festergut/);
-    expect(r.log).toMatch(/Brakka taunts Festergut/);
-    expect(r.log).toMatch(/Alice gains Inoculated \(3\)/);
+    expect(r.log).toMatch(/Brakka\* taunts Festergut/);
+    expect(r.log).toMatch(/Alice\* gains Inoculated \(3\)/);
+    // Every raid member is a stand-in: the first line lists them and explains the marker (spec §6.3).
+    const header = r.log.split('\n')[0];
+    expect(header).toMatch(/^Stand-ins \(approximate, spec §6\.3\), marked \* below: .+\. See the limitation report in summary\.json\.$/);
+    expect(header.split(': ')[1].split('. ')[0].split(', ')).toHaveLength(25);
+    expect(header).not.toContain('Festergut');
+    expect(r.log).not.toMatch(/Festergut\*/);
+    expect(r.log).not.toMatch(/ heals .* for 0$/m);
     // No raw ability id is left in the lines that name abilities.
     expect(r.log.split('\n').filter((l) => /gaseous_blight|gas_spore_carrier|caster_bolt|healer_heal/.test(l) && !l.includes('Festergut: '))).toEqual([]);
   });

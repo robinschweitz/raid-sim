@@ -6,6 +6,8 @@ const ABILITY_KEYS = new Set(['spell', 'ability', 'aura']);
 /** `...Ms` keys that are absolute times; every other `...Ms` key is a duration. */
 const CLOCK_KEYS = new Set(['endMs', 'expiresMs', 'arrivalMs', 'earliestMs', 'latestMs']);
 
+export const STANDIN_MARK = '*';
+
 const pad = (n: number, width: number): string => String(n).padStart(width, '0');
 
 export function clock(ms: number): string {
@@ -15,7 +17,8 @@ export function clock(ms: number): string {
 }
 
 export function createFormatter(trace: Trace, dict: Dictionary): (ev: TraceEvent) => string {
-  const names = new Map(trace.meta.units.map((u) => [u.id, u.name]));
+  // Stand-ins carry a marker in the log (spec §6.3); the header line of `formatLog` explains it.
+  const names = new Map(trace.meta.units.map((u) => [u.id, u.approximate ? `${u.name}${STANDIN_MARK}` : u.name]));
   const render = (key: string, v: TraceValue | undefined): string => {
     if (v === undefined) return '';
     if (v === null) return key.endsWith('Ms') ? 'never' : '';
@@ -35,8 +38,16 @@ export function createFormatter(trace: Trace, dict: Dictionary): (ev: TraceEvent
   };
 }
 
-/** Readable event log; `extra` adds content names such as `ability.gas_spore`. */
+/**
+ * Readable event log; `extra` adds content names such as `ability.gas_spore`. When the run has stand-ins, the first line
+ * lists them and explains the marker.
+ */
 export function formatLog(trace: Trace, dict: Dictionary, extra: Dictionary): string[] {
-  const format = createFormatter(trace, { ...dict, ...extra });
-  return trace.events.map(format);
+  const all = { ...dict, ...extra };
+  const format = createFormatter(trace, all);
+  const standIns = trace.meta.units.filter((u) => u.approximate).map((u) => u.name);
+  const header = standIns.length > 0 ? [(all['log.standins'] ?? '{units}').replace('{units}', standIns.join(', '))] : [];
+  // A heal of zero (a full target) says nothing to a reader; the trace keeps it.
+  const shown = trace.events.filter((e) => !(e.kind === 'heal' && Number(e.data.amount) === 0));
+  return [...header, ...shown.map(format)];
 }

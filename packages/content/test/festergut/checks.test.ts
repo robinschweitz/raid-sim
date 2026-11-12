@@ -53,6 +53,11 @@ describe('Festergut observation checks', () => {
     expect(check('festergut.inoculated_at_pungent', pungent([3, 12500], [1, 37500]), { minStacks: 3 })).toEqual({ pass: false, detail: 'b had 1 at 1000 ms' });
     expect(check('festergut.inoculated_at_pungent', pungent([3, 12500], [1, 37500]), { minStacks: 3, except: ['b'] }).pass).toBe(true);
     expect(check('festergut.inoculated_at_pungent', traceOf(() => {}))).toEqual({ pass: false, detail: 'Pungent Blight was never cast' });
+    // Nobody left to check: the check fails and says why (no Infinity in the detail).
+    expect(check('festergut.inoculated_at_pungent', pungent([3, 12500], [1, 37500]), { minStacks: 3, except: ['a', 'b'] })).toEqual({
+      pass: false,
+      detail: 'Pungent Blight hit no player outside except',
+    });
   });
 
   it('festergut.missed_spores compares the player with everyone else; overkill counts as damage', () => {

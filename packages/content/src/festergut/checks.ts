@@ -53,7 +53,7 @@ const noPlayerDeaths: CustomCheck = ({ trace }): Result => {
 
 /**
  * Every player a Pungent Blight hits has at least `minStacks` Inoculated stacks at that moment, except the players in
- * `except`; at least one Pungent Blight must be cast.
+ * `except`; at least one Pungent Blight must be cast and hit a player not in `except`.
  */
 const inoculatedAtPungent: CustomCheck = ({ trace, params }): Result => {
   const min = Number(params.minStacks ?? 3);
@@ -69,6 +69,8 @@ const inoculatedAtPungent: CustomCheck = ({ trace, params }): Result => {
       if (n < min) short.push(`${unit} had ${n} at ${c.atMs} ms`);
     }
   }
+  // A check that looked at nobody proves nothing.
+  if (lowest === Number.POSITIVE_INFINITY) return { pass: false, detail: 'Pungent Blight hit no player outside except' };
   return { pass: short.length === 0, detail: short.length === 0 ? `${casts.length} Pungent Blight cast(s); lowest stacks ${lowest}` : short.join('; ') };
 };
 
