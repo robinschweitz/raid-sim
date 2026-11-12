@@ -1,3 +1,4 @@
+import { removeAurasOnDeath } from './auras';
 import { Catalog, type SchoolSet } from './catalog';
 import { schoolLabel } from './schools';
 import { positionAt, travelTimeMs } from './movement';
@@ -229,13 +230,7 @@ export class Simulation {
     }
     const deathId = this.emit('death', { unit: u.id }, [cause]);
     u.diedAtEvent = deathId;
-    for (const key of [...u.auras.keys()].sort(compareStrings)) {
-      const a = u.auras.get(key)!;
-      this.cancel(a.expiry);
-      this.cancel(a.tick);
-      u.auras.delete(key);
-      this.emit('aura_removed', { unit: u.id, aura: a.auraId, caster: a.casterId, reason: 'death' }, [deathId]);
-    }
+    removeAurasOnDeath(this, u.id, deathId);
     this.checkOutcome(deathId);
   }
 

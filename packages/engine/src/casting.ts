@@ -34,11 +34,11 @@ export function checkCast(sim: Simulation, casterId: string, spellId: string, ta
   const spell = sim.catalog.spell(spellId);
   const caster = sim.unit(casterId);
   const target = sim.units.get(resolveTarget(spell, casterId, targetId));
-  if (!caster.alive) return fail('dead');
+  if (!caster.alive && !spell.allowDeadCaster) return fail('dead');
   if (caster.cast) return fail('casting');
   if (spell.gcdMs > 0 && sim.now < caster.gcdUntilMs) return fail('gcd');
   if ((caster.cooldowns.get(spellId) ?? 0) > sim.now) return fail('cooldown');
-  if (!target || !target.alive) return fail('target_dead');
+  if (!target || (!target.alive && !spell.allowDeadTarget)) return fail('target_dead');
   if (caster.move && spell.castTimeMs > 0 && !spell.usableWhileMoving) return fail('moving');
   if (target.id !== caster.id && edgeDistance(caster, target, sim.now) > spell.rangeYd) return fail('out_of_range');
   return { ok: true };
@@ -79,8 +79,8 @@ export function startCast(
     const caster = sim.unit(casterId);
     const tId = resolveTarget(spell, casterId, targetId);
     const target = sim.units.get(tId);
-    if (!caster.alive) return failed('dead');
-    if (!target || !target.alive) return failed('target_dead');
+    if (!caster.alive && !spell.allowDeadCaster) return failed('dead');
+    if (!target || (!target.alive && !spell.allowDeadTarget)) return failed('target_dead');
     const event = sim.emit(
       'cast_start',
       { caster: casterId, spell: spellId, target: tId, castTimeMs: 0, endMs: sim.now, triggered: true },
@@ -123,9 +123,9 @@ export function startCast(
 }
 
 function complete(sim: Simulation, caster: Unit, spell: SpellDef, targetId: string, startEvent: string, options: CastOptions): void {
-  if (!caster.alive) return;
+  if (!caster.alive && !spell.allowDeadCaster) return;
   const target = sim.unit(targetId);
-  if (!target.alive) {
+  if (!target.alive && !spell.allowDeadTarget) {
     sim.emit('cast_failed', { caster: caster.id, spell: spell.id, target: targetId, reason: 'target_dead' }, [startEvent]);
     return;
   }

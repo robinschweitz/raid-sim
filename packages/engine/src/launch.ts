@@ -95,20 +95,21 @@ export function launchSpell(
 /** DoSpellHitOnUnit and the damage after it (Spell.cpp 3253, 3336–3354, 5866–5871, 2885–2957). */
 function hitUnit(sim: Simulation, casterId: string, spell: SpellDef, unitId: string, items: readonly Item[], cause: string): void {
   const unit = sim.unit(unitId);
-  if (!unit.alive || sim.over) return;
+  const deadOk = spell.allowDeadTarget === true;
+  if ((!unit.alive && !deadOk) || sim.over) return;
   const hitId = sim.emit('spell_hit', { caster: casterId, spell: spell.id, target: unitId }, [cause]);
   const causes = [hitId];
   const script = sim.catalog.spellScript(spell.id);
   // The spell's auras first.
   for (const it of items) {
-    if (it.effect.type === 'apply_aura') applyAura(sim, it.effect.aura, casterId, unitId, causes, { viaArea: it.viaArea });
+    if (it.effect.type === 'apply_aura') applyAura(sim, it.effect.aura, casterId, unitId, causes, { viaArea: it.viaArea, allowDeadTarget: deadOk });
   }
   // Then per effect: the OnEffectHitTarget hook, then the effect's default handler.
   for (const index of [...new Set(items.map((it) => it.index))]) {
-    if (!unit.alive) return;
+    if (!unit.alive && !deadOk) return;
     script?.onEffectHitTarget?.({ sim, spellId: spell.id, casterId, targetId: unitId, effectIndex: index, causes });
     // The hook may have killed the unit: no default handler runs on it.
-    if (!unit.alive) return;
+    if (!unit.alive && !deadOk) return;
     for (const it of items) {
       if (it.index !== index || it.effect.type === 'apply_aura' || it.effect.type === 'damage') continue;
       applyLeafEffect(sim, it.effect, { casterId, targetId: unitId, ability: spell.id, causes, viaArea: it.viaArea });
@@ -118,6 +119,6 @@ function hitUnit(sim: Simulation, casterId: string, spell: SpellDef, unitId: str
   for (const it of items) {
     if (it.effect.type === 'damage') sim.damage(unitId, it.amount, { sourceId: casterId, ability: spell.id, school: it.effect.school }, causes);
   }
-  if (!unit.alive) return;
+  if (!unit.alive && !deadOk) return;
   script?.afterHitTarget?.({ sim, spellId: spell.id, casterId, targetId: unitId, causes });
 }

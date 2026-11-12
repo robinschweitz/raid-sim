@@ -8,6 +8,8 @@ import { auraKey, compareStrings, type AuraInstance } from './units';
 export interface ApplyAuraOptions {
   /** The aura comes from an area effect: its periodic damage is area damage (A-026). */
   readonly viaArea?: boolean;
+  /** The spell allows dead targets: a death-persistent aura may land on a dead unit (A-012). */
+  readonly allowDeadTarget?: boolean;
 }
 
 /** Applies, stacks or replaces an aura; returns the event id, or null if the target is dead or the fight is over. */
@@ -21,14 +23,15 @@ export function applyAura(
 ): string | null {
   const def = sim.catalog.aura(auraId);
   const target = sim.unit(targetId);
-  if (!target.alive || sim.over) return null;
+  const deadOk = options.allowDeadTarget === true && def.deathPersistent === true;
+  if ((!target.alive && !deadOk) || sim.over) return null;
   const key = auraKey(auraId, casterId, def.stackScope ?? 'caster');
   let existing = target.auras.get(key);
   if (existing && def.stackScope === 'unit_replace' && existing.casterId !== casterId) {
     // Area auras of different casters do not stack (SpellAuras.cpp 2131–2151, 2193–2210): the old instance goes first.
     removeInstance(sim, targetId, key, existing, 'replaced', causes);
     // A removal hook may have killed the holder, decided the fight or applied this aura itself; that result stands.
-    if (!target.alive || sim.over || target.auras.has(key)) return null;
+    if ((!target.alive && !deadOk) || sim.over || target.auras.has(key)) return null;
     existing = undefined;
   }
   const expiresMs = def.durationMs === null ? Number.POSITIVE_INFINITY : sim.now + def.durationMs;
@@ -99,8 +102,8 @@ function hookContext(
   };
 }
 
+/** AuraEffect::HandleEffect calls the after-remove hooks for every remove mode (SpellAuraEffects.cpp 755–804, A-012). */
 function afterRemove(sim: Simulation, inst: AuraInstance, unitId: string, removedId: string, reason: AuraRemoveReason): void {
-  if (!sim.unit(unitId).alive) return;
   sim.catalog.auraScript(inst.auraId)?.afterRemove?.({ ...hookContext(sim, inst, unitId, [removedId], inst.stacks), reason });
 }
 
@@ -209,4 +212,24 @@ export function removeAuras(
     ids.push(removeInstance(sim, targetId, key, inst, reason, causes));
   }
   return ids;
+}
+
+/**
+ * Death removes every aura that is not death-persistent, with reason death; afterRemove hooks run (Unit.cpp 5424–5443, A-012).
+ * A hook may decide the fight (the last player dies): the remaining auras are then dropped silently, so no event follows the outcome.
+ */
+export function removeAurasOnDeath(sim: Simulation, unitId: string, deathId: string): void {
+  const unit = sim.unit(unitId);
+  for (const key of [...unit.auras.keys()].sort(compareStrings)) {
+    // A hook of an earlier removal may already have removed this instance.
+    const inst = unit.auras.get(key);
+    if (!inst || sim.catalog.aura(inst.auraId).deathPersistent) continue;
+    if (sim.over) {
+      sim.cancel(inst.expiry);
+      sim.cancel(inst.tick);
+      unit.auras.delete(key);
+      continue;
+    }
+    removeInstance(sim, unitId, key, inst, 'death', [deathId]);
+  }
 }

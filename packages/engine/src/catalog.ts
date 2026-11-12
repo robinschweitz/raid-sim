@@ -67,7 +67,7 @@ export interface DamageModifier {
   readonly schools?: SchoolSet;
 }
 
-export type AuraRemoveReason = 'expired' | 'removed' | 'dispelled' | 'replaced';
+export type AuraRemoveReason = 'expired' | 'removed' | 'dispelled' | 'replaced' | 'death';
 
 export interface AuraHookContext {
   readonly sim: Simulation;
@@ -91,7 +91,7 @@ export interface AuraHookContext {
 export interface AuraScript {
   afterApply?(ctx: AuraHookContext): void;
   afterStack?(ctx: AuraHookContext): void;
-  /** Not called when the aura is removed by death (A-012), nor when the holder is dead (e.g. killed by onExpire). */
+  /** Called for every removal, including by death and on a dead holder (A-012). */
   afterRemove?(ctx: AuraHookContext & { readonly reason: AuraRemoveReason }): void;
 }
 
@@ -130,6 +130,8 @@ export interface AuraDef {
   readonly modifiers?: readonly DamageModifier[];
   /** SPELL_ATTR6_IGNORE_CASTER_DAMAGE_MODIFIERS for periodic damage: the caster's done factors are not taken (A-029). */
   readonly ignoreCasterDamageMods?: boolean;
+  /** Survives the holder's death (IsDeathPersistent, SpellInfo.cpp 1262; A-012). */
+  readonly deathPersistent?: boolean;
 }
 
 export interface SpellDef {
@@ -143,6 +145,10 @@ export interface SpellDef {
   readonly travelSpeedYdPerSec?: number;
   /** SPELL_ATTR6_IGNORE_CASTER_DAMAGE_MODIFIERS: the caster's damage-done modifiers do not apply (SpellInfo.cpp 1655–1674). */
   readonly ignoreCasterDamageMods?: boolean;
+  /** SPELL_ATTR*_ALLOW_CAST_WHILE_DEAD: a dead unit may cast it (A-012). */
+  readonly allowDeadCaster?: boolean;
+  /** SPELL_ATTR*_ALLOW_DEAD_TARGET: it may target and hit a dead unit (A-012). */
+  readonly allowDeadTarget?: boolean;
   readonly effects: readonly Effect[];
 }
 
