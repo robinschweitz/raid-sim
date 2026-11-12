@@ -41,7 +41,7 @@ function applyEffect(sim: Simulation, e: Effect, ctx: EffectContext): void {
   switch (e.type) {
     case 'area': {
       const found = areaTargets(sim, sim.unit(ctx.casterId), e, areaCenter(sim, e, ctx.casterId, ctx.targetId));
-      const hit = limitTargets(sim, found, e.maxTargets, `unit:${ctx.casterId}.${ctx.ability}.targets`);
+      const hit = limitTargets(sim, found, e.maxTargets, `unit:${ctx.casterId}.${ctx.ability}.tick_targets`);
       for (const u of hit) applyEffects(sim, e.effects, { ...ctx, targetId: u.id, viaArea: true });
       return;
     }
@@ -93,13 +93,13 @@ export function applyLeafEffect(sim: Simulation, e: LeafEffect, ctx: EffectConte
       castOnSelf(sim, e.spell, ctx);
       return;
     case 'periodic_trigger':
-      // The triggering aura's caster becomes the original caster (Unit.cpp 1387-1389).
+      // The triggering aura's caster becomes the original caster (Unit.cpp 1387–1389).
       castOnSelf(sim, e.spell, ctx, sourceOf(ctx));
       return;
     case 'instakill':
-      // No modifiers: the damage is the target's current health (SpellEffects.cpp 279-292); sim.damage handles death.
+      // No modifiers: the damage is the target's current health (SpellEffects.cpp 279–292); sim.damage handles death.
       if (!target.alive) return;
-      // Dealt by the casting unit (GetUnitCasterForEffectHandlers, not the original caster) in SPELL_SCHOOL_MASK_NORMAL (SpellEffects.cpp 279-301).
+      // Dealt by the casting unit (GetUnitCasterForEffectHandlers, not the original caster) in SPELL_SCHOOL_MASK_NORMAL (SpellEffects.cpp 279–301).
       sim.damage(target.id, target.health, { sourceId: ctx.casterId, ability: ctx.ability, school: 'physical' }, ctx.causes);
       return;
   }
@@ -111,5 +111,6 @@ export function applyLeafEffect(sim: Simulation, e: LeafEffect, ctx: EffectConte
  * periodic_trigger passes the aura's caster (Unit.cpp 1387–1389 takes the triggering aura's caster).
  */
 function castOnSelf(sim: Simulation, spellId: string, ctx: EffectContext, owner?: string): void {
-  startCast(sim, ctx.targetId, spellId, ctx.targetId, ctx.causes, owner === undefined ? { triggered: true } : { triggered: true, originalCasterId: owner });
+  // The original caster is omitted when it is the casting unit itself, which keeps the trace quiet.
+  startCast(sim, ctx.targetId, spellId, ctx.targetId, ctx.causes, owner === undefined || owner === ctx.targetId ? { triggered: true } : { triggered: true, originalCasterId: owner });
 }

@@ -37,7 +37,7 @@ export interface BossContext {
   victim(): Unit | null;
   ai(name: string, data?: Readonly<Record<string, TraceValue>>, causes?: readonly string[]): string;
   cast(spellId: string, targetId: string, causes: readonly string[], options?: CastOptions): CastResult;
-  /** Makes another unit cast (`unit->CastSpell(...)` in a script); traced with this boss as the original caster (A-020). */
+  /** Makes another unit cast (`unit->CastSpell(...)` in a script); the original caster is recorded only when `options.originalCasterId` is given (A-020). */
   castAs(casterId: string, spellId: string, targetId: string, causes: readonly string[], options?: CastOptions): CastResult;
   /** Living units on this boss's threat list, sorted by id. */
   threatList(): Unit[];
@@ -125,7 +125,7 @@ export function makeBossContext(sim: Simulation, bossId: string): BossContext {
     ai: (name, data = {}, causes = []) => sim.emit('ai_event', { ...data, boss: bossId, event: name }, causes),
     cast: (spellId, targetId, causes, options) => startCast(sim, bossId, spellId, targetId, causes, options),
     castAs: (casterId, spellId, targetId, causes, options = {}) =>
-      startCast(sim, casterId, spellId, targetId, causes, { ...options, originalCasterId: options.originalCasterId ?? bossId }),
+      startCast(sim, casterId, spellId, targetId, causes, options),
     threatList: () => threatFor(sim)?.listed(bossId) ?? [],
     selectTarget: (mechanic, options = {}) => sim.rng.stream(`boss:${bossId}.${mechanic}`).pick(candidates(options), 1)[0] ?? null,
     countTargets: (options = {}) => candidates(options).length,

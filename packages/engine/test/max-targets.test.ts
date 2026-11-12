@@ -114,7 +114,7 @@ describe('max targets at launch (A-027)', () => {
     expect(sim.trace.list().filter((e) => e.kind === 'cast_start')).toEqual([]);
   });
 
-  it('an area in an aura tick uses its own maxTargets and the stream unit:<caster>.<aura>.targets', () => {
+  it('an area in an aura tick uses its own maxTargets and the stream unit:<caster>.<aura>.tick_targets', () => {
     const sim = newSim();
     sim.catalog.addAura({
       id: 'pulse',
@@ -125,6 +125,6 @@ describe('max targets at launch (A-027)', () => {
     sim.at(0, EventClass.SpellHit, () => void applyAura(sim, 'pulse', 'boss', 'boss', []));
     sim.run();
     expect(holders(sim)).toHaveLength(2);
-    expect(sim.rng.usage()['unit:boss.pulse.targets']).toBeGreaterThan(0);
+    expect(sim.rng.usage()['unit:boss.pulse.tick_targets']).toBeGreaterThan(0);
   });
 });

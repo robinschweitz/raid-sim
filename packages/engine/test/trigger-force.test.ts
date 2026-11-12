@@ -33,7 +33,10 @@ describe('trigger_spell and force_cast (A-030)', () => {
       'aura_applied:inhaled',
       'spell_hit:inhale',
     ]);
-    expect(sim.trace.list().find((e) => e.kind === 'cast_start' && e.data.spell === 'inhaled_blight')?.data).toMatchObject({ triggered: true, originalCaster: 'boss' });
+    // The owner is the casting unit itself, so no redundant originalCaster is recorded.
+    const trig = sim.trace.list().find((e) => e.kind === 'cast_start' && e.data.spell === 'inhaled_blight')?.data;
+    expect(trig).toMatchObject({ triggered: true });
+    expect(trig).not.toHaveProperty('originalCaster');
   });
 
   it('damage of earlier units is fixed before a later trigger, and dealt after it', () => {

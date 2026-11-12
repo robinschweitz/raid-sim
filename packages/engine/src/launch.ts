@@ -85,7 +85,7 @@ export function launchSpell(
     for (const it of items) {
       if (it.effect.type === 'trigger_spell') {
         // EffectTriggerSpell in LAUNCH_TARGET mode (SpellEffects.cpp 808–812): cast now, before any unit is hit.
-        startCast(sim, casterId, it.effect.spell, unitId, [cause], { triggered: true, originalCasterId: sourceId });
+        startCast(sim, casterId, it.effect.spell, unitId, [cause], sourceId === casterId ? { triggered: true } : { triggered: true, originalCasterId: sourceId });
         continue;
       }
       if (it.effect.type !== 'damage') continue;

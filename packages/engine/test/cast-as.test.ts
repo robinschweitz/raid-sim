@@ -31,7 +31,7 @@ const starts = (sim: Simulation) => sim.trace.list().filter((e) => e.kind === 'c
 describe('casting as another unit (A-020)', () => {
   it('a boss script makes another unit cast; the trace names the original caster', () => {
     const sim = newSim();
-    sim.at(0, EventClass.AiUpdate, () => void makeBossContext(sim, 'boss').castAs('p1', 'splash', 'p1', [], { triggered: true }));
+    sim.at(0, EventClass.AiUpdate, () => void makeBossContext(sim, 'boss').castAs('p1', 'splash', 'p1', [], { triggered: true, originalCasterId: 'boss' }));
     sim.run();
     expect(starts(sim)[0].data).toMatchObject({ caster: 'p1', target: 'p1', triggered: true, originalCaster: 'boss' });
     expect(sim.trace.list().find((e) => e.kind === 'damage')?.data).toMatchObject({ target: 'p2', source: 'boss', amount: 100 });
@@ -57,12 +57,20 @@ describe('casting as another unit (A-020)', () => {
     sim.catalog.addSpell({ id: 'bolt', castTimeMs: 2000, gcdMs: 1500, cooldownMs: 0, rangeYd: 40, usableWhileMoving: false, target: 'unit', effects: [{ type: 'damage', school: 'fire', min: 1, max: 1 }] });
     sim.at(0, EventClass.Decision, () => void startCast(sim, 'p1', 'bolt', 'boss', []));
     sim.at(500, EventClass.AiUpdate, () => {
-      makeBossContext(sim, 'boss').castAs('p1', 'splash', 'p1', [], { triggered: true });
+      makeBossContext(sim, 'boss').castAs('p1', 'splash', 'p1', [], { triggered: true, originalCasterId: 'boss' });
       expect(sim.unit('p1').cast?.spellId).toBe('bolt');
       expect(sim.unit('p1').gcdUntilMs).toBe(1500);
     });
     sim.run();
     expect(sim.trace.list().find((e) => e.kind === 'cast_success' && e.data.spell === 'bolt')?.t).toBe(2000);
+  });
+
+  it('records no original caster unless the script passes one (Spell.cpp 661-663)', () => {
+    const sim = newSim();
+    sim.at(0, EventClass.AiUpdate, () => void makeBossContext(sim, 'boss').castAs('p1', 'splash', 'p1', [], { triggered: true }));
+    sim.run();
+    expect(starts(sim)[0].data).not.toHaveProperty('originalCaster');
+    expect(sim.trace.list().find((e) => e.kind === 'damage')?.data).toMatchObject({ target: 'p2', source: 'p1' });
   });
 
   it('rejects an unknown original caster', () => {
@@ -74,7 +82,7 @@ describe('casting as another unit (A-020)', () => {
 describe('the original caster owns damage, bonuses and auras (A-020)', () => {
   const done = { id: 'might', durationMs: null, maxStacks: 1, modifiers: [{ kind: 'damage_done_pct', pct: 50, perStack: false }] } as const;
   const viaBoss = (sim: Simulation, spell: string, target: string, caster = 'p1') =>
-    sim.at(0, EventClass.AiUpdate, () => void makeBossContext(sim, 'boss').castAs(caster, spell, target, [], { triggered: true }));
+    sim.at(0, EventClass.AiUpdate, () => void makeBossContext(sim, 'boss').castAs(caster, spell, target, [], { triggered: true, originalCasterId: 'boss' }));
   const damages = (sim: Simulation) => sim.trace.list().filter((e) => e.kind === 'damage').map((e) => e.data);
 
   it('uses the original caster damage-done factor and the creature-AoE rule, not the casting unit ones', () => {
@@ -162,7 +170,7 @@ describe('the original caster owns damage, bonuses and auras (A-020)', () => {
     sim.catalog.addSpell({ id: 'mend', castTimeMs: 0, gcdMs: 0, cooldownMs: 0, rangeYd: 0, usableWhileMoving: true, target: 'self', effects: [{ type: 'heal', min: 10, max: 10 }] });
     sim.at(0, EventClass.SpellHit, () => void sim.damage('p1', 50, { sourceId: 'boss', ability: 'x', school: 'physical' }, []));
     // The heal runs after the damage (t=1), whatever the order of event classes.
-    sim.at(1, EventClass.AiUpdate, () => void makeBossContext(sim, 'boss').castAs('p1', 'mend', 'p1', [], { triggered: true }));
+    sim.at(1, EventClass.AiUpdate, () => void makeBossContext(sim, 'boss').castAs('p1', 'mend', 'p1', [], { triggered: true, originalCasterId: 'boss' }));
     sim.run();
     expect(sim.trace.list().find((e) => e.kind === 'heal')?.data).toMatchObject({ target: 'p1', source: 'boss' });
   });

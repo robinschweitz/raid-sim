@@ -185,7 +185,7 @@ describe('runScenario', () => {
         },
       };
       const problems = invalid(prepared(), { ...registry, bosses: new Map([['dummy', bad]]) });
-      expect(problems).toEqual([{ file: 'catalog', path: 'spell dangling', message: 'unknown spell missing_spell' }]);
+      expect(problems).toEqual([{ file: 'boss:dummy', path: 'spell dangling', message: 'unknown spell missing_spell' }]);
     });
 
     it('a model factory that throws is attributed to the spec', () => {
