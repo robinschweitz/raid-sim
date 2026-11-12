@@ -123,6 +123,7 @@ describe('Simulation', () => {
         nextTickMs: 0,
         appliedEvent: '',
         viaArea: false,
+        periodicAmounts: [],
       });
       sim.damage('p1', 1e6, hit('boss'), []);
     });

@@ -52,8 +52,30 @@ export function aoeDamageFactor(sim: Simulation, sourceId: string, targetId: str
  * damage done, damage taken, then the area reduction (A-017, A-026).
  */
 export function modifiedSpellDamage(sim: Simulation, sourceId: string, targetId: string, school: SchoolSet, rolled: number, route: DamageRoute = {}): number {
-  let amount = route.ignoreCasterMods ? Math.trunc(rolled) : Math.trunc(rolled * damageDoneFactor(sim, sourceId, school));
-  amount = Math.trunc(amount * damageTakenFactor(sim, targetId, school));
-  if (route.viaArea) amount = Math.trunc(amount * aoeDamageFactor(sim, sourceId, targetId, school));
-  return Math.max(0, amount);
+  return damageTakenStep(sim, sourceId, targetId, school, doneStep(sim, sourceId, school, rolled, route), route);
+}
+
+/** First step: the source's damage-done factors, truncated. */
+function doneStep(sim: Simulation, sourceId: string, school: SchoolSet, rolled: number, route: DamageRoute): number {
+  return route.ignoreCasterMods ? Math.trunc(rolled) : Math.trunc(rolled * damageDoneFactor(sim, sourceId, school));
+}
+
+/** Later steps: the target's damage-taken factor, then the area reduction, each truncated. */
+function damageTakenStep(sim: Simulation, sourceId: string, targetId: string, school: SchoolSet, amount: number, route: DamageRoute): number {
+  let result = Math.trunc(amount * damageTakenFactor(sim, targetId, school));
+  if (route.viaArea) result = Math.trunc(result * aoeDamageFactor(sim, sourceId, targetId, school));
+  return Math.max(0, result);
+}
+
+/**
+ * A periodic damage amount fixed at (re)application (AuraEffect::CalculateAmount, A-029): the rolled amount after the
+ * caster's damage-done step (truncated), multiplied by the stacks. The taken and area steps come at each tick.
+ */
+export function fixedPeriodicDamage(sim: Simulation, sourceId: string, school: SchoolSet, rolled: number, stacks: number, ignoreCasterMods: boolean): number {
+  return doneStep(sim, sourceId, school, rolled, { ignoreCasterMods }) * stacks;
+}
+
+/** One tick of a fixed periodic amount: damage taken on the victim, then the area reduction, each truncated (A-026, A-029). */
+export function periodicTickDamage(sim: Simulation, sourceId: string, targetId: string, school: SchoolSet, fixed: number, viaArea: boolean): number {
+  return damageTakenStep(sim, sourceId, targetId, school, fixed, { viaArea });
 }

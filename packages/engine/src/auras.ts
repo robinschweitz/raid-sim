@@ -1,4 +1,5 @@
 import { applyEffects } from './effects';
+import { fixedPeriodicDamage, periodicTickDamage } from './modifiers';
 import { EventClass, type Scheduled } from './queue';
 import type { Simulation } from './sim';
 import type { AuraHookContext, AuraRemoveReason } from './catalog';
@@ -34,6 +35,7 @@ export function applyAura(
     existing.expiresMs = expiresMs;
     existing.expiry = schedule(existing);
     existing.refreshedMs = sim.now;
+    fixPeriodicAmounts(sim, existing);
     const id = sim.emit(
       'aura_stack',
       { unit: targetId, aura: auraId, caster: casterId, stacks: existing.stacks, expiresMs: traceExpiry },
@@ -58,8 +60,10 @@ export function applyAura(
     nextTickMs: sim.now + (def.periodic?.intervalMs ?? 0),
     appliedEvent: '',
     viaArea: options.viaArea === true,
+    periodicAmounts: [],
   };
   inst.expiry = schedule(inst);
+  fixPeriodicAmounts(sim, inst);
   target.auras.set(key, inst);
   inst.appliedEvent = sim.emit('aura_applied', { unit: targetId, aura: auraId, caster: casterId, stacks: 1, expiresMs: traceExpiry }, causes);
   if (def.periodic && target.auras.get(key) === inst) scheduleTick(sim, targetId, key, inst);
@@ -92,6 +96,38 @@ function afterRemove(sim: Simulation, inst: AuraInstance, unitId: string, remove
   sim.catalog.auraScript(inst.auraId)?.afterRemove?.({ ...hookContext(sim, inst, unitId, [removedId], inst.stacks), reason });
 }
 
+/**
+ * AuraEffect::CalculateAmount (SpellAuraEffects.cpp 557–580): a periodic damage or heal amount is rolled once, takes the
+ * caster's damage-done factor (truncated, A-017) and is multiplied by the stacks; recalculated whenever the aura is
+ * applied, stacked or refreshed (A-029).
+ */
+function fixPeriodicAmounts(sim: Simulation, inst: AuraInstance): void {
+  const def = sim.catalog.aura(inst.auraId);
+  inst.periodicAmounts = (def.periodic?.effects ?? []).map((e) => {
+    if (e.type !== 'damage' && e.type !== 'heal') return null;
+    const rolled = sim.rng.stream(`unit:${inst.casterId}.amount`).int(e.min, e.max);
+    if (e.type === 'heal') return rolled * inst.stacks;
+    return fixedPeriodicDamage(sim, inst.casterId, e.school, rolled, inst.stacks, def.ignoreCasterDamageMods === true);
+  });
+}
+
+/** One tick: fixed amounts take the victim's factors now (and the area factor for an area-applied aura); other effects run as usual. */
+function tickEffects(sim: Simulation, inst: AuraInstance, targetId: string, tickId: string): void {
+  const effects = sim.catalog.aura(inst.auraId).periodic?.effects ?? [];
+  const ctx = { casterId: inst.casterId, targetId, ability: inst.auraId, causes: [tickId], viaArea: inst.viaArea };
+  effects.forEach((e, i) => {
+    const fixed = inst.periodicAmounts[i] ?? null;
+    if (fixed === null) {
+      applyEffects(sim, [e], ctx);
+    } else if (e.type === 'damage') {
+      const amount = periodicTickDamage(sim, inst.casterId, targetId, e.school, fixed, inst.viaArea);
+      sim.damage(targetId, amount, { sourceId: inst.casterId, ability: inst.auraId, school: e.school }, [tickId]);
+    } else if (e.type === 'heal') {
+      sim.heal(targetId, fixed, { sourceId: inst.casterId, ability: inst.auraId, school: 'holy' }, [tickId]);
+    }
+  });
+}
+
 function scheduleTick(sim: Simulation, targetId: string, key: string, inst: AuraInstance): void {
   const periodic = sim.catalog.aura(inst.auraId).periodic;
   if (!periodic) return;
@@ -110,7 +146,7 @@ function scheduleTick(sim: Simulation, targetId: string, key: string, inst: Aura
       { unit: targetId, aura: inst.auraId, caster: inst.casterId, stacks: inst.stacks },
       [inst.appliedEvent],
     );
-    applyEffects(sim, periodic.effects, { casterId: inst.casterId, targetId, ability: inst.auraId, causes: [tickId], viaArea: inst.viaArea });
+    tickEffects(sim, inst, targetId, tickId);
     // A tick effect may have re-applied this aura, which already restarted the chain.
     if (target.auras.get(key) === inst && inst.tick === null) scheduleTick(sim, targetId, key, inst);
   });

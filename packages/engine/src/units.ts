@@ -47,6 +47,8 @@ export interface AuraInstance {
   appliedEvent: string;
   /** Applied by an area effect: its periodic damage counts as area damage (SpellAuraEffects.cpp 6398–6405). */
   readonly viaArea: boolean;
+  /** Per periodic effect: the amount fixed at the last (re)application, or null for effects that are not damage or heal (A-029). */
+  periodicAmounts: (number | null)[];
 }
 
 export interface CastState {

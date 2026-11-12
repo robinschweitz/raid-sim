@@ -123,6 +123,8 @@ export interface AuraDef {
   readonly periodic?: { readonly intervalMs: number; readonly effects: readonly Effect[] };
   readonly onExpire?: readonly Effect[];
   readonly modifiers?: readonly DamageModifier[];
+  /** SPELL_ATTR6_IGNORE_CASTER_DAMAGE_MODIFIERS for periodic damage: the caster's done factors are not taken (A-029). */
+  readonly ignoreCasterDamageMods?: boolean;
 }
 
 export interface SpellDef {
