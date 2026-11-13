@@ -1,0 +1,84 @@
+# Festergut, 25-player normal. Positions are room coordinates in yards; Festergut stands at (4267.92, 3137.26).
+# Every raid member is a stand-in (spec §6.3): tanks and melee are rate stand-ins, healers and ranged are generic
+# ability-using actors (A-035). The three Gate 1 specs replace t1, one healer and one ranged in Plan 3.
+id: festergut-25n
+boss: festergut
+roster:
+  - { id: t1, name: Tormund, kind: standin, role: tank, maxHealth: 95000, ratePerSecond: 3000, armor: 50000, avoidance: { missPct: 8, dodgePct: 27, parryPct: 22 }, threatMultiplier: 8, reason: "armor at the cap and 57 % avoidance stand in for tank cooldowns and block at three Inhaled Blight stacks (A-039)", reaction: { minMs: 300, maxMs: 600 } }
+  - { id: t2, name: Brakka, kind: standin, role: tank, maxHealth: 95000, ratePerSecond: 3000, armor: 50000, avoidance: { missPct: 8, dodgePct: 27, parryPct: 22 }, threatMultiplier: 8, reason: "armor at the cap and 57 % avoidance stand in for tank cooldowns and block at three Inhaled Blight stacks (A-039)", reaction: { minMs: 300, maxMs: 600 } }
+  - { id: h1, name: Lindra, kind: modelled, spec: generic_healer, profile: default, reaction: { minMs: 300, maxMs: 800 } }
+  - { id: h2, name: Osric, kind: modelled, spec: generic_healer, profile: default, reaction: { minMs: 300, maxMs: 800 } }
+  - { id: h3, name: Maela, kind: modelled, spec: generic_healer, profile: default, reaction: { minMs: 300, maxMs: 800 } }
+  - { id: h4, name: Tobin, kind: modelled, spec: generic_healer, profile: default, reaction: { minMs: 300, maxMs: 800 } }
+  - { id: h5, name: Yselle, kind: modelled, spec: generic_healer, profile: default, reaction: { minMs: 300, maxMs: 800 } }
+  - { id: h6, name: Garrow, kind: modelled, spec: generic_healer, profile: default, reaction: { minMs: 300, maxMs: 800 } }
+  - { id: m1, name: Ragnok, kind: standin, role: melee, maxHealth: 34000, ratePerSecond: 9500, reaction: { minMs: 300, maxMs: 800 } }
+  - { id: m2, name: Sylda, kind: standin, role: melee, maxHealth: 34000, ratePerSecond: 9500, reaction: { minMs: 300, maxMs: 800 } }
+  - { id: m3, name: Dervin, kind: standin, role: melee, maxHealth: 34000, ratePerSecond: 9500, reaction: { minMs: 300, maxMs: 800 } }
+  - { id: m4, name: Kessa, kind: standin, role: melee, maxHealth: 34000, ratePerSecond: 9500, reaction: { minMs: 300, maxMs: 800 } }
+  - { id: m5, name: Holt, kind: standin, role: melee, maxHealth: 34000, ratePerSecond: 9500, reaction: { minMs: 300, maxMs: 800 } }
+  - { id: r01, name: Alice, kind: modelled, spec: generic_caster, profile: default, reaction: { minMs: 300, maxMs: 800 } }
+  - { id: r02, name: Bob, kind: modelled, spec: generic_caster, profile: default, reaction: { minMs: 300, maxMs: 800 } }
+  - { id: r03, name: Cara, kind: modelled, spec: generic_caster, profile: default, reaction: { minMs: 300, maxMs: 800 } }
+  - { id: r04, name: Dorian, kind: modelled, spec: generic_caster, profile: default, reaction: { minMs: 300, maxMs: 800 } }
+  - { id: r05, name: Elin, kind: modelled, spec: generic_caster, profile: default, reaction: { minMs: 300, maxMs: 800 } }
+  - { id: r06, name: Farid, kind: modelled, spec: generic_caster, profile: default, reaction: { minMs: 300, maxMs: 800 } }
+  - { id: r07, name: Greta, kind: modelled, spec: generic_caster, profile: default, reaction: { minMs: 300, maxMs: 800 } }
+  - { id: r08, name: Hakon, kind: modelled, spec: generic_caster, profile: default, reaction: { minMs: 300, maxMs: 800 } }
+  - { id: r09, name: Ines, kind: modelled, spec: generic_caster, profile: default, reaction: { minMs: 300, maxMs: 800 } }
+  - { id: r10, name: Jarek, kind: modelled, spec: generic_caster, profile: default, reaction: { minMs: 300, maxMs: 800 } }
+  - { id: r11, name: Kira, kind: modelled, spec: generic_caster, profile: default, reaction: { minMs: 300, maxMs: 800 } }
+  - { id: r12, name: Lorn, kind: modelled, spec: generic_caster, profile: default, reaction: { minMs: 300, maxMs: 800 } }
+spots:
+  # The tank in front of Festergut; the melee group at his flank, 6.4 yd from the tank. Both are inside his 8 yd reach.
+  tank: { x: 4267.92, y: 3127.76 }
+  melee: { x: 4272.92, y: 3131.76 }
+  # Ranged and healers: a grid in front of him, 9 yd apart (Vile Gas and its splash reach 8 yd), 23 to 43 yd from his centre.
+  g11: { x: 4245.42, y: 3114.26 }
+  g12: { x: 4254.42, y: 3114.26 }
+  g13: { x: 4263.42, y: 3114.26 }
+  g14: { x: 4272.42, y: 3114.26 }
+  g15: { x: 4281.42, y: 3114.26 }
+  g16: { x: 4290.42, y: 3114.26 }
+  g21: { x: 4245.42, y: 3105.26 }
+  g22: { x: 4254.42, y: 3105.26 }
+  g23: { x: 4263.42, y: 3105.26 }
+  g24: { x: 4272.42, y: 3105.26 }
+  g25: { x: 4281.42, y: 3105.26 }
+  g26: { x: 4290.42, y: 3105.26 }
+  g32: { x: 4254.42, y: 3096.26 }
+  g33: { x: 4263.42, y: 3096.26 }
+  g34: { x: 4272.42, y: 3096.26 }
+  g35: { x: 4281.42, y: 3096.26 }
+phases:
+  - phase: default
+    assignments: { t1: tank, t2: melee, h1: melee, h2: melee, h3: g22, h4: g23, h5: g24, h6: g25, m1: melee, m2: melee, m3: melee, m4: melee, m5: melee, r01: g11, r02: g12, r03: g13, r04: g14, r05: g15, r06: g16, r07: g21, r08: g26, r09: g32, r10: g33, r11: g34, r12: g35 }
+rules:
+  # Gas Spore: everyone at range runs to the melee group, so all three spores explode on the whole raid.
+  # `&ranged` names this list of the players at range (healers h3-h6 and r01-r12); `*ranged` below reuses it.
+  - id: stack-for-spores
+    who: &ranged [h3, h4, h5, h6, r01, r02, r03, r04, r05, r06, r07, r08, r09, r10, r11, r12]
+    when: { on: cast_start, spell: gas_spore, caster: boss }
+    do: { do: move_to, spot: melee }
+    priority: 60
+  # The spores exploded (12 s after the cast): back out before Vile Gas, which Gas Spore delays to 20 s after the cast.
+  - id: spread-after-spores
+    who: *ranged
+    when: { on: aura_applied, aura: blighted_spores, target: self }
+    do: { do: return_to_assignment }
+    priority: 50
+    cooldownMs: 5000
+    retry: { times: 3, everyMs: 1000 }
+  # Tank swap at 9 stacks of Gastric Bloat: the tenth stack is Gastric Explosion.
+  - id: swap-to-t2
+    who: [t2]
+    when: { on: aura_stacks, aura: gastric_bloat, target: t1, atLeast: 9 }
+    do: { do: taunt, target: boss }
+    priority: 70
+    retry: { times: 2, everyMs: 1000 }
+  - id: swap-to-t1
+    who: [t1]
+    when: { on: aura_stacks, aura: gastric_bloat, target: t2, atLeast: 9 }
+    do: { do: taunt, target: boss }
+    priority: 70
+    retry: { times: 2, everyMs: 1000 }

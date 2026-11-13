@@ -2,6 +2,7 @@ export type Dictionary = Readonly<Record<string, string>>;
 
 /** English templates per event kind. Ability names come from content dictionaries (`ability.<id>`). */
 export const EN: Dictionary = {
+  'log.standins': 'Stand-ins (approximate, spec §6.3), marked * below: {units}. See the limitation report in summary.json.',
   'event.engage': '{boss} engaged',
   'event.ai_event': '{boss}: {event}',
   'event.cast_start': '{caster} begins casting {spell} → {target}',

@@ -1,0 +1,18 @@
+id: festergut-late-tank-swap
+plan: plan-25n.yaml
+difficulty: 25n
+seed: 1
+maxDurationMs: 330000
+mistakes:
+  # The swap rule waits for ten stacks; the plan says nine.
+  - { type: set_stack_threshold, rule: swap-to-t2, atLeast: 10 }
+observation:
+  text: scenario.festergut_late_tank_swap.observation
+  checks:
+    - { check: event_occurs, kind: aura_stack, where: { aura: gastric_bloat, unit: t1, stacks: 10 } }
+    - { check: event_occurs, kind: cast_start, where: { spell: gastric_explosion, caster: t1 } }
+    - { check: event_occurs, kind: death, where: { unit: t1 } }
+    # The explosion, the tenth stack and the late rule share one cause chain; the threshold is the scenario's mistake.
+    - { check: custom, name: festergut.late_swap, params: { rule: swap-to-t2, tank: t1 } }
+annotations:
+  - { text: scenario.festergut.note.gastric_explosion, at: { event: cast_start, where: { spell: gastric_explosion } } }

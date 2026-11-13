@@ -24,6 +24,11 @@ export interface PolicyFactory {
   /** Data entries of this spec; merged into the registry (once per spec) after the boss data. */
   readonly data?: readonly unknown[];
   readonly role: Exclude<Role, 'boss' | 'add'>;
+  /**
+   * True for a generic role actor that is not a supported spec (spec §6.3): it uses the cast machinery, but its abilities
+   * and numbers are invented. Its units are marked `approximate` and listed as stand-ins in the limitation report (A-035).
+   */
+  readonly approximate?: boolean;
   create(args: { readonly sim: Simulation; readonly member: ModelledMember; readonly data: DataRegistry }): {
     readonly unit: Pick<UnitInit, 'maxHealth' | 'speedYdPerSec' | 'combatReach' | 'boundingRadius'>;
     readonly policy: ActorPolicy;
@@ -199,7 +204,7 @@ export function runScenario(prepared: PreparedRun, registry: ContentRegistry): R
       } catch (e) {
         return setupFailure(`spec:${m.spec}`, e);
       }
-      sim.addUnit({ ...made.unit, id: m.id, name: m.name, kind: 'player', role: factory.role, pos });
+      sim.addUnit({ ...made.unit, id: m.id, name: m.name, kind: 'player', role: factory.role, approximate: factory.approximate === true, pos });
       controllers.push(new ActorController(sim, m.id, made.policy, hooks));
     } else {
       sim.addUnit({ ...playerBody, id: m.id, name: m.name, kind: 'player', role: m.role, approximate: true, maxHealth: m.maxHealth, armor: m.armor, avoidance: m.avoidance, threatMultiplier: m.threatMultiplier, pos });
@@ -257,6 +262,6 @@ export function runScenario(prepared: PreparedRun, registry: ContentRegistry): R
     units: sim.sortedUnits().map((u) => ({ id: u.id, name: u.name, kind: u.kind, role: u.role, approximate: u.approximate })),
   });
   const observations = evaluateObservations(scenario.observation.checks, trace, registry.checks);
-  const summary = buildSummary(trace, collectLimitations(sim, data, [setup.script]), observations);
+  const summary = buildSummary(trace, collectLimitations(sim, data, [setup.script], plan.roster), observations);
   return { outcome: outcome.kind, trace, summary };
 }

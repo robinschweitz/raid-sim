@@ -74,4 +74,21 @@ describe('formatter', () => {
     const ev = { id: 'e9', t: 0, kind: 'timer_window', causes: [], data: { boss: 'boss', ability: 'smash', earliestMs: null, latestMs: null, cleared: true } } as Trace['events'][number];
     expect(formatLog({ ...t, events: [ev] }, EN, { 'ability.smash': 'Smash' })).toEqual(['[00:00.000] Smash timer cleared']);
   });
+
+  it('marks stand-ins with * and lists them in a header line (spec §6.3)', () => {
+    const t = trace();
+    const marked: Trace = { ...t, meta: { ...t.meta, units: t.meta.units.map((u) => (u.id === 'p1' ? { ...u, approximate: true } : u)) } };
+    const lines = formatLog(marked, EN, { 'ability.smash': 'Smash' });
+    expect(lines[0]).toBe('Stand-ins (approximate, spec §6.3), marked * below: Alice. See the limitation report in summary.json.');
+    expect(lines.slice(1)).toEqual(['[00:00.000] Boss engaged', '[00:01.500] Boss Smash hits Alice* for 300', '[00:02.000] Outcome: timeout']);
+    // The trace itself is not changed: the marker is wording.
+    expect(marked.meta.units.find((u) => u.id === 'p1')!.name).toBe('Alice');
+  });
+
+  it('leaves out heals of zero', () => {
+    const t = trace();
+    const heal = (id: string, amount: number) =>
+      ({ id, t: 0, kind: 'heal', causes: [], data: { source: 'p1', target: 'p1', ability: 'mend', amount, overheal: 500 } }) as Trace['events'][number];
+    expect(formatLog({ ...t, events: [heal('e1', 0), heal('e2', 20)] }, EN, {})).toEqual(['[00:00.000] Alice mend heals Alice for 20']);
+  });
 });

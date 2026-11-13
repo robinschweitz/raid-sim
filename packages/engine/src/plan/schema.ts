@@ -36,6 +36,8 @@ export const StandinMemberSchema = z
       .strict()
       .default({ missPct: 0, dodgePct: 0, parryPct: 0 }),
     threatMultiplier: z.number().finite().min(0).default(1),
+    /** Why the profile has these values; reported with them in the limitation report. */
+    reason: z.string().min(1).optional(),
     reaction: ReactionSchema,
   })
   .strict();

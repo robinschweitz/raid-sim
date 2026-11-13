@@ -1,4 +1,5 @@
 import { startCast, type CastOptions, type CastResult } from './casting';
+import { Chaser } from './chase';
 import { EventMap } from './eventmap';
 import { meleeIfReady } from './melee';
 import { withinCombatRange } from './movement';
@@ -61,6 +62,11 @@ export interface BossScript {
   readonly mechanics: readonly MechanicStatus[];
   /** Known differences from Rising-Gods that are not modelled (§6.4). */
   readonly knownServerDifferences: readonly string[];
+  /**
+   * Creature::IsCombatMovementAllowed (Creature.h 456): true by default (Creature.cpp 272), false after a script's
+   * SetCombatMovement(false). With it the boss chases its victim (A-040); undefined means true.
+   */
+  readonly combatMovement?: boolean;
   /** JustEngagedWith(who): `who` is the pulling unit when the encounter starts with a puller (A-033), else null. */
   onEngage(ctx: BossContext, who: Unit | null): void;
   updateAI(ctx: BossContext, diffMs: number): void;
@@ -77,20 +83,123 @@ export abstract class EventScriptedAI implements BossScript {
   abstract readonly bossId: string;
   abstract readonly mechanics: readonly MechanicStatus[];
   readonly knownServerDifferences: readonly string[] = [];
+  /** AzerothCore's default; a script that calls SetCombatMovement(false) sets it to false. */
+  readonly combatMovement: boolean = true;
   protected events!: EventMap;
+  /** Published timer windows by event id, in EventMap time (A-034). */
+  private readonly windows = new Map<number, { ability: string; earliest: number; latest: number }>();
+  /** The first `ai_event` the script emitted for the EventMap event that last executed: the cause of automatic window clears. */
+  private lastExecuted: readonly string[] = [];
+  /** The context handed to `executeEvent`, which records that `ai_event`; one per context. */
+  private readonly recording = new WeakMap<BossContext, BossContext>();
 
   onEngage(ctx: BossContext, who: Unit | null = null): void {
     this.events = new EventMap(ctx.sim.rng.stream(`boss:${this.bossId}.timers`));
+    this.windows.clear();
+    this.lastExecuted = [];
     this.engage(ctx, who);
   }
 
+  /**
+   * Publishes the boss-mod window of a scheduled event: it is due between minMs and maxMs from now. The window is checked
+   * against the EventMap (GetTimeUntilEvent), so a window that does not contain its event fails loudly instead of going
+   * stale. A window published earlier for the same event under another ability name is cleared. Nothing happens once the
+   * fight is over.
+   */
+  protected publishWindow(ctx: BossContext, ability: string, eventId: number, minMs: number, maxMs: number, causes: readonly string[]): void {
+    if (ctx.sim.over) return;
+    for (const [id, other] of this.windows) {
+      // `sim.timerWindows` has one entry per boss and ability name.
+      if (id !== eventId && other.ability === ability) throw new Error(`timer window name ${ability} is already used by event ${id}, not event ${eventId}`);
+    }
+    const until = this.events.timeUntilEvent(eventId);
+    if (until === null || until < minMs || until > maxMs) {
+      throw new Error(`timer window ${ability} [${minMs}, ${maxMs}] does not contain event ${eventId} (${until === null ? 'not scheduled' : `due in ${until} ms`})`);
+    }
+    const old = this.windows.get(eventId);
+    if (old && old.ability !== ability) ctx.clearTimer(old.ability, causes);
+    this.windows.set(eventId, { ability, earliest: this.events.now + minMs, latest: this.events.now + maxMs });
+    ctx.publishTimer(ability, minMs, maxMs, causes);
+  }
+
+  /**
+   * After the script delayed events with DelayEventsToMax (EventMap.cpp 144–158): the event is now due no earlier than
+   * floorMs from now, so both bounds of its window move up to that floor, which is all a boss mod could know. This models
+   * that floor only. A fixed-amount DelayEvents (EventMap.cpp 122–142) adds the amount to the event's time; it is not a
+   * floor: when the delayed event leaves its window, the check after the update (`checkWindows`) throws, and a delay that
+   * keeps it inside passes. A window whose event is no longer scheduled is cleared; an unchanged window is not published
+   * again.
+   */
+  protected raiseWindow(ctx: BossContext, eventId: number, floorMs: number, causes: readonly string[]): void {
+    if (ctx.sim.over) return;
+    const w = this.windows.get(eventId);
+    if (!w) return;
+    if (!this.events.hasTimeUntilEvent(eventId)) {
+      this.windows.delete(eventId);
+      ctx.clearTimer(w.ability, causes);
+      return;
+    }
+    const now = this.events.now;
+    const earliest = Math.max(w.earliest, now + floorMs);
+    const latest = Math.max(w.latest, now + floorMs);
+    if (earliest === w.earliest && latest === w.latest) return;
+    this.publishWindow(ctx, w.ability, eventId, earliest - now, latest - now, causes);
+  }
+
   updateAI(ctx: BossContext, diffMs: number): void {
+    this.step(ctx, diffMs);
+    this.checkWindows(ctx);
+  }
+
+  private step(ctx: BossContext, diffMs: number): void {
     if (!ctx.victim()) return;
     this.events.update(diffMs);
     if (ctx.self.cast) return;
     const id = this.events.execute();
-    if (id !== 0) this.executeEvent(id, ctx);
+    if (id !== 0) {
+      this.lastExecuted = [];
+      this.executeEvent(id, this.recordingContext(ctx));
+    }
     if (!ctx.self.cast) this.afterEvents(ctx);
+  }
+
+  /** `ctx` with an `ai` that remembers the first event emitted since `lastExecuted` was reset. */
+  private recordingContext(ctx: BossContext): BossContext {
+    let rec = this.recording.get(ctx);
+    if (!rec) {
+      rec = {
+        ...ctx,
+        ai: (name, data, causes) => {
+          const id = ctx.ai(name, data, causes);
+          if (this.lastExecuted.length === 0) this.lastExecuted = [id];
+          return id;
+        },
+      };
+      this.recording.set(ctx, rec);
+    }
+    return rec;
+  }
+
+  /**
+   * After every update: a published window whose event is no longer scheduled (a one-shot that fired, or a cancelled
+   * event) is cleared, with the `ai_event` of the EventMap event that last executed as its cause; a window the script
+   * already cleared itself is only forgotten (`clearTimer` records nothing for it). An event outside its window means the
+   * script changed a timer without publishing it, which throws.
+   */
+  private checkWindows(ctx: BossContext): void {
+    if (ctx.sim.over) return;
+    for (const [eventId, w] of this.windows) {
+      const until = this.events.timeUntilEvent(eventId);
+      if (until === null) {
+        this.windows.delete(eventId);
+        ctx.clearTimer(w.ability, this.lastExecuted);
+        continue;
+      }
+      const due = this.events.now + until;
+      if (due < w.earliest || due > w.latest) {
+        throw new Error(`timer window ${w.ability} [${w.earliest}, ${w.latest}] does not contain event ${eventId} (due at ${due})`);
+      }
+    }
   }
 
   /** DoMeleeAttackIfReady by default; override to change what happens after events. */
@@ -175,8 +284,11 @@ export function attachBoss(
   const engage = sim.emit('engage', who ? { boss: bossUnitId, who: who.id } : { boss: bossUnitId });
   afterEngage?.(engage);
   script.onEngage(ctx, who);
+  const chaser = script.combatMovement === false ? null : new Chaser(sim, bossUnitId);
   const tick = (): void => {
     if (!ctx.self.alive || sim.outcome) return;
+    // Unit::Update moves the creature (UpdateMotion, Unit.cpp 643) before Creature::Update runs its AI (Creature.cpp 899).
+    chaser?.update();
     script.updateAI(ctx, intervalMs);
     sim.at(sim.now + intervalMs, EventClass.AiUpdate, tick);
   };

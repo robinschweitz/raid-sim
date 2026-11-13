@@ -39,7 +39,8 @@ export function checkCast(sim: Simulation, casterId: string, spellId: string, ta
   if (spell.gcdMs > 0 && sim.now < caster.gcdUntilMs) return fail('gcd');
   if ((caster.cooldowns.get(spellId) ?? 0) > sim.now) return fail('cooldown');
   if (!target || (!target.alive && !spell.allowDeadTarget)) return fail('target_dead');
-  if (caster.move && spell.castTimeMs > 0 && !spell.usableWhileMoving) return fail('moving');
+  // Spell::prepare refuses a cast-time spell only to a moving player (Spell.cpp 3691); a creature's chase stops instead (A-040).
+  if (caster.kind === 'player' && caster.move && spell.castTimeMs > 0 && !spell.usableWhileMoving) return fail('moving');
   if (target.id !== caster.id && edgeDistance(caster, target, sim.now) > spell.rangeYd) return fail('out_of_range');
   return { ok: true };
 }

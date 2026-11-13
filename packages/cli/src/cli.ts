@@ -1,6 +1,6 @@
 import { dirname, join, resolve } from 'node:path';
 import { CONTENT, CONTENT_TEXT_EN } from '@raid/content';
-import { canonicalStringify, parsePlan, parseScenario, prepareRun, runScenario, type ContentRegistry, type RunResult } from '@raid/engine';
+import { DEFAULT_PROFILE_REASON, canonicalStringify, parsePlan, parseScenario, prepareRun, runScenario, type ContentRegistry, type RunResult } from '@raid/engine';
 import { EN, clock, formatLog } from '@raid/format';
 
 export interface Io {
@@ -91,11 +91,29 @@ export function runCli(argv: readonly string[], io: Io, registry: ContentRegistr
   }
   const s = result.summary;
   io.out(`${result.trace.meta.scenario}: ${s.outcome} at ${clock(s.durationMs)}`);
-  io.out(`deaths: ${s.deaths.length}`);
-  for (const d of s.deaths) io.out(`  ${d.unit} at ${clock(d.atMs)}${d.killingBlow ? ` (${d.killingBlow.ability} from ${d.killingBlow.source})` : ''}`);
+  const players = new Set(result.trace.meta.units.filter((u) => u.kind === 'player').map((u) => u.id));
+  const death = (d: (typeof s.deaths)[number]): string =>
+    `  ${d.unit} at ${clock(d.atMs)}${d.killingBlow ? ` (${d.killingBlow.ability} from ${d.killingBlow.source})` : ''}`;
+  const playerDeaths = s.deaths.filter((d) => players.has(d.unit));
+  const bossDeaths = s.deaths.filter((d) => !players.has(d.unit));
+  io.out(`player deaths: ${playerDeaths.length}`);
+  for (const d of playerDeaths) io.out(death(d));
+  io.out(`boss deaths: ${bossDeaths.length}`);
+  for (const d of bossDeaths) io.out(death(d));
   for (const o of s.observations) io.out(`${o.pass ? 'PASS' : 'FAIL'} ${o.check}: ${o.detail}`);
   const l = s.limitations;
-  io.out(`limitations: ${l.standIns.length} stand-ins, ${l.assumptions.length} assumptions, ${l.partialMechanics.length} partial mechanics`);
+  const partial = l.partialMechanics.filter((m) => m.status === 'partial').length;
+  const notImplemented = l.partialMechanics.filter((m) => m.status === 'not_implemented').length;
+  io.out(
+    `limitations: ${l.standIns.length} stand-ins, ${l.assumptions.length} assumptions, ${partial} partial mechanics, ${notImplemented} not implemented, ${l.profileValues.length} stand-in profile values`,
+  );
+  // Profiles the plan explains (a reason other than the default) are spelled out: they stand in for player behaviour.
+  const explained = new Map<string, typeof l.profileValues>();
+  for (const v of l.profileValues) if (v.reason !== DEFAULT_PROFILE_REASON) explained.set(v.unit, [...(explained.get(v.unit) ?? []), v]);
+  for (const [unit, values] of explained) {
+    const reasons = [...new Set(values.map((v) => v.reason))].join('; ');
+    io.out(`  profile ${unit}: ${values.map((v) => `${v.field} ${v.value}`).join(', ')} (${reasons})`);
+  }
   io.out(`wrote ${dir}`);
   return s.observations.every((o) => o.pass) ? 0 : 1;
 }
