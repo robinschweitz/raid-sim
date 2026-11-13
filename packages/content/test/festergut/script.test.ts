@@ -162,7 +162,8 @@ describe('Festergut script: Gastric Bloat, Gas Spore, Vile Gas, Berserk', () => 
     const few = newFight({ maxDurationMs: 250000, players: ring(4, 30) });
     few.sim.run();
     const picks = few.events('ai_event', { event: 'vile_gas' });
-    expect(picks.every((e) => e.data.farTargets === 4)).toBe(true);
+    // Four far players until r01 becomes the victim (165.5 s): Festergut walks to r01 (A-040), which leaves three far.
+    expect(picks.map((e) => e.data.farTargets)).toEqual([4, 4, 4, 3, 3]);
     expect(new Set(picks.map((e) => e.data.target)).has('t1')).toBe(true);
   });
 

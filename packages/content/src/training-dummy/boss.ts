@@ -6,6 +6,8 @@ const ID = 'training_dummy';
 
 class TrainingDummyAI extends EventScriptedAI {
   readonly bossId = ID;
+  /** A training dummy stands still (like SetCombatMovement(false); its speed is 0 as well). */
+  readonly combatMovement = false;
   readonly mechanics: readonly MechanicStatus[] = [
     { key: 'training_dummy.mark', status: 'implemented', omissions: [], validation: 'unvalidated' },
     { key: 'training_dummy.melee', status: 'implemented', omissions: [], validation: 'unvalidated' },

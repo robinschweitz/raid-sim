@@ -1,4 +1,5 @@
 import { startCast, type CastOptions, type CastResult } from './casting';
+import { Chaser } from './chase';
 import { EventMap } from './eventmap';
 import { meleeIfReady } from './melee';
 import { withinCombatRange } from './movement';
@@ -61,6 +62,11 @@ export interface BossScript {
   readonly mechanics: readonly MechanicStatus[];
   /** Known differences from Rising-Gods that are not modelled (§6.4). */
   readonly knownServerDifferences: readonly string[];
+  /**
+   * Creature::IsCombatMovementAllowed (Creature.h 456): true by default (Creature.cpp 272), false after a script's
+   * SetCombatMovement(false). With it the boss chases its victim (A-040); undefined means true.
+   */
+  readonly combatMovement?: boolean;
   /** JustEngagedWith(who): `who` is the pulling unit when the encounter starts with a puller (A-033), else null. */
   onEngage(ctx: BossContext, who: Unit | null): void;
   updateAI(ctx: BossContext, diffMs: number): void;
@@ -77,6 +83,8 @@ export abstract class EventScriptedAI implements BossScript {
   abstract readonly bossId: string;
   abstract readonly mechanics: readonly MechanicStatus[];
   readonly knownServerDifferences: readonly string[] = [];
+  /** AzerothCore's default; a script that calls SetCombatMovement(false) sets it to false. */
+  readonly combatMovement: boolean = true;
   protected events!: EventMap;
   /** Published timer windows by event id, in EventMap time (A-034). */
   private readonly windows = new Map<number, { ability: string; earliest: number; latest: number }>();
@@ -276,8 +284,11 @@ export function attachBoss(
   const engage = sim.emit('engage', who ? { boss: bossUnitId, who: who.id } : { boss: bossUnitId });
   afterEngage?.(engage);
   script.onEngage(ctx, who);
+  const chaser = script.combatMovement === false ? null : new Chaser(sim, bossUnitId);
   const tick = (): void => {
     if (!ctx.self.alive || sim.outcome) return;
+    // Unit::Update moves the creature (UpdateMotion, Unit.cpp 643) before Creature::Update runs its AI (Creature.cpp 899).
+    chaser?.update();
     script.updateAI(ctx, intervalMs);
     sim.at(sim.now + intervalMs, EventClass.AiUpdate, tick);
   };

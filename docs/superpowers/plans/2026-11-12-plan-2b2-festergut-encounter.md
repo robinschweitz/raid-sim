@@ -4169,7 +4169,7 @@ Expected: PASS; `festergut-cli.test.ts` has 3 tests, `golden.test.ts` still 2.
 ## Found while writing Plan 2b-2 (for Plan 3 and Gate 4)
 
 - `@raid/engine` did not export `melee.ts` and `modifiers.ts`; Plan 2b-2 exports them.
-- The boss does not move: a victim outside melee range is never chased. Fine while a tank holds Festergut; needed as soon as a fight has movement.
+- The boss did not move: a victim outside melee range was never chased.  (done after Plan 2b-2: bosses chase their victim like AzerothCore's ChaseMovementGenerator, A-040, `docs/research/creature-chase-azerothcore.md`; the clean kill and missed-spore runs are unchanged, the late tank swap now wipes at 03:48.910 instead of 04:55.330 because Festergut walks to each new victim)
 - Rate stand-ins bypass damage modifiers (`sim.damage` with a fixed amount): Gastric Bloat's +10 % per stack does not raise a stand-in tank's damage or threat. A modelled tank (Plan 3) gets the bonus and may pull threat back after a swap; the swap rules then need a threat-aware trigger (the rule vocabulary has none for `threat_target`).
 - Healers need area heals and tanks need cooldowns before a fight like Festergut can be healed by real specs; the generic healer's splash heal and the stand-in tank profile stand in for both (A-035, A-039).
 - `db` sources have no line field; Plan 2b-2 writes row, column, SQL file and line into `key`.

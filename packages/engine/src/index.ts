@@ -2,6 +2,7 @@ export * from './area';
 export * from './auras';
 export * from './boss';
 export * from './casting';
+export * from './chase';
 export * from './catalog';
 export * from './controller';
 export * from './core-data';

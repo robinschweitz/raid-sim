@@ -79,7 +79,7 @@ export const FESTERGUT_MECHANICS: readonly MechanicStatus[] = [
   {
     key: 'festergut.melee',
     status: 'partial',
-    omissions: ['no crits, crushing blows or block (A-022)', 'Festergut does not move: he does not chase his victim'],
+    omissions: ['no crits, crushing blows or block (A-022)'],
     validation: SOURCE,
   },
   { key: 'festergut.berserk', status: 'implemented', omissions: [], validation: SOURCE },
@@ -145,6 +145,8 @@ export function festergutTimers(data: DataRegistry): FestergutTimers {
 /** Port of boss_festergutAI (boss_festergut.cpp 89–267), 25-player normal. Heroic Malleable Goo is Gate 4. */
 export class FestergutAI extends EventScriptedAI {
   readonly bossId = FESTERGUT_ID;
+  /** boss_festergut.cpp never calls SetCombatMovement(false): he chases his victim at speed_run × 7 yd/s (A-040). */
+  readonly combatMovement = true;
   readonly mechanics = FESTERGUT_MECHANICS;
   readonly knownServerDifferences: readonly string[] = [
     'Rising-Gods has not been compared yet (Gate 2): every timer and value is the AzerothCore baseline',
