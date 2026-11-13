@@ -294,3 +294,11 @@ kill.
 4. Which roster slots the modelled players take (`t1`, `h1`, `r01` proposed) and which raid members they represent.
 5. Out-of-scope items: pets (Mirror Image, Nibelung's Val'kyr), absorbs (Sacred Shield), raid cooldowns (Divine Sacrifice).
 6. Real characters later: what export format the signup site or the Rising-Gods armory provides.
+
+## Owner decisions (2026-11-13)
+
+- Faction: Alliance (Fire Mage gnome, Restoration Druid night elf, Protection Paladin human; Seal of Vengeance).
+- Out of scope for Plan 3, reported as not modelled in SUPPORT.md and the limitation report: pets (Mirror Image, Nibelung's Val'kyr), absorb shields (Sacred Shield), raid cooldowns (Divine Sacrifice, Divine Guardian).
+- Gear: the typical Festergut-progression profile (about iLvl 257) proposed in the spec research files is accepted. Build and gear stay data so real raid members' characters can be loaded later.
+- Build first the standard builds; loading real characters comes later.
+- The other 22 raid members stay stand-ins.
