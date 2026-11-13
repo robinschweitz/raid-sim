@@ -42,7 +42,7 @@ Fire Power 5/5 (12400, +10 % fire damage), Pyromaniac 3/3 (34296: +3 % crit; 50 
 on targets — **Pyromaniac's regen needs three targets with fire DoTs: not reachable on one boss**), Combustion 1/1
 (11129 → 28682), Molten Fury 2/2 (31680, +12 % damage vs targets below 35 %), Empowered Fire 3/3 (31658: +15 % of SP to
 Fireball/Frostfire/Pyroblast as SPELLMOD_BONUS_MULTIPLIER; Ignite ticks return 2 % base mana via 67545, script
-`spell_mage_empowered_fire`, spell_mage.cpp 1658), Hot Streak 3/3 (44448), Burnout 5/5 (44472: +50 % crit damage bonus,
+`spell_mage_empowered_fire`, spell_mage.cpp 1087), Hot Streak 3/3 (44448), Burnout 5/5 (44472: +50 % crit damage bonus,
 +1 % base mana cost on crit), Living Bomb 1/1.
 
 Talent order string for the validator (row/column order of Talent.dbc per tab): `23000503110003-0355030010303331053120300351-`.
