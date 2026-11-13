@@ -90,8 +90,7 @@ the item spells listed in §6. Hit 408 = 15.55 % (26.232 per %); with a stand-in
 17 % spell-hit requirement against a level-83 boss (§3.7) is met (the guide's 14 % cap with Misery, `configured`).
 Set: Bloodmage Regalia (ItemSet 883) 5/5 → 2p 70752 / 4p 70748 (§6).
 
-Consumables (`configured`, standard raid): Flask of the Frost Wyrm (+125 SP), Fish Feast (+40 SP? — the stat food spell
-is read in 3a), Potion of Speed pre-pot and one in combat. Mana Sapphire (the mage's own gem) — on-use mana.
+Consumables (`configured`, standard raid): Flask of the Frost Wyrm (+125 SP), Fish Feast (stat food; its spell is read in 3a-1), Potion of Speed pre-pot and one in combat. Mana Sapphire (the mage's own gem) — on-use mana.
 
 Raid buffs and debuffs assumed from stand-ins (player note §13): Arcane Intellect (self), Mark of the Wild (modelled druid),
 Blessing of Kings/Wisdom, Fortitude, Divine Spirit, Totem of Wrath or Demonic Pact (SP), Moonkin Aura/Elemental Oath
@@ -105,11 +104,11 @@ Misery or Improved Faerie Fire (+3 % hit), and the 5 % spell crit debuff from th
 | --- | --- | --- | --- | --- | --- | --- |
 | Fireball r16 | 42833 | 3500 ms (−500 talent, −150 glyph) / 1500 cat 133 / — | 19 % base mana | e0 SCHOOL_DAMAGE 888..1132 (bp 887 + d245) fire; e1 PERIODIC_DAMAGE 29 every 2 s for 8 s; speed 24 yd/s; range 35 | DBC bonus 1.0 (no spell_bonus_data row); +15 % Empowered Fire | default handlers |
 | Pyroblast r12 | 42891 | 5000 ms (instant with Hot Streak) / 1500 / — | 22 % | e0 1190..1510; e1 113 every 3 s for 12 s; speed 24 | 1.15 direct, 0.05 dot (`spell_bonus_data.sql` line 851) | Hot Streak's mod (48108: −100 % cast time on Pyroblast mask) |
-| Living Bomb r3 | 55360 | instant / 1500 / — | 22 % | e0 PERIODIC_DAMAGE 345 every 3 s for 12 s; e1 DUMMY 55361 (on expire/dispel: explosion 55362, 690 fire in 10 yd, max targets unlimited) | 0.2 dot (line 1181), explosion 0.4 (line 1183) | `spell_mage_living_bomb` (spell_mage.cpp 1678) casts the explosion on removal |
+| Living Bomb r3 | 55360 | instant / 1500 / — | 22 % | e0 PERIODIC_DAMAGE 345 every 3 s for 12 s; e1 DUMMY 55361 (on expire/dispel: explosion 55362, 690 fire in 10 yd, max targets unlimited) | 0.2 dot (line 1181), explosion 0.4 (line 1183) | `spell_mage_living_bomb` (spell_mage.cpp 766) casts the explosion on removal |
 | Scorch r11 | 42859 | 1500 / 1500 / — | 8 % | 376..444 fire | 0.4286 (line 847) | applies Improved Scorch 22959 through the talent's proc (12873, procFlags 0x10000) |
 | Fire Blast r11 | 42873 | instant / 1500 / 8 s (cat 19) | 21 % | 925..1095 | 0.4286 (line 849) | moving filler |
-| Combustion | 11129 | instant, off GCD / 2 min | — | stacking +10 % fire crit per non-crit (28682, 10 stacks), 3 charges consumed by fire crits | — | `spell_mage_combustion`, `spell_mage_combustion_proc` (1654, 1656); spell_proc line 257 |
-| Molten Armor r3 | 43046 | instant / 1500 | 28 % | PROC_TRIGGER 43044 (fire damage to melee attackers), aura 197 −6 % crit taken? (MOD_ATTACKER_*), aura 220 MOD_RATING_FROM_STAT: 35 % of spirit (+20 % glyph) as crit ratings | — | `spell_mage_molten_armor` (1648) |
+| Combustion | 11129 | instant, off GCD / 2 min | — | stacking +10 % fire crit per non-crit (28682, 10 stacks), 3 charges consumed by fire crits | — | `spell_mage_combustion` (spell_mage.cpp 1051); spell_proc line 257 |
+| Molten Armor r3 | 43046 | instant / 1500 | 28 % | PROC_TRIGGER 43044 (fire damage to melee attackers), aura 197 (−5 % chance to be crit), aura 220 MOD_RATING_FROM_STAT: 35 % of spirit (+20 % glyph) as crit ratings | — | `spell_mage_molten_armor` (160) |
 | Evocation | 12051 | channel 8 s / 4 min | — | +15 % max mana every 2 s (4 ticks) | — | needed if the fight runs past mana |
 | Mirror Image | 55342 | instant / 3 min | 10 % | summons 3 images | — | **out of scope** (pets) |
 | Arcane Intellect / Brilliance | 42995 / 43002 | buff | — | +60 Int | — | applied before the pull as a permanent aura |
@@ -119,19 +118,20 @@ Off-GCD use: Combustion with Bloodlust (guide), potion of Speed, trinket on-use 
 
 ## 6. Procs and talent effects that matter
 
-- **Hot Streak** (44448, spell_proc line 144, `spell_mage_hot_streak`, spell_mage.cpp 1664): two consecutive crits of
+- **Hot Streak** (44448, spell_proc line 144, `spell_mage_hot_streak`, spell_mage.cpp 1264): two consecutive crits of
   Fireball/Scorch/Fire Blast/Living Bomb explosion/Frostfire (mask) → 48108 (10 s): next Pyroblast instant. Rank 3 is
   100 % (bp 99+1 on effect 0). The "two in a row" counter is script state.
-- **Ignite** (12848, spell_proc line 232; `spell_mage_ignite`, 1677): fire crit → 40 % of the crit damage spread over 4 s
+- **Ignite** (12848, spell_proc line 232; `spell_mage_ignite`, spell_mage.cpp 710): fire crit → 40 % of the crit damage spread over 4 s
   in 2 ticks (12654), rolling the remaining amount into the new Ignite. Ignite does not crit and has no coefficient; it
-  ignores the caster's done modifiers on its ticks? (script sets the amount; 3b reads the script for the exact rolling
-  formula and the done/taken steps).
-- **Master of Elements** (29076, line 184, `spell_mage_master_of_elements`, 1680): 30 % of the spell's base mana cost
+  is applied with `CastDelayedSpellWithPeriodicAmount` ("implement ignite bug", spell_mage.cpp 710–752): amount =
+  8 % × rank of the crit damage / max ticks; 3b reads how the existing Ignite is rolled into the new one and which
+  done/taken steps apply to the ticks.
+- **Master of Elements** (29076, line 184, `spell_mage_master_of_elements`, 822): 30 % of the spell's base mana cost
   on a fire/frost crit.
-- **Burnout** (44472, spell_proc line 143, `spell_mage_burnout`/`_trigger` 1650–1651): +50 % crit damage bonus
-  (SPELLMOD_CRIT_DAMAGE_BONUS on mask), and a crit costs 5 %? (bp 4+1 on effect 1 → "1 % of base mana per rank" → 5 %
-  base mana) — 3b confirms from the script.
-- **Empowered Fire** (31658, spell_proc line 166): Ignite ticks restore 2 % base mana (67545, `spell_mage_empowered_fire`).
+- **Burnout** (44472, spell_proc line 143, `spell_mage_burnout`, 209): +50 % crit damage bonus
+  (SPELLMOD_CRIT_DAMAGE_BONUS on mask), and effect 1 (bp 4+1 = 5) makes each crit cost an extra 5 % of base mana — the
+  amount's meaning is confirmed from the script in 3b.
+- **Empowered Fire** (31658, spell_proc line 166): Ignite ticks restore 2 % base mana (67545, `spell_mage_empowered_fire`, 1087).
 - **Clearcasting** from Arcane Concentration (12577, 10 % on hit; 12536 −100 % cost, 1 charge; spell_proc line 262).
 - **Improved Scorch**: 22959 debuff (+5 % crit taken, MOD_ATTACKER_SPELL_CRIT_CHANCE (179), 30 s); spell group with
   Shadow Mastery / Winter's Chill (`spell_group.sql`) — if a stand-in warlock provides Shadow Mastery the mage skips
@@ -147,7 +147,7 @@ Off-GCD use: Combustion with Bloodlust (guide), potion of Speed, trinket on-use 
 - Trinkets: Muradin's Spyglass 71571 (spell damage → stacking SP, 10 stacks); Sliver of Pure Ice (on-use mana);
   Ashen Band 71581 (proc; the 251 ring has no Frostforged proc — check effect 2); Nibelung 71845 (2 % on hit: Val'kyr
   guardian, **out of scope**, pet).
-- Meta gem: +3 % critical damage (44797, aura 163 MOD_CRIT_DAMAGE_BONUS, all schools mask 895? — read the misc value).
+- Meta gem: +3 % critical damage (44797, aura 163 MOD_CRIT_DAMAGE_BONUS; its school mask is the misc value).
 
 ## 7. Decision policy (priority list) — `configured` (wowtbc.gg, retrieved 2026-11-13)
 

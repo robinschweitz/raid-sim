@@ -42,7 +42,7 @@ taken stacking (45282) — the damage-reduction part is a proc on being crit), E
 the bonus coefficient (op 24 BONUS_MULTIPLIER) for HoTs), Revitalize 3/3 (48545: Rejuvenation/Wild Growth ticks have 15 %
 to give the target mana/rage/energy/runic power — `spell_dru_revitalize`, spell_druid.cpp 1563; **only modelled players
 with mana benefit; stand-ins have no resources**), Tree of Life 1/1 (65139 talent; form 33891), Improved Tree of Life 3/3
-(48537: +200 %? armor in form (aura 142 bp 199+1 on form flag) and +15 % of spirit as healing (aura 175
+(48537: +200 % armor from items in Tree of Life (aura 142 bp 199+1, misc 1) and +15 % of spirit as healing (aura 175
 MOD_SPELL_HEALING_OF_STAT_PERCENT misc 4)), Gift of the Earthmother 5/5 (51183: +10 % spell haste on the heal mask? (aura
 65 MOD_CASTING_SPEED? misc 21 — op 21 GLOBAL_COOLDOWN −151 ms? read in 3c) and −1.5 s?), Wild Growth 1/1.
 
@@ -85,7 +85,7 @@ MP5 18, armor 3871**, plus auras: meta 55275 (+2 % Int), 60694 (+10 all stats), 
 idol 71178, trinkets 71611 / 71585, Nibelung 71845 (out of scope).
 Consumables (`configured`): Flask of the Frost Wyrm, Fish Feast (stat food), Runic Mana Potion.
 Buffs assumed from stand-ins: as the mage, minus spell-damage-taken debuffs; plus Mana Spring, Blessing of Wisdom,
-Replenishment, Innervate from another druid? (no: the druid casts its own).
+Replenishment. Innervate is the druid's own.
 
 ## 5. Abilities used (rank 80 client values)
 
@@ -109,7 +109,7 @@ Replenishment, Innervate from another druid? (no: the druid casts its own).
 
 Nature's Grace (16880 family, spell_proc line 204: spell crit → 16886), Omen of Clarity (3.5 PPM, line 283), Living Seed
 is **not taken** (the build has 0/3), Revitalize (only modelled mana users), Natural Perfection's damage reduction stacks
-(when crit by Festergut? he only melees the tank; Gas Spore/Vile Gas/Pungent Blight cannot crit: A-028), T10 2p (70658,
+(it needs the druid to be crit; Festergut only melees the tank and Gas Spore/Vile Gas/Pungent Blight cannot crit: A-028), T10 2p (70658,
 Wild Growth decline −30 % less? — the aura script reads bonus amount 30: `AddPct(_baseReduction, -30)`), T10 4p (70664:
 2 % on Rejuvenation tick → jump? `spell_dru_t10_restoration_4p_bonus`, 1153), the idol 71178 (Rejuvenation ticks → 71184
 stacking spirit? read in 3c), Althor's Abacus 71611 (30 % on heal → 71610 heal on the lowest nearby ally), Purified Lunar

@@ -77,14 +77,13 @@ always matching the socket colour (`configured` simplification of the guide's "o
 
 Totals (items, gems, socket bonuses, flat enchants): **Str 1304, Sta 2845, defense rating 900 (→ +183 defense, 583
 skill: crit-immune against level 83 needs 540), dodge rating 763, parry rating 444, block rating 37, block value 237
-(shield), expertise rating 155, hit rating 193, Agi 22, armor 26771, +275 health**, plus auras: 55344 (+2 % item armor),
-60694? (no: the chest has +275 health here), 25063 (+2 % threat), 64571 (Blood Draining), set 901 4/5 (2p 70758,
+(shield), expertise rating 155, hit rating 193, Agi 22, armor 26771, +275 health**, plus auras: 55344 (+2 % item armor), 25063 (+2 % threat), 64571 (Blood Draining), set 901 4/5 (2p 70758,
 4p 70761 → 70760), libram 71194 (Shield of Righteousness → 71197?), trinkets 71634 (Corpse Tongue Coin: below 35 %
 health, armor proc) and 71586 (on-use absorb 6400, 10 s), ring 71653 (path selection only).
 Consumables (`configured`): Flask of Stoneblood (+1300 health), Dragonfin Filet / Fish Feast (stat food), Indestructible
 Potion.
 Buffs from stand-ins: Kings, Fortitude, Mark of the Wild (modelled druid), Commanding Shout/Blood Pact, Devotion Aura
-(self), Retribution Aura? (no: Devotion), Horn of Winter / Strength of Earth, Trueshot/Unleashed Rage, Battle Shout/Might,
+(self), Horn of Winter / Strength of Earth, Trueshot/Unleashed Rage, Battle Shout/Might,
 the boss debuffs Demoralizing Shout/Roar (−AP), Thunder Clap/Frost Fever (−attack speed; the paladin's own Judgements of
 the Just covers it), Sunder/Expose Armor, Faerie Fire, Blood Frenzy. Blessing of Sanctuary is the paladin's own.
 
@@ -113,7 +112,7 @@ the Just covers it), Sunder/Expose Armor, Faerie Fire, Blood Frenzy. Blessing of
 ## 6. Defensive mechanics that matter
 
 Avoidance from defense/dodge/parry with diminishing returns (§3.9 of the player note), block chance 5 % + defense +
-Holy Shield 30 % + Redoubt (30 % for 10 s or 5 blocks after being crit? — Redoubt procs on being hit (procFlags 0x2a8, 10 %)),
+Holy Shield 30 % + Redoubt (20135: 10 % chance when hit, procFlags 0x2a8, to gain 20132 = +30 % block for 10 s or 5 blocks),
 block value reduces each blocked hit, **crushing blows and crits from Festergut** (the engine's boss melee has neither:
 A-022) — a tank above the 102.4 % combined miss/dodge/parry/block (+ defense crit immunity) cannot be crushed;
 Ardent Defender (−20 % damage below 35 %, cheat-death once per 2 min: `spell_pal_ardent_defender`, 322), Shield of the
@@ -131,7 +130,7 @@ On the boss with aggro: keep Righteous Fury, Seal of Vengeance, Blessing of Sanc
 3. Fillers when everything is on cooldown: Avenger's Shield, Holy Wrath (undead), Exorcism (when not moving).
 4. Divine Plea on cooldown below 80 % mana. Divine Protection, Lay on Hands, Corroded Skeleton Key: plan rules (health
    thresholds), not the rotation.
-Off-tank (not the victim): keep Holy Shield? no — off-tank behaviour follows the plan (taunt rule with Hand of Reckoning
+Off-tank (not the victim): behaviour follows the plan (taunt rule with Hand of Reckoning
 when the other tank has 9 Gastric Bloat stacks; keep Seal and auras; deal damage with the same priority from melee range
 behind the boss). A modelled tank that out-threats the stand-in tank after a swap is a **known risk** (2b-2 "found while
 writing"): the swap rule then needs a threat-aware trigger.
@@ -152,6 +151,5 @@ Spiritual Attunement and Sanctuary mana returns.
 
 Divine Sacrifice / Divine Guardian (raid cooldown; the scenarios do not need them — listed), Sacred Shield (absorb: not
 modelled), Hand of Salvation/Protection/Freedom, Righteous Defense (Hand of Reckoning is used), Exorcism outside fillers,
-Blood Draining's heal (out of scope until absorbs/heals from procs are needed? it is a heal proc below 35 %: **include if
-cheap**, decide in 3d), Corpse Tongue Coin's armor proc (below 35 % health; same decision), Pursuit of Justice's speed is
+Blood Draining's heal (a heal proc below 35 % health: in or out is decided in 3d), Corpse Tongue Coin's armor proc (below 35 % health; same decision), Pursuit of Justice's speed is
 **in** scope (it changes plan movement: 7 → 8.05 yd/s), the Ashen ring's reputation-path spell (no effect at friendly).

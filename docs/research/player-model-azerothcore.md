@@ -70,7 +70,7 @@ spell crit, armor via MOD_RESISTANCE_OF_STAT_PERCENT; agility → armor, crit, d
 - `GetManaBonusFromIntellect` (303–311): first 20 intellect 1 mana each, the rest 15.
 - `UpdateMaxPower` (326–339): same shape with create mana and the intellect bonus.
 
-### 3.3 Armor — needed (paladin; also every player's armor against Festergut's melee? only the tank is hit)
+### 3.3 Armor — needed (the paladin; Festergut's melee hits only the tank)
 `Player::UpdateArmor` (`StatSystem.cpp` 269–291): (items BASE × BASE_PCT) + 2 × agility + TOTAL flat (+ % of a stat via
 MOD_RESISTANCE_OF_STAT_PERCENT), × TOTAL_PCT (Toughness +10 % armor from items is BASE_PCT; Devotion Aura is flat TOTAL).
 Armor reduction itself is already in `melee.ts` (`Unit.cpp` 2233–2300).
@@ -84,10 +84,11 @@ plus MOD_ATTACK_POWER auras, MOD_ATTACK_POWER_PCT, and AP-of-stat/AP-of-armor au
 Gear spell power is applied as `ApplySpellPowerBonus` (`StatSystem.cpp` 167–175: `m_baseSpellPower` added to damage and
 healing). `SpellBaseDamageBonusDone` (`Unit.cpp` 8848) and `SpellBaseHealingBonusDone` (9615) sum it with
 MOD_DAMAGE_DONE / MOD_HEALING_DONE auras by school mask and the spell-power-from-stat auras (MOD_SPELL_DAMAGE_OF_STAT_PERCENT,
-MOD_SPELL_HEALING_OF_STAT_PERCENT: Nurturing Instinct, Improved Tree of Life (spirit → healing), Lunar Guidance;
-MOD_SPELL_DAMAGE_OF_ATTACK_POWER: Touched by the Light for the paladin, Str → SP; Mage Armor/Molten Armor
-are crit/regen, not SP). Paladin Sheath of Light / Touched by the Light matter for Judgement, Consecration, Holy Shield,
-Avenger's Shield coefficients.
+MOD_SPELL_HEALING_OF_STAT_PERCENT: Improved Tree of Life gives 15 % of spirit as healing (48537, aura 175), Touched by
+the Light gives the paladin spell power equal to 60 % of strength (53592, aura 174 with misc 126 = all magic schools,
+aura 175 for healing). Molten Armor gives crit rating from spirit (aura 220 MOD_RATING_FROM_STAT), not spell power. The
+paladin's spell power matters for the SP part of Judgement, Consecration, Holy Shield, Avenger's Shield and Holy
+Vengeance coefficients (`spell_bonus_data`).
 
 ### 3.6 Crit — needed
 - Melee crit (`UpdateCritPercentage`, `StatSystem.cpp` 658–696): agility crit (`GetMeleeCritFromAgility`, `Player.cpp`
@@ -111,9 +112,10 @@ Avenger's Shield coefficients.
 - Crit damage: `SpellCriticalDamageBonus` (`Unit.cpp` 9201–9238): magic spells +50 %, melee/ranged-class spells +100 %;
   MOD_CRIT_DAMAGE_BONUS by school (the meta gem Chaotic Skyflare/Relentless Earthsiege "3 % increased critical damage" is
   an aura of this type) is added as a percentage of the doubled amount, then SPELLMOD_CRIT_DAMAGE_BONUS (Burnout, Spell
-  Power talent) adds to the bonus part. Heals: `SpellCriticalHealingBonus` (9240–9277): +50 % for magic, then
-  MOD_CRITICAL_HEALING_AMOUNT multiplier (meta gem "Revitalizing Skyflare" is 3 % crit *healing*? — no: Revitalizing is
-  +3 % crit effect; checked in Plan 3c).
+  Power talent) adds to the bonus part. Chaotic Skyflare Diamond's "+3 % critical damage" is aura 44797, type 163
+  (MOD_CRIT_DAMAGE_BONUS). Heals: `SpellCriticalHealingBonus` (9240–9277): +50 % for magic, then the
+  MOD_CRITICAL_HEALING_AMOUNT multiplier (Revitalizing Skyflare Diamond's "+3 % critical healing effect", aura 55256 —
+  not in the standard druid profile, which uses Ember Skyflare).
 - Melee crit multiplier for the paladin's swings: 2× (CalculateMeleeDamage, `Unit.cpp` 1684–).
 - Ignite, Living Seed and similar "on crit" effects are procs (§9), not crit math.
 
@@ -147,7 +149,7 @@ and parry 14 % against level-83 targets come from the creature side (GetUnitDodg
   88.129021.
 - Block (`UpdateBlockPercentage`, 633–656): 5 % + defense × 0.04 + MOD_BLOCK_PERCENT (Holy Shield +30 %, Redoubt) + rating
   (16.395 per %), no diminishing return. Block value (`GetShieldBlockValue`, `Player.cpp` 5275–5282): (flat block value from
-  the shield and auras + Str × 0.5 − 10) × pct mods (Redoubt? no: Shield Specialization-like talents, Glyph of Holy Shield…).
+  the shield and auras + Str × 0.5 − 10) × pct mods (MOD_SHIELD_BLOCKVALUE_PCT auras; none in the standard paladin build).
 - **Creature attacks against the player**: Festergut's swings roll miss/dodge/parry/block/crit/crushing on the attack
   table (`RollMeleeOutcomeAgainst`, `Unit.cpp` 3013–3190): crushing blows from level-83 creatures (skill difference 15 →
   15 % crushing, 150 % damage) unless the table is full, crits 5.6 % minus defense; blocks reduce by block value. The
@@ -158,7 +160,7 @@ and parry 14 % against level-83 targets come from the creature side (GetUnitDodg
 - `Player::UpdateManaRegen` (`StatSystem.cpp` 939–971): spirit regen = `sqrt(Int) × OCTRegenMPPerSpirit()` per second,
   where `OCTRegenMPPerSpirit` = Spirit × gtRegenMPPerSpt[class, level] (`Player.cpp` 5429–5446; 0.003345 at 80 for all
   three classes), × MOD_POWER_REGEN_PERCENT; MP5 = (MOD_POWER_REGEN + item MP5 `m_baseManaRegen`) / 5 per second plus
-  MOD_MANA_REGEN_FROM_STAT (percent of a stat per 5 s: Molten Armor? no — Mage Armor; Replenishment is a periodic energize,
+  MOD_MANA_REGEN_FROM_STAT (percent of a stat per 5 s, e.g. Mage Armor — not used by the fire build; Replenishment is a periodic energize,
   below). While casting ("interrupted") only MP5 + MOD_MANA_REGEN_INTERRUPT % of spirit regen (cap 100 %: Meditation-like
   talents, Intensity for druids, Mage Armor 50 %, Arcane Meditation) — 960.
 - `Player::Regenerate(POWER_MANA)` (`Player.cpp` 1886–2026) runs from `RegenerateAll` (1803–1883) on every player
@@ -166,10 +168,11 @@ and parry 14 % against level-83 targets come from the creature side (GetUnitDodg
   interrupted rate applies when `IsUnderLastManaUseEffect()` (`Unit.cpp` 13331–13334: less than 5000 ms since the last mana
   spend, set in `Spell::TakePower`, `Spell.cpp` 5505–5569). The player update interval is the map update (A-002's 10 ms);
   the engine can integrate regeneration exactly per event instead (proposed adaptation in Plan 3a).
-- Replenishment (Revitalize? no: Judgements of the Wise, Vampiric Touch, Hunting Party, Improved Soul Leech, Enduring
-  Winter) restores 0.2 % of max mana per second as a periodic energize on up to 10 party/raid members. The Restoration
-  Druid's Revitalize procs a mana return, not Replenishment. For Gate 1 Replenishment comes from a stand-in (configured
-  buff, §13).
+- Replenishment (from Judgements of the Wise, Vampiric Touch, Hunting Party, Improved Soul Leech or Enduring Winter)
+  restores a percentage of max mana per second as a periodic energize on up to 10 raid members (exact value from the
+  Replenishment spell's client data in 3a-1). The Restoration Druid's Revitalize gives the HoT target mana/rage/energy
+  (`spell_dru_revitalize`, spell_druid.cpp 1563), not Replenishment. In Gate 1 Replenishment comes from a stand-in
+  (configured buff, §13); none of the three standard builds takes a Replenishment talent.
 
 ### 3.11 Haste — needed
 - Spell haste: `UNIT_MOD_CAST_SPEED` starts at 1 and is changed by `ApplyCastTimePercentMod` (`Unit.cpp` 13154–13164;
@@ -217,24 +220,23 @@ The diminishing returns in §3.9 use these percentages before the DR formula.
   SPELLMOD_EFFECT1..3 / SPELLMOD_ALL_EFFECTS change the value before the bonus (`Player::ApplySpellMod`, `Player.cpp`
   10035–10115).
 - `Unit::SpellDamageBonusDone` (`Unit.cpp` 8537–8709): skipped for DIRECT_DAMAGE (weapon) and SPELL_ATTR3_IGNORE_CASTER_MODIFIERS;
-  DoneTotalMod = `SpellPctDamageModsDone` (8209–: MOD_DAMAGE_PERCENT_DONE by school — Fire Power, Molten Fury vs <35 %,
-  Arcane Power, Avenging Wrath, Righteous Fury? no — plus class scripts); DoneAdvertisedBenefit = SpellBaseDamageBonusDone
+  DoneTotalMod = `SpellPctDamageModsDone` (8209–: MOD_DAMAGE_PERCENT_DONE by school — Playing with Fire, Avenging Wrath,
+  Crusade, One-Handed Weapon Specialization — plus OVERRIDE_CLASS_SCRIPTS such as Molten Fury); DoneAdvertisedBenefit = SpellBaseDamageBonusDone
   (spell power for the school) + class-script flat bonuses; the coefficient is the DBC `EffectBonusMultiplier[effIndex]`
   (8668), **overridden by `spell_bonus_data`** (`direct_bonus` / `dot_bonus`, plus `ap_bonus` / `ap_dot_bonus` × AP, 8669–
   8695); with no row and DmgClass NONE no spell power is added (8697–8702); coefficient × level penalty
   (`CalculateLevelPenalty`, 3248: spells below level 20) × stacks, SPELLMOD_BONUS_MULTIPLIER (Empowered Fire, Empowered
   Rejuvenation, Empowered Touch raise the coefficient) (8706–8714); result = (base + DoneTotal) × DoneTotalMod, then
-  SPELLMOD_DAMAGE / SPELLMOD_DOT (talents in %, e.g. Fire Power? no — Improved Moonfire, Glyph of Living Bomb crits) on the
-  result (8716–8720).
+  SPELLMOD_DAMAGE / SPELLMOD_DOT (percentage talents: Fire Power, Spell Impact, Gift of Nature, Improved Rejuvenation,
+  Genesis) on the result (8716–8720).
 - `SpellDamageBonusTaken` (8711–8846): the target's MOD_DAMAGE_PERCENT_TAKEN (already in the engine as `damage_taken_pct`),
   MOD_SCHOOL_DAMAGE_TAKEN (Curse of the Elements / Earth and Moon / Ebon Plaguebringer 13 % spell damage taken, a raid
   debuff provided by a stand-in) and flat taken bonuses.
-- Healing: `SpellHealingBonusDone` (9365–9483) the same with `SpellPctHealingModsDone` (9279–: MOD_HEALING_DONE_PERCENT —
-  Tree of Life aura? no, Master Shapeshifter, Gift of Nature applies via spell mods; Nurturing Instinct no) and
-  `SpellBaseHealingBonusDone`; `SpellHealingBonusTaken` (9485–9613) applies the target's MOD_HEALING_PCT /
-  MOD_HEALING_RECEIVED (Tree of Life aura +6 %? → check: in 3.3 the Tree of Life passive increases healing received;
-  Divine Hymn, Guardian Spirit, the paladin's Divine Guardian? no). **Festergut players have no healing-taken modifiers from
-  the boss** in 25n (no Mortal Wound-like debuff).
+- Healing: `SpellHealingBonusDone` (9365–9483) the same with `SpellPctHealingModsDone` (9279–: MOD_HEALING_DONE_PERCENT,
+  e.g. Master Shapeshifter in Tree of Life; Gift of Nature works through spell mods) and `SpellBaseHealingBonusDone`;
+  `SpellHealingBonusTaken` (9485–9613) applies the target's MOD_HEALING_PCT (the Tree of Life passive 34123 is an area aura
+  of type 118 MOD_HEALING_PCT on party members, bp 5+1 = 6 %; Improved Devotion Aura raises healing taken for the party)
+  and the Nourish HoT bonus (9513–9530). Festergut applies no healing-taken modifier in 25N.
 - Order of the final modifiers matches the engine's per-step truncation (A-017, A-026): done (with coefficient), crit,
   taken, area, absorb (absorbs: Sacred Shield, Divine Aegis from stand-ins — not modelled in Gate 1).
 
@@ -245,32 +247,34 @@ have their coefficient there, e.g. Fireball 1.0 × talents).
 
 ### 4.3 Crit roll for spells
 `Spell::DoAllEffectOnTarget`/`HandleLaunchPhase` roll crit per target (`Unit::SpellTakenCritChance` for the victim side),
-with the player's random generator; our streams: `player:<id>.crit` (spec §8.7). Periodic ticks only crit when an aura
-enables it (Glyph of Living Bomb? no — 3.3 Living Bomb ticks can crit via its own aura? to verify in 3b; Ignite never
-crits).
+with the player's random generator; our streams: `unit:<id>.crit` (spec §8.7). Periodic ticks only crit when an aura of
+type 286 ABILITY_PERIODIC_CRIT covers the spell (Glyph of Living Bomb 63091 for Living Bomb); Ignite's ticks cannot crit
+(no such aura).
 
 ### 4.4 Spell hit roll
 `MagicSpellHitResult` (§3.7) for damaging spells against Festergut; heals and self-buffs never miss. Partial resists:
-`CalcAbsorbResist` (`Unit.cpp` 2344–) — bosses at level 83 have an average 6 % level-based resist for spells that are
-not binary? In 3.3 every non-binary spell against a +3 level target suffers a level-based partial resist
-(~ 2 % per level difference × ...); **to research in 3a** (not cited yet; mark `partial` if left out).
+`CalcAbsorbResist` (`Unit.cpp` 2344–) may apply a level-based partial resist against a +3 level target; the exact rule
+at this commit is **not researched yet** (Plan 3a-2 task 4). Until then the spell damage pipeline is `partial` with this
+omission listed.
 
 ## 5. Mana costs — needed
 `SpellInfo::CalcPowerCost` (`SpellInfo.cpp` 2843–): ManaCost + ManaCostPercentage × **create (base) mana** (2870–2873;
-paladin 4394, mage 3268, druid 3496 at 80, §2) + school cost modifiers, then SPELLMOD_COST (Pyromaniac? no: Frost Channeling,
-Moonglow −9 %, Tree of Life −20 % HoTs, Benediction, Glyph of Divine Plea…) (2905–2907). Spent in `Spell::TakePower`
+paladin 4394, mage 3268, druid 3496 at 80, §2) + school cost modifiers, then SPELLMOD_COST (Moonglow −9 %, Benediction
+−4 %, Clearcasting −100 %) (2905–2907). Spent in `Spell::TakePower`
 (`Spell.cpp` 5505–), which also sets the five-second rule. The client column `ManaCostPercentage` (204) and `PowerType`
 (41) are **not extracted today** (Plan 3a extends the extraction).
 
-Mana returns: Master of Elements (30 % of base cost on crit), Illumination (paladin, not taken), Seals of the Pure? no;
-Judgements of the Wise (paladin, 25 % of base mana over 10 s? — actually Judgements of the Wise gives Replenishment and
-25 % of base mana), Divine Plea (25 % max mana over 15 s, −50 % healing done), Empowered Fire (Ignite ticks restore 2 % base
-mana), Burnout (+1 % base mana cost on crit), Revitalize (druid, 1 % mana on Rejuv/WG ticks, 15 % chance? — read in 3c),
-Omen of Clarity (free cast), Innervate (stand-in?). Each is a proc (§9) or an effect.
+Mana returns and drains in the three builds: Master of Elements (30 % of the base cost on a crit), Empowered Fire (Ignite
+ticks return 2 % base mana, 67545), Burnout (an extra 5 % base-mana cost on a crit), Clearcasting (Arcane Concentration,
+Omen of Clarity), Evocation (15 % max mana per 2 s tick), Lifebloom's bloom (half the base cost × stacks), Innervate
+(225 % of base mana over 10 s), Divine Plea (aura 21: 5 % max mana every 3 s for 15 s; −50 % healing done), Spiritual
+Attunement and Blessing of Sanctuary (mana from healing received / avoided hits), Purified Lunar Dust and Sliver of Pure
+Ice (trinkets). Each is a proc (§9) or an effect, cited in the spec notes.
 
 ## 6. Cooldowns and categories — needed
 Spell `RecoveryTime`, `CategoryRecoveryTime` with `Category` (shared cooldowns: Shield of Righteousness / Hammer of the
-Righteous are separate; Judgements share category), SPELLMOD_COOLDOWN (Improved Judgements −1 s each, Glyph of Swiftmend no).
+Righteous have separate cooldowns; Judgements share category 1210; Wild Growth uses category 1237; Fire Blast 19),
+SPELLMOD_COOLDOWN (Improved Judgements −1 s).
 Already: per-spell cooldown map; new: categories and spell mods.
 
 ## 7. Spell modifiers (talents and glyphs) — needed, central
@@ -279,13 +283,13 @@ Most talents and glyphs are auras `SPELL_AURA_ADD_FLAT_MODIFIER` (107) / `ADD_PC
 (`Player::IsAffectedBySpellmod`, `Player.cpp` 10018–10033; `ApplySpellMod` 10035–10115: flat mods add, pct mods multiply
 (they are summed per op then applied once), charges consumed for mods with charges, e.g. Hot Streak's Pyroblast cast
 time). The spell data needed for this (`effectSpellClassMask`, `spellFamilyName`, `spellFamilyFlags`) is already in the
-extraction. This one mechanism covers: Improved Fireball (cast time), Incineration and Critical Mass? (crit chance), Burnout
+extraction. This one mechanism covers: Improved Fireball (cast time), Incineration and World in Flames (crit chance, SPELLMOD op 7; Critical Mass is a school crit aura, type 71), Burnout
 (crit damage), Empowered Fire (bonus multiplier), Glyph of Fireball (crit), Moonglow (cost), Gift of Nature (healing %),
 Empowered Rejuvenation (bonus multiplier and periodic %), Improved Rejuvenation (%), Glyph of Wild Growth (targets),
-Combat Expertise? (no: MOD_EXPERTISE), Improved Judgements (cooldown), Glyph of Seal of Vengeance (expertise, MOD_EXPERTISE),
-Benediction (cost), Touched by the Light? (no: MOD_SPELL_DAMAGE_OF_STAT_PERCENT).
+Improved Judgements (cooldown), Glyph of Seal of Vengeance (expertise, MOD_EXPERTISE),
+Benediction (cost). Combat Expertise (aura 240 MOD_EXPERTISE) and Touched by the Light (aura 174) are stat auras (§8), not spell mods.
 **Engine contract:** `SpellDef` gains `family` and `familyFlags`; auras gain `spellMods: { op, kind: flat|pct, value,
-classMask, charges? }`; casting, launch, crit, cost, cooldown, GCD and periodic code ask `spellModValue(caster, spell, op,
+classMask, charges (optional) }`; casting, launch, crit, cost, cooldown, GCD and periodic code ask `spellModValue(caster, spell, op,
 base)`.
 
 ## 8. Auras that change stats — needed
@@ -295,8 +299,7 @@ MOD_HEALING_DONE, MOD_SPELL_DAMAGE_OF_STAT_PERCENT, MOD_SPELL_HEALING_OF_STAT_PE
 MOD_CRIT_PCT, MOD_ATTACKER_SPELL_CRIT_CHANCE, MOD_RATING, MOD_INCREASE_HEALTH(_PERCENT), MOD_POWER_REGEN(_PERCENT),
 MOD_MANA_REGEN_INTERRUPT, MOD_MANA_REGEN_FROM_STAT, MOD_CASTING_SPEED_NOT_STACK, MOD_MELEE_HASTE (exists),
 MOD_PARRY/DODGE/BLOCK_PERCENT, MOD_SHIELD_BLOCKVALUE(_PCT), MOD_EXPERTISE, MOD_THREAT, MOD_DAMAGE_PERCENT_DONE
-(exists as `damage_done_pct`), MOD_HEALING_DONE_PERCENT, MOD_HEALING_PCT, MOD_CRIT_DAMAGE_BONUS, MOD_SCHOOL_DAMAGE_TAKEN?
-(as `damage_taken_pct` by school: exists). Stacking rules between raid buffs (`spell_group` / `spell_group_stack_rules`)
+(exists as `damage_done_pct`), MOD_HEALING_DONE_PERCENT, MOD_HEALING_PCT, MOD_CRIT_DAMAGE_BONUS, and school damage taken (exists as `damage_taken_pct` with schools). Stacking rules between raid buffs (`spell_group` / `spell_group_stack_rules`)
 matter only when two sources give the same buff; Gate 1 lets each raid buff come from one source (§13), so spell groups
 are **not needed** in Gate 1 except for the 5 % spell crit debuff (Improved Scorch vs Shadow Mastery, `spell_group`).
 
@@ -315,7 +318,7 @@ Procs Gate 1 needs (details in the spec notes): Hot Streak (two crits in a row �
 crit damage over 4 s, rolling), Master of Elements, Burnout's mana cost, Empowered Fire's mana return; Nature's Grace (spell
 crit → 20 % haste 3 s), Omen of Clarity (heal/hit → Clearcasting), Living Seed (crit heal → seed), Revitalize; Seal of
 Vengeance (melee hit → Holy Vengeance stack + seal damage), Judgement of Light/Wisdom debuff, Redoubt (crit taken → block),
-Holy Shield (block → holy damage), Ardent Defender (cheat death, passive below 35 %), Righteous Vengeance? (not taken),
+Holy Shield (block → holy damage), Ardent Defender (cheat death, passive below 35 %),
 Divine Plea's healing reduction, Sacred Duty (no), trinket procs (listed in each gear profile; at most two per spec).
 **Engine contract:** an event bus already exists (`sim.subscribe`); Plan 3a adds a `ProcDef` on auras with the
 `spell_proc` fields and a dispatcher that runs after each hit (phase HIT), cast finish (FINISH) and on taken damage.
@@ -324,8 +327,7 @@ Divine Plea's healing reduction, Sacred Duty (no), trinket procs (listed in each
 `Unit::AttackerStateUpdate` (`Unit.cpp` 2767–) → `CalculateMeleeDamage` (1684–): weapon damage = `Player::CalculateMinMaxDamage`
 (`StatSystem.cpp` 544–624: (weapon min/max + AP / 14 × weapon speed) × BASE_PCT + flat) × TOTAL_PCT (One-Handed Weapon
 Specialization +10 %); `RollMeleeOutcomeAgainst` (3013–3190): miss (8 % vs 83 minus hit), dodge (boss 6.5 % minus
-expertise), parry (14 % minus expertise; from the front), glancing (only auto-attacks, 24 % vs +3 levels at 25 % reduction?
-→ read in 3a), crit, hit; armor of the boss (Festergut 10643 base armor × modifier 1 → creature armor already in data) with
+expertise), parry (14 % minus expertise; from the front), glancing blows (auto-attacks only; chance and reduction against +3 levels read in 3a-3), crit, hit; armor of the boss (Festergut 10643 base armor × modifier 1 → creature armor already in data) with
 Sunder/Expose Armor/Faerie Fire from stand-ins; procs (Seal of Vengeance). **Parry haste**: when the *boss* parries the
 tank's swing, the boss's own swing timer is cut (`Unit.cpp` 2044–2074: remaining time above 60 % → −40 %, between 20 % and
 60 % → set to 20 %), unless the creature has CREATURE_FLAG_EXTRA_NO_PARRY_HASTEN (Festergut's `flags_extra` must be checked
@@ -335,15 +337,13 @@ in 3a; creature_template line 28891). Threat of a swing = damage × threat multi
 `ThreatManager::CalculateModifiedThreat` (`ThreatManager.cpp` 741–795): `spell_threat` pctMod (and flat/AP bonus in
 `Spell::HandleThreatSpells`) per spell (`data/sql/base/db_world/spell_threat.sql`, not fetched yet: Plan 3a), then
 SPELLMOD_THREAT (talents), then the per-school multiplier `GetTotalAuraMultiplierByMiscMask(SPELL_AURA_MOD_THREAT, mask)`
-of the source (`UpdateMySpellSchoolModifiers` 861–866). Righteous Fury (25780): +80 % holy threat? — in 3.3, Righteous Fury
-gives 80 % more threat from holy spells, and Improved Righteous Fury / the passive "Touched by the Light"? no; the 3.3
-paladin tank threat bonus is Righteous Fury (holy ×1.8) **plus** the 3.0 change that makes Righteous Fury apply to all
-damage for Protection (spell 25780 effect 1? — verified from the DBC in `spec-protection-paladin-azerothcore.md`). Mage:
-Burning Soul (−10 % fire threat), Arcane Subtlety? (Arcane Subtlety reduces threat of arcane spells: not relevant to fire;
-the fire threat talent is Burning Soul; 3.3 "Frost Channeling" frost only). Druid: Subtlety (−10 % threat of healing
-spells? — Druid Subtlety reduces threat of healing spells by 10/20/30 % in 3.3? to verify) and the healing threat rule
-(half the healing, split, A-019). Vigilance / Misdirection / Tricks of the Trade are not in Gate 1. Salvation (−2 % ×
-?) is a hand spell in 3.3, not a blessing: not needed.
+of the source (`UpdateMySpellSchoolModifiers` 861–866). Client data: Righteous Fury (25780) effect 0 is MOD_THREAT
+(aura 10) +80 % with misc value 2 = holy school only; the glove enchant 3253 adds aura 25063 (MOD_THREAT +2 %, all
+schools). The paladin's physical melee therefore has no Righteous Fury bonus, its holy abilities (SoR, HotR, Judgement,
+Consecration, Holy Shield, Seal of Vengeance) do. Mage: the standard build has no threat talent (Burning Soul is not
+taken); Arcane Subtlety (12592) effect 0 is aura 10 −40 % threat for the **arcane** school only, so it does not reduce
+fire threat. Druid: Subtlety is not in the build; healing threat follows the healing rule (half the healing, split,
+A-019). Vigilance, Misdirection, Tricks of the Trade and Hand of Salvation are not in Gate 1.
 
 The engine's stand-in `threatMultiplier` stays for stand-ins; modelled units compute threat per hit from these auras.
 
@@ -356,7 +356,7 @@ spells with `spelltrigger`, `spellppmRate`). Enchant and gem effects are `SpellI
 (on equip), damage, resistance, prismatic socket); gem items point to `GemProperties.dbc` → enchant id. Set bonuses are
 `ItemSet.dbc` (spells at piece thresholds). Rising-Gods characters could later be loaded in the same shape (armory
 export or the signup site), so the profile format should mirror these keys: `class, race, level, talents[{talentId, rank}]
-| talentString, glyphs[spellId], items[{slot, itemId, enchantId?, gems[itemId], suffix?}], consumables[spellId],
+| talentString, glyphs[spellId], items[{slot, itemId, enchantId (optional), gems[itemId], randomSuffix (optional)}], consumables[spellId],
 raidBuffs[ref]`. The loader turns it into base stats + auras (talent passives, glyph auras, item stat totals as flat
 auras, item spells, set bonus auras, enchant auras) — **all as data, nothing hard-coded per character**.
 Gate 1: needed (the three standard profiles go through this loader).
@@ -368,7 +368,7 @@ modelled paladin), Mark of the Wild (from the modelled druid), Arcane Intellect 
 Divine Spirit, Battle Shout / Horn of Winter, Trueshot / Unleashed Rage / Abomination's Might (10 % AP), Totem of Wrath /
 Demonic Pact / Flametongue (spell power), Moonkin Aura / Elemental Oath (5 % spell crit), Wrath of Air / Swift
 Retribution (haste), Bloodlust/Heroism (one cast at a plan time), Ferocious Inspiration / Sanctified Retribution (3 %
-damage), Mana Spring, Replenishment, Leader of the Pack, Improved Devotion? (from the paladin), and the debuffs on the boss:
+damage), Mana Spring, Replenishment, Leader of the Pack, Devotion Aura (from the modelled paladin), and the debuffs on the boss:
 Sunder Armor / Expose Armor (−20 % armor), Faerie Fire (−5 %), Curse of the Elements / Ebon Plaguebringer (+13 % spell damage
 taken), Improved Scorch / Shadow Mastery / Winter's Chill (+5 % spell crit), Misery / Improved Faerie Fire (+3 % spell hit),
 Heart of the Crusader / Totem of Wrath (+3 % crit), Blood Frenzy / Savage Combat (+4 % physical), and the boss damage
